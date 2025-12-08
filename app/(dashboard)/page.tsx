@@ -57,6 +57,11 @@ type SportCardData = {
   lastSync: string;
 };
 
+type SyncLogRow = {
+  completed_at: string | null;
+  started_at: string | null;
+};
+
 async function fetchSportCards(): Promise<SportCardData[]> {
   const client = isAdminAvailable() ? supabaseAdmin : supabase;
   const formatter = new Intl.NumberFormat("fr-FR");
@@ -70,7 +75,7 @@ async function fetchSportCards(): Promise<SportCardData[]> {
 
     const logQuery = client
       .from("sync_logs")
-      .select("completed_at, started_at")
+      .select<SyncLogRow>("completed_at, started_at")
       .eq("sport_id", sport.sportId)
       .order("started_at", { ascending: false })
       .limit(1);
@@ -87,8 +92,9 @@ async function fetchSportCards(): Promise<SportCardData[]> {
 
     const matches = formatter.format(count ?? 0);
 
-    const lastLog = logData?.[0];
-    const lastTimestamp = lastLog?.completed_at ?? lastLog?.started_at;
+    const lastLog = logData && logData.length > 0 ? logData[0] : null;
+    const lastTimestamp =
+      lastLog?.completed_at ?? lastLog?.started_at ?? null;
     const lastSync = lastTimestamp
       ? formatDateTime(lastTimestamp)
       : "Aucune sync";
