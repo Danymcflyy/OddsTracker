@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 
 import { autoSyncService } from "@/lib/sync/auto-sync-service";

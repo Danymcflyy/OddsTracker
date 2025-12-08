@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, RefreshCw, Settings as SettingsIcon, Shield, Signal, Database, Check } from "lucide-react";
+import { Loader2, RefreshCw, Settings as SettingsIcon, Shield, Signal, Database, Check, KeyRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,7 @@ interface SettingsResponse {
   extraSyncEnabled: boolean;
   extraSyncTime: string;
   closingStrategy: "historical" | "tournament";
+  oddsApiKeyPreview: string | null;
   apiUsage: {
     used: number;
     limit: number;
@@ -53,6 +54,8 @@ interface FormState {
   extraSyncTime: string;
   followedTournaments: FollowedTournamentsMap;
   closingStrategy: "historical" | "tournament";
+  oddsApiKeyInput: string;
+  oddsApiKeyShouldClear: boolean;
 }
 
 async function fetchSettingsData(): Promise<SettingsResponse> {
@@ -83,6 +86,8 @@ export default function SettingsPage() {
         extraSyncTime: result.extraSyncTime,
         followedTournaments: result.followedTournaments,
         closingStrategy: result.closingStrategy,
+        oddsApiKeyInput: "",
+        oddsApiKeyShouldClear: false,
       });
     } finally {
       setLoading(false);
@@ -137,6 +142,11 @@ export default function SettingsPage() {
           extraSyncTime: form.extraSyncTime,
           followedTournaments: form.followedTournaments,
           closingStrategy: form.closingStrategy,
+          oddsApiKey: form.oddsApiKeyShouldClear
+            ? ""
+            : form.oddsApiKeyInput.trim() !== ""
+              ? form.oddsApiKeyInput.trim()
+              : undefined,
         }),
       });
 
@@ -201,6 +211,7 @@ export default function SettingsPage() {
     selected: form.followedTournaments[sportId] ?? [],
   }));
   const sportButtons = Object.entries(data.tournaments.labels || {});
+  const oddsApiKeyPreview = data.oddsApiKeyPreview ?? null;
   const strategyOptions: Array<{
     value: "historical" | "tournament";
     label: string;
@@ -408,6 +419,64 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-1">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <KeyRound className="h-5 w-5" />
+            Clé API OddsPapi
+          </CardTitle>
+          <CardDescription>Mettre à jour la clé utilisée par les imports (serveur + Vercel).</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-sm font-medium">Clé enregistrée</p>
+            <p className="text-sm text-muted-foreground">
+              {oddsApiKeyPreview ? oddsApiKeyPreview : "Aucune clé sauvegardée"}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Nouvelle clé</Label>
+            <Input
+              type="password"
+              value={form.oddsApiKeyInput}
+              onChange={(event) =>
+                updateForm({
+                  oddsApiKeyInput: event.target.value,
+                  oddsApiKeyShouldClear: false,
+                })
+              }
+              placeholder="pk_live_XXXXXXXX"
+              disabled={form.oddsApiKeyShouldClear}
+            />
+            <p className="text-xs text-muted-foreground">
+              Laissez vide pour conserver la clé actuelle. Entrez une nouvelle valeur pour la remplacer.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {form.oddsApiKeyShouldClear ? (
+              <>
+                <p className="text-sm text-rose-600 font-medium">La clé sera supprimée lors de l'enregistrement.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => updateForm({ oddsApiKeyShouldClear: false })}
+                >
+                  Annuler
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => updateForm({ oddsApiKeyShouldClear: true, oddsApiKeyInput: "" })}
+              >
+                Supprimer la clé
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-col gap-1">

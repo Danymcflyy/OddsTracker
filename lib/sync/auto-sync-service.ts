@@ -14,6 +14,7 @@ import { supabaseAdmin } from "@/lib/db";
 import { loadFollowedTournaments } from "@/lib/settings/followed-tournaments";
 import type { FollowedTournamentsMap } from "@/lib/config/tournaments";
 import { loadClosingStrategy } from "@/lib/settings/closing-strategy";
+import { loadOddsApiKey } from "@/lib/settings/odds-api-key";
 import type { OddsClosingStrategy } from "@/types/settings";
 
 interface AutoSyncStats {
@@ -79,6 +80,9 @@ export class AutoSyncService {
       settlementsApplied: 0,
       errors: [],
     };
+
+    const oddsApiKey = await loadOddsApiKey();
+    oddsPapiClient.setApiKey(oddsApiKey);
 
     const closingStrategy =
       options?.closingStrategy ?? (await loadClosingStrategy());

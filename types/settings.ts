@@ -14,6 +14,7 @@ export enum SettingKey {
   API_REQUESTS_RESET_DATE = "api_requests_reset_date",
   FOLLOWED_TOURNAMENTS = "followed_tournaments",
   ODDS_CLOSING_STRATEGY = "odds_closing_strategy",
+  ODDSPAPI_API_KEY = "oddspapi_api_key",
 }
 
 export type OddsClosingStrategy = "historical" | "tournament";
@@ -32,6 +33,7 @@ export interface AppSettings {
   api_requests_reset_date: string | null;
   followed_tournaments: string | null;
   odds_closing_strategy: OddsClosingStrategy;
+  oddspapi_api_key: string | null;
 }
 
 /**
@@ -43,6 +45,7 @@ export interface EditableSettings {
   extra_sync_enabled: boolean;
   extra_sync_time: string;
   odds_closing_strategy: OddsClosingStrategy;
+  oddspapi_api_key: string | null;
 }
 
 /**
@@ -54,6 +57,7 @@ export interface UpdateSettingsInput {
   extra_sync_enabled?: boolean;
   extra_sync_time?: string;
   odds_closing_strategy?: OddsClosingStrategy;
+  oddspapi_api_key?: string;
 }
 
 /**
@@ -65,6 +69,7 @@ export interface SyncConfig {
   extra_sync_enabled: boolean;
   extra_sync_time: string;
   odds_closing_strategy: OddsClosingStrategy;
+  oddspapi_api_key: string | null;
 }
 
 /**
@@ -109,6 +114,9 @@ export function settingsArrayToObject(settings: Setting[]): Partial<AppSettings>
       case "odds_closing_strategy":
         obj[key] = value === "tournament" ? "tournament" : "historical";
         break;
+      case "oddspapi_api_key":
+        obj[key] = value || null;
+        break;
     }
   });
 
@@ -139,6 +147,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   api_requests_reset_date: null,
   followed_tournaments: null,
   odds_closing_strategy: "historical",
+  oddspapi_api_key: null,
 };
 
 export const DEFAULT_CLOSING_STRATEGY: OddsClosingStrategy = "historical";

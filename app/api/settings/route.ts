@@ -16,6 +16,7 @@ import {
   normalizeFollowedTournaments,
 } from "@/lib/settings/followed-tournaments";
 import { normalizeClosingStrategy } from "@/lib/settings/closing-strategy";
+import { maskOddsApiKey } from "@/lib/settings/odds-api-key";
 
 const DEFAULT_API_LIMIT = parseInt(process.env.ODDSPAPI_MONTHLY_LIMIT ?? "5000", 10);
 
@@ -43,6 +44,7 @@ export async function GET() {
   const followedTournaments = normalizeFollowedTournaments(rawSettings.followed_tournaments);
 
   const closingStrategy = normalizeClosingStrategy(rawSettings.odds_closing_strategy);
+  const oddsApiKeyPreview = maskOddsApiKey(rawSettings.oddspapi_api_key);
 
   const { data: logs } = await supabaseAdmin
     .from("sync_logs")
@@ -79,6 +81,7 @@ export async function GET() {
       labels: SPORT_LABELS,
     },
     followedTournaments,
+    oddsApiKeyPreview,
   });
 }
 
@@ -130,6 +133,12 @@ export async function POST(request: Request) {
     updates.push({
       key: SettingKey.ODDS_CLOSING_STRATEGY,
       value: normalized,
+    });
+  }
+  if ("oddsApiKey" in body) {
+    updates.push({
+      key: SettingKey.ODDSPAPI_API_KEY,
+      value: (body.oddsApiKey ?? "").trim(),
     });
   }
 

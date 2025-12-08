@@ -1,6 +1,7 @@
 import "./load-env";
 
 import { oddsPapiClient } from "@/lib/api/oddspapi";
+import { loadOddsApiKey } from "@/lib/settings/odds-api-key";
 
 /**
  * Script de test pour lister les tournois disponibles
@@ -14,6 +15,9 @@ interface CliOptions {
 }
 
 async function run() {
+  const storedKey = await loadOddsApiKey();
+  oddsPapiClient.setApiKey(storedKey);
+
   const options = parseArgs();
 
   const filters = [];

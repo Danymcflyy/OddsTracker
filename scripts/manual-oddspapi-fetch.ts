@@ -13,6 +13,7 @@ import type {
 } from "@/lib/api/types";
 import { BASE_MARKETS, normalizeTeamName } from "@/lib/import/catalog";
 import { supabaseAdmin, isAdminAvailable } from "@/lib/db";
+import { loadOddsApiKey } from "@/lib/settings/odds-api-key";
 
 interface CliOptions {
   sportId: number;
@@ -25,6 +26,9 @@ interface CliOptions {
 }
 
 async function run() {
+  const storedKey = await loadOddsApiKey();
+  oddsPapiClient.setApiKey(storedKey);
+
   const options = parseArgs();
   console.log(
     `📡 Requête OddsPapi • sportId=${options.sportId}${

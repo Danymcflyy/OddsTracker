@@ -5,6 +5,7 @@ import { differenceInMilliseconds } from "date-fns";
 import type { FixtureWithEnrichedOdds } from "@/types/fixture";
 import { oddsPapiClient } from "@/lib/api/oddspapi";
 import { supabaseAdmin, isAdminAvailable, supabase } from "@/lib/db";
+import { loadOddsApiKey } from "@/lib/settings/odds-api-key";
 import type { Database } from "@/types/database";
 
 interface SyncResult {
@@ -28,6 +29,9 @@ export class SyncService {
     if (!isAdminAvailable()) {
       throw new Error("SyncService nécessite SUPABASE_SERVICE_ROLE_KEY");
     }
+
+    const oddsApiKey = await loadOddsApiKey();
+    oddsPapiClient.setApiKey(oddsApiKey);
 
     const logId = await this.createSyncLog(sportId);
 

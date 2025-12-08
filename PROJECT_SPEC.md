@@ -260,6 +260,12 @@ const DEFAULT_PARAMS = {
 };
 ```
 
+### Clé OddsPapi
+
+- La clé API est stockée dans Supabase (`settings.oddspapi_api_key`) et éditable depuis la page ⚙️ Réglages.  
+- En production (Vercel), mettez d’abord une valeur via l’interface puis, si besoin, synchronisez avec la variable d’environnement.  
+- Les services (`auto-sync`, scripts) appliquent automatiquement la dernière valeur enregistrée, avec repli sur `ODDSPAPI_API_KEY` défini dans l’environnement local.
+
 ### Gestion des rate limits
 
 - Cooldown `/v4/historical-odds` : 5000ms

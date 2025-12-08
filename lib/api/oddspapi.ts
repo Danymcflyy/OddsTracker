@@ -56,18 +56,31 @@ export interface OddsPapiClientOptions {
 
 export class OddsPapiClient {
   private readonly baseUrl: string;
-  private readonly apiKey: string;
+  private readonly defaultApiKey: string;
+  private apiKey: string;
   private readonly defaultParams: Record<string, string>;
   private readonly queues = new Map<string, Promise<void>>();
 
   constructor(options?: OddsPapiClientOptions) {
     this.baseUrl = options?.baseUrl || DEFAULT_BASE_URL;
-    this.apiKey = options?.apiKey || DEFAULT_API_KEY;
+    this.defaultApiKey = options?.apiKey || DEFAULT_API_KEY;
+    this.apiKey = this.defaultApiKey;
     this.defaultParams = { ...DEFAULT_QUERY_PARAMS, ...(options?.defaultParams || {}) };
 
     if (!this.apiKey) {
       console.warn("⚠️  ODDSPAPI_API_KEY manquant - les requêtes OddsPapi échoueront.");
     }
+  }
+
+  /**
+   * Met à jour la clé API à la volée (ex: chargée depuis Supabase)
+   */
+  setApiKey(value?: string | null) {
+    const next = value && value.trim().length > 0 ? value.trim() : this.defaultApiKey;
+    if (!next) {
+      console.warn("⚠️  Aucune clé OddsPapi définie. Les appels échoueront.");
+    }
+    this.apiKey = next;
   }
 
   /**
