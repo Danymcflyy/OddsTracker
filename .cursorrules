@@ -1,0 +1,263 @@
+# OddsTracker - Règles de Développement
+
+## 🎯 Contexte du Projet
+
+Application web d'analyse de cotes sportives historiques depuis janvier 2019.
+Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
+
+## 📚 Stack Technique
+
+### Framework & Langage
+- **Next.js 14** (App Router obligatoire)
+- **TypeScript 5+** (mode strict activé)
+- **React 18.3** (Server Components par défaut)
+
+### UI & Styling
+- **Tailwind CSS 3.4** (utility-first)
+- **shadcn/ui** (16 composants installés)
+- **Lucide React** (icônes)
+- **Palette sobre et professionnelle** (bleu foncé #1e40af)
+
+### Data & Backend
+- **Supabase** (PostgreSQL, Free Tier)
+- **TanStack Table v8** (tableaux interactifs)
+- **OddsPapi API** (données de cotes)
+- **Bookmaker Pinnacle uniquement**
+
+### Auth & Export
+- **jose** (JWT sessions, 7 jours)
+- **bcryptjs** (hachage mot de passe)
+- **ExcelJS** (export XLSX, pas xlsx)
+- **date-fns** (formatage dates)
+
+## 🎨 Conventions de Code
+
+### Nommage
+- **Fichiers** : kebab-case (`user-profile.tsx`, `api-client.ts`)
+- **Composants** : PascalCase (`UserProfile`, `DataTable`)
+- **Fonctions/Variables** : camelCase (`getUserData`, `isLoading`)
+- **Types/Interfaces** : PascalCase (`User`, `ApiResponse`)
+- **Constantes** : UPPER_SNAKE_CASE (`API_BASE_URL`)
+
+### Structure de Fichiers
+- **Types** → `/types`
+- **Composants UI** → `/components/ui`
+- **Composants métier** → `/components/{domain}`
+- **Hooks** → `/hooks`
+- **Utils** → `/lib/utils`
+- **Services** → `/lib/{service}`
+
+### TypeScript
+- **Mode strict activé** (pas de `any` sans justification)
+- **Types explicites** pour les paramètres de fonction
+- **Interfaces** pour les objets complexes
+- **Pas de `as` casting** sauf absolument nécessaire
+
+### React & Next.js
+- **Server Components par défaut** (sauf interactivité)
+- **'use client'** uniquement si hooks/events nécessaires
+- **Composants purs** quand possible
+- **Pas de props drilling** (Context si nécessaire)
+
+## 🎨 UI & Design
+
+### Couleurs
+```css
+/* Principales */
+--primary: #1e40af (Bleu foncé)
+--background: #ffffff (Blanc)
+--foreground: #0f172a (Noir slate)
+
+/* Résultats */
+--winner: #16a34a (Vert - Pari gagnant)
+--winner-bg: #dcfce7 (Vert clair)
+--loser: #dc2626 (Rouge - Pari perdant)
+--loser-bg: #fee2e2 (Rouge clair)
+
+/* Neutrales */
+--muted: #f1f5f9 (Gris clair)
+--border: #e2e8f0 (Gris bordure)
+```
+
+### Principes
+- **Desktop-first, mobile-friendly**
+- **Pas d'emojis** sauf demande explicite
+- **Sobre et professionnel**
+- **Pas de traces IA** dans le code
+
+### Composants
+- **Utiliser shadcn/ui** en priorité
+- **Import depuis** `@/components/ui`
+- **Variantes winner/loser** pour badges
+- **Toaster** pour notifications
+
+## 🔒 Sécurité
+
+### Vulnérabilités
+- ✅ **exceljs** (pas xlsx - vulnérable)
+- ✅ **Vérifier npm audit** avant commit
+- ✅ **Pas de secrets** dans le code
+- ✅ **Variables d'env** pour tout
+
+### Auth
+- **Mot de passe unique** (pas de multi-users)
+- **Session JWT** (7 jours, HTTP-only cookie)
+- **Middleware** protège toutes les routes sauf /login
+- **Pas de tokens** en localStorage
+
+## 📊 Base de Données
+
+### Tables Principales
+- `sports` (4 sports : Football, Hockey, Tennis, Volleyball)
+- `fixtures` (matchs)
+- `odds` (cotes opening/closing)
+- `leagues`, `teams`, `countries`
+- `markets`, `outcomes`
+- `settings`, `sync_logs`
+
+### Requêtes
+- **Supabase client** via `lib/db/index.ts`
+- **Queries organisées** dans `lib/db/queries/`
+- **Index optimisés** déjà en place
+- **Pagination côté serveur** obligatoire
+
+## 🔌 API OddsPapi
+
+### Règles Strictes
+- **Bookmaker Pinnacle uniquement** (paramètre `bookmakers=pinnacle`)
+- **Rate limits** :
+  - `/v4/historical-odds` : 5000ms entre requêtes
+  - `/v4/odds-by-tournaments` : 1000ms entre requêtes
+- **Queue système** pour gérer les délais
+- **Logger toutes erreurs** dans `sync_logs`
+
+### Endpoints
+- `GET /v4/sports` - Sports disponibles
+- `GET /v4/tournaments` - Compétitions
+- `GET /v4/fixtures` - Matchs
+- `GET /v4/historical-odds` - Cotes historiques
+- `GET /v4/settlements` - Résultats
+- `GET /account` - Quota API
+
+## 📝 Bonnes Pratiques
+
+### Code Quality
+- ❌ **Pas de console.log** en production
+- ❌ **Pas de commentaires évidents** ("// Boucle sur les items")
+- ✅ **Code concis et lisible**
+- ✅ **DRY** (Don't Repeat Yourself)
+- ✅ **KISS** (Keep It Simple, Stupid)
+
+### Performance
+- **Pagination** obligatoire pour les listes
+- **Lazy loading** pour composants lourds
+- **Mémoïsation** quand pertinent
+- **Index DB** déjà optimisés
+
+### Git
+- **Commits clairs** et concis
+- **Pas de credentials** dans le code
+- **package-lock.json** committé
+- **.env.local** dans .gitignore
+
+## 🎯 Fonctionnalités Clés
+
+### Tableaux (TanStack Table)
+- **Tri** sur toutes colonnes
+- **Pagination** (25/50/100 par page)
+- **Filtres** multiples (pays, ligue, équipe, date, cotes)
+- **Colonnes dynamiques** selon marchés disponibles
+- **Visibilité** personnalisable (localStorage)
+
+### Export
+- **CSV** avec UTF-8 BOM
+- **XLSX** avec ExcelJS (styles, formats)
+- **Respecte filtres** et colonnes visibles
+- **Nom de fichier** avec date/sport
+
+### Coloration
+- **Vert** : Pari gagnant (cote + résultat)
+- **Rouge** : Pari perdant
+- **Neutre** : Match non terminé
+- **Logique** dans `lib/utils/winner-detection.ts`
+
+### Synchronisation
+- **Cron quotidien** 6h (Vercel Cron)
+- **Sync manuelle** depuis réglages
+- **Import historique** depuis 01/2019 (une fois)
+- **Logs détaillés** dans `sync_logs`
+
+## 📂 Référence Rapide
+
+### Imports Fréquents
+```typescript
+// UI Components
+import { Button, Input, Select } from "@/components/ui";
+
+// Utils
+import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/utils/date";
+import { formatOdds } from "@/lib/utils/odds-format";
+
+// DB
+import { supabase } from "@/lib/db";
+
+// Hooks
+import { useToast } from "@/hooks/use-toast";
+```
+
+### Routes API
+- `/api/auth/login` - POST
+- `/api/auth/logout` - POST
+- `/api/fixtures/[sport]` - GET
+- `/api/sync/manual` - POST
+- `/api/sync/cron` - GET
+- `/api/export/csv` - POST
+- `/api/export/xlsx` - POST
+
+## 🚫 À Éviter
+
+### Code
+- ❌ `any` sans justification
+- ❌ Inline styles (utiliser Tailwind)
+- ❌ console.log en production
+- ❌ Commentaires évidents
+- ❌ Props drilling excessif
+- ❌ Composants monolithiques (>300 lignes)
+
+### UI
+- ❌ Emojis (sauf demande explicite)
+- ❌ Couleurs flashy
+- ❌ Animations excessives
+- ❌ Traces IA dans les messages
+
+### Data
+- ❌ Bookmaker autre que Pinnacle
+- ❌ Requêtes API sans rate limit
+- ❌ Données en dur (utiliser DB)
+- ❌ Fetch côté client si possible côté serveur
+
+## 📖 Documentation
+
+### Priorité de Lecture
+1. **PROJECT_SPEC.md** - Spécifications complètes (37 KB)
+2. **NEXT_STEPS.md** - Plan de développement
+3. **components/ui/README.md** - Guide composants
+
+### Commandes Utiles
+```bash
+npm run dev        # Dev server
+npm run build      # Build production
+npm run lint       # ESLint
+npm audit          # Sécurité
+```
+
+## 🎯 Objectif Final
+
+Application pro, sobre, performante permettant d'analyser les cotes historiques sportives avec tableaux interactifs, filtres avancés et exports.
+
+**Délai** : ~5 jours | **Budget** : 950€ | **Qualité** : Production-ready
+
+---
+
+**Toujours consulter PROJECT_SPEC.md pour les détails d'implémentation.**

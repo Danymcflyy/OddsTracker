@@ -1,0 +1,185 @@
+// ===========================================
+// ODDSTRACKER - Schema Base de Données
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // Changer en "postgresql" pour prod
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================
+// SPORTS & LIGUES
+// ===========================================
+
+model Sport {
+  id        String   @id @default(cuid())
+  key       String   @unique // ex: "soccer", "icehockey"
+  name      String   // ex: "Football", "Hockey"
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  
+  leagues   League[]
+  fixtures  Fixture[]
+}
+
+model League {
+  id        String   @id @default(cuid())
+  key       String   @unique // ex: "soccer_epl", "icehockey_nhl"
+  name      String   // ex: "Premier League", "NHL"
+  country   String?  // ex: "England", "USA"
+  sportId   String
+  sport     Sport    @relation(fields: [sportId], references: [id])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  
+  fixtures  Fixture[]
+  
+  @@index([sportId])
+}
+
+// ===========================================
+// MATCHS & ÉQUIPES
+// ===========================================
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  country   String?
+  createdAt DateTime @default(now())
+  
+  homeFixtures Fixture[] @relation("HomeTeam")
+  awayFixtures Fixture[] @relation("AwayTeam")
+  
+  @@unique([name, country])
+}
+
+model Fixture {
+  id            String   @id @default(cuid())
+  externalId    String   @unique // ID de l'API OddsPapi
+  
+  sportId       String
+  sport         Sport    @relation(fields: [sportId], references: [id])
+  
+  leagueId      String
+  league        League   @relation(fields: [leagueId], references: [id])
+  
+  homeTeamId    String
+  homeTeam      Team     @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  
+  awayTeamId    String
+  awayTeam      Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  
+  commenceTime  DateTime // Date/heure du match
+  
+  // Scores (null si pas encore joué)
+  homeScore     Int?
+  awayScore     Int?
+  
+  // Statut
+  status        FixtureStatus @default(SCHEDULED)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  odds          Odds[]
+  
+  @@index([sportId])
+  @@index([leagueId])
+  @@index([commenceTime])
+  @@index([status])
+}
+
+enum FixtureStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+// ===========================================
+// COTES PINNACLE
+// ===========================================
+
+model Odds {
+  id          String   @id @default(cuid())
+  
+  fixtureId   String
+  fixture     Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  
+  // Type de marché
+  market      MarketType
+  
+  // Type de cote (opening ou closing)
+  oddsType    OddsType
+  
+  // Valeurs des cotes
+  // Pour 1X2: home=1, draw=X, away=2
+  // Pour Over/Under: home=over, away=under
+  // Pour Handicap: home=home+handicap, away=away-handicap
+  homeOdds    Float
+  drawOdds    Float?   // Null pour tennis/sports sans nul
+  awayOdds    Float
+  
+  // Ligne pour handicap/totals
+  line        Float?   // ex: -1.5, 2.5
+  
+  // Période du pari (0: temps plein, 1: 1ère mi-temps, 2: 2ème mi-temps)
+  period      Int      @default(0)
+  
+  // Timestamp de la cote
+  timestamp   DateTime
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([fixtureId, market, oddsType, line, period])
+  @@index([fixtureId])
+  @@index([market])
+  @@index([oddsType])
+  @@index([period])
+}
+
+enum MarketType {
+  H2H           // 1X2 / Moneyline
+  SPREADS       // Handicap
+  TOTALS        // Over/Under
+  DOUBLE_CHANCE // 1X, X2, 12
+}
+
+enum OddsType {
+  OPENING
+  CLOSING
+}
+
+// ===========================================
+// UTILISATEURS & CONFIG
+// ===========================================
+
+model Settings {
+  id              String   @id @default("settings")
+  passwordHash    String   // Mot de passe hashé
+  lastSyncDate    DateTime?
+  apiRequestsUsed Int      @default(0)
+  apiRequestsMax  Int      @default(200)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SyncLog {
+  id            String   @id @default(cuid())
+  type          String   // "historical", "daily", "manual"
+  sport         String?
+  league        String?
+  status        String   // "started", "completed", "failed"
+  fixturesAdded Int      @default(0)
+  oddsAdded     Int      @default(0)
+  requestsUsed  Int      @default(0)
+  error         String?
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+}
