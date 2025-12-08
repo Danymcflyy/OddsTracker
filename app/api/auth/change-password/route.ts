@@ -93,7 +93,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const currentHash = settings.value;
+    const currentHash = (settings as { value?: string | null } | null)?.value ?? "";
+    if (!currentHash) {
+      return NextResponse.json<ChangePasswordResponse>(
+        {
+          success: false,
+          error: "Mot de passe actuel indisponible",
+        },
+        { status: 500 }
+      );
+    }
 
     // Vérifier le mot de passe actuel
     const isValid = await bcrypt.compare(currentPassword, currentHash);
@@ -115,9 +124,12 @@ export async function POST(request: Request) {
     const newHash = await bcrypt.hash(newPassword, 10);
 
     // Mettre à jour dans la base de données
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from("settings")
-      .update({ value: newHash, updated_at: new Date().toISOString() })
+      .update({
+        value: newHash,
+        updated_at: new Date().toISOString(),
+      })
       .eq("key", "password_hash");
 
     if (updateError) {

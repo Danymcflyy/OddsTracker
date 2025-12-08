@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import type { FixtureWithEnrichedOdds } from "@/types/fixture";
 import { exportToCSV } from "@/lib/export/csv-export";
 import { exportToXLSX } from "@/lib/export/xlsx-export";
+import type { CsvExportOptions } from "@/lib/export/csv-export";
+import type { XlsxExportOptions } from "@/lib/export/xlsx-export";
 import { useToast } from "@/hooks/use-toast";
 
 interface ExportButtonsProps<TData extends FixtureWithEnrichedOdds> {
@@ -51,8 +53,10 @@ export function ExportButtons<TData extends FixtureWithEnrichedOdds>({
           visibleColumns,
           data: rows,
           columnLabels,
-          formatCell,
-        };
+          formatCell: formatCell as
+            | CsvExportOptions["formatCell"]
+            | XlsxExportOptions["formatCell"],
+        } satisfies CsvExportOptions & XlsxExportOptions;
 
         const blob =
           type === "csv"

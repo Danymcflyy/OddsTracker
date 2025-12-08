@@ -1,12 +1,15 @@
 import ExcelJS from "exceljs";
 import type { FixtureWithEnrichedOdds } from "@/types/fixture";
 
-interface XlsxExportOptions {
+export interface XlsxExportOptions {
   filename: string;
   visibleColumns: string[];
   data: FixtureWithEnrichedOdds[];
   columnLabels?: Record<string, string>;
-  formatCell?: (row: FixtureWithEnrichedOdds, columnId: string) => string | number | null | Date;
+  formatCell?: (
+    row: FixtureWithEnrichedOdds,
+    columnId: string
+  ) => string | number | Date | null | undefined;
 }
 
 const DEFAULT_LABELS: Record<string, string> = {
@@ -38,7 +41,9 @@ export async function exportToXLSX({
   data.forEach((row) => {
     const rowData: Record<string, string | number | Date | null> = {};
     visibleColumns.forEach((columnId) => {
-      rowData[columnId] = formatCell(row, columnId);
+      const value = formatCell(row, columnId);
+      rowData[columnId] =
+        (value ?? null) as string | number | Date | null;
     });
     worksheet.addRow(rowData);
   });

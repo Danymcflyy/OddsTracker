@@ -11,6 +11,7 @@ import type {
 } from "@/lib/api/types";
 import { BASE_MARKETS, normalizeTeamName } from "@/lib/import/catalog";
 import { supabaseAdmin } from "@/lib/db";
+const adminDb = supabaseAdmin as any;
 import { loadFollowedTournaments } from "@/lib/settings/followed-tournaments";
 import type { FollowedTournamentsMap } from "@/lib/config/tournaments";
 import { loadClosingStrategy } from "@/lib/settings/closing-strategy";
@@ -70,6 +71,7 @@ export class AutoSyncService {
   private marketMetadataCache = new Map<number, Map<number, MarketMetadataEntry>>();
   private baseMarketCache: Record<string, MarketCache> | null = null;
   private lastHistoricalFetch = 0;
+  private db = adminDb;
 
   async sync(options?: SyncOptions): Promise<AutoSyncStats> {
     const stats: AutoSyncStats = {
@@ -170,7 +172,7 @@ export class AutoSyncService {
       if (allowedSports && !allowedSports.has(sportId)) continue;
       const sportDbId = await this.ensureSportRecord(sportId);
 
-      const { data: fixtures, error } = await supabaseAdmin
+      const { data: fixtures, error } = await this.db
         .from("fixtures")
         .select("id, oddspapi_id, start_time, league_id")
         .is("odds_locked_at", null)
@@ -184,20 +186,28 @@ export class AutoSyncService {
         continue;
       }
 
+      const fixtureRows = fixtures as Array<{
+        id: number;
+        oddspapi_id: string | null;
+        start_time: string;
+        league_id: number | null;
+      }>;
+
       const leagueIds = Array.from(
         new Set(
-          fixtures
+          fixtureRows
             .map((fixture) => fixture.league_id)
             .filter((value): value is number => typeof value === "number")
         )
       );
       const leagueMap = new Map<number, number>();
       if (leagueIds.length) {
-        const { data: leagues } = await supabaseAdmin
+        const { data: leagues } = await this.db
           .from("leagues")
           .select("id, oddspapi_id")
           .in("id", leagueIds);
-        leagues?.forEach((league) => {
+        const leagueRows = leagues as Array<{ id: number; oddspapi_id: number | null }> | null;
+        leagueRows?.forEach((league) => {
           if (typeof league.oddspapi_id === "number") {
             leagueMap.set(league.id, league.oddspapi_id);
           }
@@ -222,19 +232,21 @@ export class AutoSyncService {
 
       const closings: FixtureRecord[] = [];
 
-      for (const fixture of fixtures) {
-        const settlement = settlementMap.get(fixture.oddspapi_id);
+      for (const fixture of fixtureRows) {
+        const fixtureKey = fixture.oddspapi_id ?? undefined;
+        if (!fixtureKey) continue;
+        const settlement = settlementMap.get(fixtureKey);
         if (!settlement) {
           continue;
         }
 
         closings.push({
-          oddspapiId: fixture.oddspapi_id,
+          oddspapiId: fixtureKey,
           dbId: fixture.id,
           tournamentId: fixture.league_id ? leagueMap.get(fixture.league_id) : undefined,
         });
 
-        await supabaseAdmin
+        await this.db
           .from("fixtures")
           .update({
             home_score: settlement.homeScore ?? null,
@@ -297,12 +309,15 @@ export class AutoSyncService {
   ): Promise<FixtureRecord[]> {
     const records: FixtureRecord[] = [];
     const ids = fixtures.map((fixture) => fixture.id);
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await this.db
       .from("fixtures")
       .select("oddspapi_id, id")
       .in("oddspapi_id", ids);
 
-    const existingSet = new Map<string, number>(existing?.map((row) => [row.oddspapi_id, row.id]));
+    const existingRows = (existing ?? []) as Array<{ oddspapi_id: string; id: number }>;
+    const existingSet = new Map<string, number>(
+      existingRows.map((row) => [row.oddspapi_id, row.id])
+    );
 
     for (const fixture of fixtures) {
       if (existingSet.has(fixture.id)) {
@@ -319,7 +334,7 @@ export class AutoSyncService {
       const homeTeamId = await ensureTeam(fixture.homeTeam);
       const awayTeamId = await ensureTeam(fixture.awayTeam);
 
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await this.db
         .from("fixtures")
         .insert({
           oddspapi_id: fixture.id,
@@ -394,7 +409,7 @@ export class AutoSyncService {
     }
 
     const fixtureIds = entries.map((entry) => entry.dbId);
-    const { data: existingRows } = await supabaseAdmin
+    const { data: existingRows } = await this.db
       .from("odds")
       .select(
         "fixture_id, market_id, outcome_id, opening_price, opening_timestamp, closing_price, closing_timestamp, is_winner"
@@ -402,7 +417,18 @@ export class AutoSyncService {
       .in("fixture_id", fixtureIds);
 
     const existingMap = new Map<number, any[]>();
-    (existingRows ?? []).forEach((row) => {
+    const oddsRows =
+      (existingRows ?? []) as Array<{
+        fixture_id: number;
+        market_id: number;
+        outcome_id: number;
+        opening_price: number | null;
+        opening_timestamp: string | null;
+        closing_price: number | null;
+        closing_timestamp: string | null;
+        is_winner: boolean | null;
+      }>;
+    oddsRows.forEach((row) => {
       const bucket = existingMap.get(row.fixture_id) ?? [];
       bucket.push(row);
       existingMap.set(row.fixture_id, bucket);
@@ -461,7 +487,7 @@ export class AutoSyncService {
       return this.sportCache.get(sportId)!;
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await this.db
       .from("sports")
       .select("id")
       .eq("oddspapi_id", sportId)
@@ -502,7 +528,7 @@ export class AutoSyncService {
     const cache: Record<string, MarketCache> = {};
 
     for (const definition of Object.values(BASE_MARKETS)) {
-      const { data: market, error: marketError } = await supabaseAdmin
+      const { data: market, error: marketError } = await this.db
         .from("markets")
         .upsert(
           {
@@ -521,7 +547,7 @@ export class AutoSyncService {
 
       const outcomes: Record<string, number> = {};
       for (const outcomeDef of definition.outcomes) {
-        const { data: outcome, error: outcomeError } = await supabaseAdmin
+        const { data: outcome, error: outcomeError } = await this.db
           .from("outcomes")
           .upsert(
             {
@@ -573,7 +599,7 @@ export class AutoSyncService {
   }
 
   private async updateLastSync() {
-    await supabaseAdmin
+    await this.db
       .from("settings")
       .upsert(
         [
@@ -649,7 +675,7 @@ async function ensureLeague(meta: TournamentMeta | undefined, sportDbId: number)
   const fallbackSlug = meta?.name?.toLowerCase().replace(/\s+/g, "-") ?? `league-${meta?.id ?? "na"}`;
   const countryId = await ensureCountry(meta?.countrySlug ?? "international");
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await adminDb
     .from("leagues")
     .upsert(
       {
@@ -672,7 +698,7 @@ async function ensureLeague(meta: TournamentMeta | undefined, sportDbId: number)
 }
 
 async function ensureCountry(slug: string) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await adminDb
     .from("countries")
     .upsert(
       {
@@ -692,7 +718,7 @@ async function ensureCountry(slug: string) {
 }
 
 async function ensureTeam(team: NormalizedTeam) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await adminDb
     .from("teams")
     .upsert(
       {
@@ -712,9 +738,9 @@ async function ensureTeam(team: NormalizedTeam) {
 }
 
 async function persistOddsRows(fixtureDbId: number, rows: any[]) {
-  await supabaseAdmin.from("odds").delete().eq("fixture_id", fixtureDbId);
+  await adminDb.from("odds").delete().eq("fixture_id", fixtureDbId);
   if (!rows.length) return;
-  const { error } = await supabaseAdmin.from("odds").insert(rows);
+  const { error } = await adminDb.from("odds").insert(rows);
   if (error) {
     throw error;
   }
@@ -894,7 +920,7 @@ async function ensureAsianHandicapMarket(handicap: number, marketCache: Record<s
   }
 
   const baseDefinition = BASE_MARKETS.ASIAN_HANDICAP;
-  const { data: market, error } = await supabaseAdmin
+  const { data: market, error } = await adminDb
     .from("markets")
     .insert({
       oddspapi_id: baseDefinition.oddspapiId,
@@ -910,7 +936,7 @@ async function ensureAsianHandicapMarket(handicap: number, marketCache: Record<s
 
   const outcomes: Record<string, number> = {};
   for (const outcomeDef of baseDefinition.outcomes) {
-    const { data: outcome, error: outcomeError } = await supabaseAdmin
+    const { data: outcome, error: outcomeError } = await adminDb
       .from("outcomes")
       .insert({
         oddspapi_id: outcomeDef.oddspapiId,

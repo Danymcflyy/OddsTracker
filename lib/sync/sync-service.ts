@@ -5,6 +5,7 @@ import { differenceInMilliseconds } from "date-fns";
 import type { FixtureWithEnrichedOdds } from "@/types/fixture";
 import { oddsPapiClient } from "@/lib/api/oddspapi";
 import { supabaseAdmin, isAdminAvailable, supabase } from "@/lib/db";
+const adminDb = supabaseAdmin as any;
 import { loadOddsApiKey } from "@/lib/settings/odds-api-key";
 import type { Database } from "@/types/database";
 
@@ -72,18 +73,20 @@ export class SyncService {
     let recordsInserted = 0;
 
     for (const tournament of tournaments) {
-      const fixtures = await oddsPapiClient.getFixtures({ tournamentId: tournament.id });
+      const fixtures = await oddsPapiClient.getFixtures({
+        tournamentId: tournament.tournamentId,
+      });
       recordsFetched += fixtures.length;
 
       if (!fixtures.length) continue;
 
-      const upsertResult = await supabaseAdmin
+      const upsertResult = await adminDb
         .from("fixtures")
         .upsert(
           fixtures.map((fixture) => ({
             oddspapi_id: fixture.id,
             sport_id: sportId,
-            league_id: tournament.id,
+            league_id: tournament.tournamentId,
             home_team_id: fixture.homeTeam.id,
             away_team_id: fixture.awayTeam.id,
             start_time: fixture.startTime,
@@ -108,7 +111,7 @@ export class SyncService {
   }
 
   private async createSyncLog(sportId: number) {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await adminDb
       .from("sync_logs")
       .insert({
         sport_id: sportId,
@@ -135,7 +138,7 @@ export class SyncService {
   ) {
     const duration = differenceInMilliseconds(new Date(), startedAt);
 
-    const { error } = await supabaseAdmin
+    const { error } = await adminDb
       .from("sync_logs")
       .update({
         status,

@@ -113,7 +113,10 @@ export default function SettingsPage() {
       if (!result.success) {
         throw new Error(result.error || "Erreur inconnue");
       }
-      const label = sportId ? data.tournaments.labels[String(sportId)] ?? `Sport ${sportId}` : null;
+      const label =
+        sportId && data
+          ? data.tournaments.labels[String(sportId)] ?? `Sport ${sportId}`
+          : null;
       alert(
         `✅ Synchronisation réussie${
           label ? ` (${label})` : ""

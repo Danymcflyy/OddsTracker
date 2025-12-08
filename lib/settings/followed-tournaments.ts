@@ -47,5 +47,6 @@ export async function loadFollowedTournaments(): Promise<FollowedTournamentsMap>
     .eq("key", SettingKey.FOLLOWED_TOURNAMENTS)
     .single();
 
-  return normalizeFollowedTournaments(data?.value);
+  const row = data as { value: string | null } | null;
+  return normalizeFollowedTournaments(row?.value);
 }

@@ -1,8 +1,8 @@
 import { supabase } from "../index";
 
 export async function getSetting(key: string) {
-  // À implémenter
-  const { data, error } = await supabase
+  const client = supabase as any;
+  const { data, error } = await client
     .from("settings")
     .select("*")
     .eq("key", key)
@@ -13,8 +13,8 @@ export async function getSetting(key: string) {
 }
 
 export async function updateSetting(key: string, value: string) {
-  // À implémenter
-  const { data, error } = await supabase
+  const client = supabase as any;
+  const { data, error } = await client
     .from("settings")
     .update({ value, updated_at: new Date().toISOString() })
     .eq("key", key)

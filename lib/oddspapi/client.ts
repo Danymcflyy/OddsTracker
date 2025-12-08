@@ -93,17 +93,19 @@ async function waitForRateLimit(): Promise<void> {
  */
 async function incrementApiRequests(): Promise<void> {
   try {
+    const client = supabaseAdmin as any;
     // Récupérer le compteur actuel
-    const { data: setting } = await supabaseAdmin
+    const { data: setting } = await client
       .from("settings")
       .select("value")
       .eq("key", "api_requests_count")
       .single();
 
-    const currentCount = setting ? parseInt(setting.value, 10) : 0;
+    const settingRow = setting as { value: string | null } | null;
+    const currentCount = settingRow?.value ? parseInt(settingRow.value, 10) : 0;
 
     // Incrémenter
-    await supabaseAdmin
+    await client
       .from("settings")
       .update({
         value: (currentCount + 1).toString(),

@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const passwordHash = settings.value;
+    const passwordHash = (settings as { value?: string | null } | null)?.value ?? "";
 
     // Si le hash est vide, c'est la première connexion
     // On doit créer le hash avec le mot de passe fourni
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       // Premier login - définir le mot de passe
       const newHash = await bcrypt.hash(password, 10);
 
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await (supabaseAdmin as any)
         .from("settings")
         .update({ value: newHash, updated_at: new Date().toISOString() })
         .eq("key", "password_hash");

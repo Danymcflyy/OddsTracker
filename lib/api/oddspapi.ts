@@ -317,7 +317,8 @@ async function readApiRequestState(): Promise<ApiRequestState> {
 
   let count = 0;
   let resetDate: Date | null = null;
-  data.forEach((row) => {
+  const rows = data as Array<{ key: SettingKey; value: string | null }>;
+  rows.forEach((row) => {
     if (row.key === SettingKey.API_REQUESTS_COUNT) {
       count = parseInt(row.value ?? "0", 10) || 0;
     } else if (row.key === SettingKey.API_REQUESTS_RESET_DATE && row.value) {
@@ -341,7 +342,7 @@ async function writeSettings(values: Record<string, string>) {
     updated_at: new Date().toISOString(),
   }));
 
-  await supabaseAdmin.from("settings").upsert(entries, { onConflict: "key" });
+  await (supabaseAdmin as any).from("settings").upsert(entries, { onConflict: "key" });
 }
 
 function delay(duration: number) {

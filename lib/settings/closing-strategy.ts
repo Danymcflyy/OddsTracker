@@ -16,5 +16,6 @@ export async function loadClosingStrategy(): Promise<OddsClosingStrategy> {
     .eq("key", SettingKey.ODDS_CLOSING_STRATEGY)
     .single();
 
-  return normalizeClosingStrategy(data?.value);
+  const row = data as { value: string | null } | null;
+  return normalizeClosingStrategy(row?.value);
 }

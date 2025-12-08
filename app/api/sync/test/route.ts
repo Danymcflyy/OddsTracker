@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { OddsPapiClient } from "@/lib/api/oddspapi";
 import { supabaseAdmin } from "@/lib/db";
+import type { Database } from "@/types/database";
 import type {
   OddsPapiFixture,
   OddsPapiMarketOdds,
@@ -153,26 +154,38 @@ async function getOrCreate<T extends TableName>(
     insertData: Omit<TableInsert<T>, keyof UniqueColumns<T>>
 ): Promise<TableRow<T> & { isNew: boolean }> {
     
-    let query = supabaseAdmin.from(table).select().match(uniqueColumns).maybeSingle();
-    const { data: existing, error: selectError } = await query;
+    const supabaseTable = supabaseAdmin as any;
+    let query = supabaseTable.from(table).select().match(uniqueColumns).maybeSingle();
+    const { data: existingRaw, error: selectError } = await query;
     if (selectError) throw new Error(`Erreur SELECT sur ${table}: ${selectError.message}`);
-    
+    const existing = existingRaw as TableRow<T> | null;
+
     if (existing) {
-        return { ...existing as TableRow<T>, isNew: false };
+        return { ...existing, isNew: false };
     }
 
     const fullInsertData = { ...uniqueColumns, ...insertData };
-    const { data: created, error: insertError } = await supabaseAdmin.from(table).insert(fullInsertData as TableInsert<T>).select().single();
+    const { data: createdRaw, error: insertError } = await supabaseTable
+        .from(table)
+        .insert(fullInsertData as Record<string, unknown>)
+        .select()
+        .single();
+    const created = createdRaw as TableRow<T> | null;
 
     if (insertError) {
         // Gérer le cas d'une "race condition" où l'enregistrement a été créé entre le SELECT et l'INSERT
         if (insertError.code === '23505') { // unique_violation
-            const { data: final, error: finalSelectError } = await supabaseAdmin.from(table).select().match(uniqueColumns).single();
+            const { data: finalRaw, error: finalSelectError } = await supabaseTable.from(table).select().match(uniqueColumns).single();
             if (finalSelectError) throw new Error(`Erreur SELECT après race condition sur ${table}: ${finalSelectError.message}`);
-            return { ...final as TableRow<T>, isNew: false };
+            const final = finalRaw as TableRow<T>;
+            return { ...final, isNew: false };
         }
         throw new Error(`Erreur INSERT sur ${table}: ${insertError.message}`);
     }
 
-    return { ...created as TableRow<T>, isNew: true };
+    if (!created) {
+        throw new Error(`INSERT sur ${table} n'a pas retourné de ligne`);
+    }
+
+    return { ...created, isNew: true };
 }

@@ -95,11 +95,13 @@ export function settingsArrayToObject(settings: Setting[]): Partial<AppSettings>
 
     switch (key) {
       case "password_hash":
-      case "last_sync":
       case "auto_sync_time":
       case "extra_sync_time":
+        obj[key] = value ?? "";
+        break;
+      case "last_sync":
       case "api_requests_reset_date":
-        obj[key] = value || null;
+        obj[key] = value ?? null;
         break;
       case "auto_sync_enabled":
       case "extra_sync_enabled":

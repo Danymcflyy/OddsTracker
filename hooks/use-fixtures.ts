@@ -43,11 +43,14 @@ function createOdd({
     created_at: timestamp,
     market: {
       id: marketId,
+      oddspapi_id: marketId,
       name: marketName,
       description: marketDescription ?? null,
     },
     outcome: {
       id: outcomeId,
+      oddspapi_id: outcomeId,
+      market_id: marketId,
       name: outcomeName,
       description: null,
     },
@@ -73,6 +76,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 10001,
         name: "Manchester City",
@@ -173,6 +177,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 10003,
         name: "Paris SG",
@@ -284,6 +289,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 10005,
         name: "Borussia Dortmund",
@@ -386,6 +392,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 20001,
         name: "Toronto Maple Leafs",
@@ -475,6 +482,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 20003,
         name: "Los Angeles Kings",
@@ -555,6 +563,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 30001,
         name: "Carlos Alcaraz",
@@ -632,6 +641,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 30003,
         name: "Aryna Sabalenka",
@@ -712,6 +722,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 40001,
         name: "Trentino Volley",
@@ -790,6 +801,7 @@ const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
       status: "finished",
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      odds_locked_at: now.toISOString(),
       home_team: {
         id: 40003,
         name: "Turkish Airlines",

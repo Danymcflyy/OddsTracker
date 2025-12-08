@@ -1,4 +1,6 @@
 import type { Fixture, Team, League, Country, Odd } from "./database";
+import type { OddWithDetails } from "./odds";
+export type { OddWithDetails } from "./odds";
 
 /**
  * Fixture avec les détails complets (équipes, ligue, pays)
@@ -37,22 +39,6 @@ export interface FixtureWithOdds extends FixtureWithDetails {
  */
 export interface FixtureWithEnrichedOdds extends FixtureWithDetails {
   odds: OddWithDetails[];
-}
-
-/**
- * Cote avec les détails du marché et du résultat
- */
-export interface OddWithDetails extends Odd {
-  market: {
-    id: number;
-    name: string;
-    description: string | null;
-  };
-  outcome: {
-    id: number;
-    name: string;
-    description: string | null;
-  };
 }
 
 /**

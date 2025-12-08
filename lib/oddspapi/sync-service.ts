@@ -80,6 +80,7 @@ export class OddsSyncService {
 
   private syncLogId?: number;
   private aborted = false;
+  private db = supabaseAdmin as any;
 
   /**
    * Récupère la progression actuelle
@@ -115,7 +116,7 @@ export class OddsSyncService {
 
     try {
       // Créer un log de synchronisation
-      const { data: syncLog, error: logError } = await supabaseAdmin
+      const { data: syncLog, error: logError } = await this.db
         .from("sync_logs")
         .insert({
           sport_id: 1, // On mettra à jour par sport après
@@ -157,7 +158,7 @@ export class OddsSyncService {
       await this.updateSyncLog("success");
 
       // Mettre à jour la date de dernière sync
-      await supabaseAdmin
+      await this.db
         .from("settings")
         .update({
           value: new Date().toISOString(),
@@ -245,7 +246,7 @@ export class OddsSyncService {
    * Récupère ou crée un sport
    */
   private async getOrCreateSport(slug: string) {
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await this.db
       .from("sports")
       .select("*")
       .eq("slug", slug)
@@ -262,7 +263,7 @@ export class OddsSyncService {
   private async getOrCreateCountry(countryName: string) {
     const slug = countryName.toLowerCase().replace(/\s+/g, "-");
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await this.db
       .from("countries")
       .select("*")
       .eq("oddspapi_slug", slug)
@@ -270,7 +271,7 @@ export class OddsSyncService {
 
     if (existing) return existing;
 
-    const { data: created, error } = await supabaseAdmin
+    const { data: created, error } = await this.db
       .from("countries")
       .insert({ oddspapi_slug: slug, name: countryName })
       .select()
@@ -295,7 +296,7 @@ export class OddsSyncService {
     // Générer un oddspapi_id à partir du key
     const oddspapiId = leagueKey.split("_").slice(-1)[0].charCodeAt(0);
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await this.db
       .from("leagues")
       .select("*")
       .eq("slug", leagueKey)
@@ -303,7 +304,7 @@ export class OddsSyncService {
 
     if (existing) return existing;
 
-    const { data: created, error } = await supabaseAdmin
+    const { data: created, error } = await this.db
       .from("leagues")
       .insert({
         oddspapi_id: oddspapiId,
@@ -329,7 +330,7 @@ export class OddsSyncService {
     // Générer un oddspapi_id à partir du nom
     const oddspapiId = teamName.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await this.db
       .from("teams")
       .select("*")
       .eq("name", teamName)
@@ -337,7 +338,7 @@ export class OddsSyncService {
 
     if (existing) return existing;
 
-    const { data: created, error } = await supabaseAdmin
+    const { data: created, error } = await this.db
       .from("teams")
       .insert({ oddspapi_id: oddspapiId, name: teamName })
       .select()
@@ -363,7 +364,7 @@ export class OddsSyncService {
     const awayTeam = await this.getOrCreateTeam(event.away_team);
 
     // 2. Créer ou mettre à jour le fixture
-    const { data: fixture, error: fixtureError } = await supabaseAdmin
+    const { data: fixture, error: fixtureError } = await this.db
       .from("fixtures")
       .upsert(
         {
@@ -417,7 +418,7 @@ export class OddsSyncService {
         const outcome = await this.getOrCreateOutcome(outcomeName, market.id);
 
         // Insérer les cotes (closing pour l'instant)
-        await supabaseAdmin.from("odds").insert({
+        await this.db.from("odds").insert({
           fixture_id: fixtureId,
           market_id: market.id,
           outcome_id: outcome.id,
@@ -443,7 +444,7 @@ export class OddsSyncService {
     const oddspapiId = marketKey.charCodeAt(0);
     const name = marketNames[marketKey] || marketKey;
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await this.db
       .from("markets")
       .select("*")
       .eq("oddspapi_id", oddspapiId)
@@ -451,7 +452,7 @@ export class OddsSyncService {
 
     if (existing) return existing;
 
-    const { data: created, error } = await supabaseAdmin
+    const { data: created, error } = await this.db
       .from("markets")
       .insert({ oddspapi_id: oddspapiId, name })
       .select()
@@ -470,7 +471,7 @@ export class OddsSyncService {
   private async getOrCreateOutcome(outcomeName: string, marketId: number) {
     const oddspapiId = outcomeName.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await this.db
       .from("outcomes")
       .select("*")
       .eq("name", outcomeName)
@@ -479,7 +480,7 @@ export class OddsSyncService {
 
     if (existing) return existing;
 
-    const { data: created, error } = await supabaseAdmin
+    const { data: created, error } = await this.db
       .from("outcomes")
       .insert({ oddspapi_id: oddspapiId, market_id: marketId, name: outcomeName })
       .select()
@@ -502,7 +503,7 @@ export class OddsSyncService {
     const awayScoreData = scoreData.scores.find((s) => s.name === scoreData.away_team);
 
     if (homeScoreData && awayScoreData) {
-      await supabaseAdmin
+      await this.db
         .from("fixtures")
         .update({
           home_score: parseInt(homeScoreData.score) || null,
@@ -520,7 +521,7 @@ export class OddsSyncService {
   private async updateSyncLog(status: string): Promise<void> {
     if (!this.syncLogId) return;
 
-    await supabaseAdmin
+    await this.db
       .from("sync_logs")
       .update({
         status,

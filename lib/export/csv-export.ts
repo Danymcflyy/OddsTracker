@@ -1,11 +1,14 @@
 import type { FixtureWithEnrichedOdds } from "@/types/fixture";
 
-interface CsvExportOptions {
+export interface CsvExportOptions {
   filename: string;
   visibleColumns: string[];
   data: FixtureWithEnrichedOdds[];
   columnLabels?: Record<string, string>;
-  formatCell?: (row: FixtureWithEnrichedOdds, columnId: string) => string | number | null;
+  formatCell?: (
+    row: FixtureWithEnrichedOdds,
+    columnId: string
+  ) => string | number | Date | null | undefined;
 }
 
 const DEFAULT_LABELS: Record<string, string> = {

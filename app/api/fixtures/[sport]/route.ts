@@ -44,7 +44,7 @@ export async function GET(
       );
     }
 
-    const sportId = sportRow.id;
+    const sportId = (sportRow as { id: number }).id;
 
     const url = new URL(request.url);
     const searchParams = url.searchParams;
@@ -95,8 +95,9 @@ export async function GET(
           throw error;
         }
 
+        const leagueRows = (data ?? []) as { id: number }[];
         return {
-          leagueIds: data?.map((league) => league.id) ?? [],
+          leagueIds: leagueRows.map((league) => league.id),
         };
       });
     }
@@ -113,7 +114,8 @@ export async function GET(
           throw error;
         }
 
-        const teamIds = data?.map((team) => team.id) ?? [];
+        const teamRows = (data ?? []) as { id: number }[];
+        const teamIds = teamRows.map((team) => team.id);
         return { teamIds };
       });
     }
@@ -133,7 +135,8 @@ export async function GET(
             throw marketsError;
           }
 
-          marketIds = marketsData?.map((market) => market.id) ?? [];
+          const marketRows = (marketsData ?? []) as { id: number }[];
+          marketIds = marketRows.map((market) => market.id);
           if (!marketIds.length) {
             return { fixtureIds: [] };
           }

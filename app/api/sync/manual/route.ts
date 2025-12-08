@@ -40,5 +40,6 @@ async function readApiRequestCount(): Promise<number> {
     .eq("key", SettingKey.API_REQUESTS_COUNT)
     .single();
 
-  return parseInt(data?.value ?? "0", 10) || 0;
+  const record = (data as { value?: string | null } | null)?.value ?? "0";
+  return parseInt(record, 10) || 0;
 }

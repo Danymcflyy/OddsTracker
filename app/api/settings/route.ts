@@ -53,9 +53,21 @@ export async function GET() {
     .limit(10);
 
   const { data: sports } = await supabaseAdmin.from("sports").select("id,name");
-  const sportsMap = new Map((sports ?? []).map((sport) => [sport.id, sport.name]));
+  const sportsRows = (sports ?? []) as { id: number; name: string }[];
+  const sportsMap = new Map(sportsRows.map((sport) => [sport.id, sport.name]));
 
-  const syncLogs = (logs ?? []).map((log) => ({
+  const logRows =
+    (logs ?? []) as Array<{
+      id: number;
+      started_at: string | null;
+      completed_at?: string | null;
+      sport_id: number | null;
+      status: string;
+      records_fetched: number | null;
+      records_inserted: number | null;
+    }>;
+
+  const syncLogs = logRows.map((log) => ({
     id: log.id,
     date: log.started_at,
     sport: sportsMap.get(log.sport_id ?? 0) ?? "Sport inconnu",
@@ -146,7 +158,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Aucune donnée à mettre à jour" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { error } = await (supabaseAdmin as any)
     .from("settings")
     .upsert(
       updates.map((entry) => ({

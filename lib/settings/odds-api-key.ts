@@ -8,7 +8,8 @@ export async function loadOddsApiKey(): Promise<string | null> {
     .eq("key", SettingKey.ODDSPAPI_API_KEY)
     .single();
 
-  return data?.value ?? null;
+  const row = data as { value: string | null } | null;
+  return row?.value ?? null;
 }
 
 export function maskOddsApiKey(value?: string | null) {
