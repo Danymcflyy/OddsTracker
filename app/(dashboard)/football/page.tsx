@@ -124,46 +124,48 @@ export default function FootballPage() {
         </div>
       </header>
 
-      {isHydrated ? (
-        <>
-          <FiltersPanel
-            filters={filters}
-            updateFilter={updateFilter}
-            resetFilters={resetFilters}
-            countryOptions={countryOptions}
-            leagueOptions={leagueOptions}
-          />
+      <div suppressHydrationWarning>
+        {isHydrated && (
+          <>
+            <FiltersPanel
+              filters={filters}
+              updateFilter={updateFilter}
+              resetFilters={resetFilters}
+              countryOptions={countryOptions}
+              leagueOptions={leagueOptions}
+            />
 
-          <Card suppressHydrationWarning>
-            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-lg font-semibold text-slate-900">
-                Résultats : {filteredData.length.toLocaleString("fr-FR")} matchs
-              </CardTitle>
-              {error ? (
-                <p className="text-sm text-destructive">Erreur : {error}</p>
-              ) : (
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>Pagination côté serveur</span>
-                  <span>•</span>
-                  <span>Tri multi-colonnes</span>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent suppressHydrationWarning>
-              <FootballTableClient
-                data={paginatedData}
-                isLoading={loading}
-                pageCount={pageCount}
-                pagination={pagination}
-                sorting={sorting}
-                onPaginationChange={setPagination}
-                onSortingChange={setSorting}
-                renderToolbar={toolbarRenderer}
-              />
-            </CardContent>
-          </Card>
-        </>
-      ) : null}
+            <Card suppressHydrationWarning>
+              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Résultats : {filteredData.length.toLocaleString("fr-FR")} matchs
+                </CardTitle>
+                {error ? (
+                  <p className="text-sm text-destructive">Erreur : {error}</p>
+                ) : (
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>Pagination côté serveur</span>
+                    <span>•</span>
+                    <span>Tri multi-colonnes</span>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent suppressHydrationWarning>
+                <FootballTableClient
+                  data={paginatedData}
+                  isLoading={loading}
+                  pageCount={pageCount}
+                  pagination={pagination}
+                  sorting={sorting}
+                  onPaginationChange={setPagination}
+                  onSortingChange={setSorting}
+                  renderToolbar={toolbarRenderer}
+                />
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
     </div>
   );
 }
