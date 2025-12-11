@@ -94,6 +94,13 @@ export default function FootballPage() {
     []
   );
 
+  // Only render table after initial hydration to avoid SSR mismatch
+  const [isHydrated, setIsHydrated] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
   return (
     <div className="space-y-8">
       <header className="space-y-2">
@@ -141,16 +148,18 @@ export default function FootballPage() {
           )}
         </CardHeader>
         <CardContent suppressHydrationWarning>
-          <FootballTableClient
-            data={paginatedData}
-            isLoading={loading}
-            pageCount={pageCount}
-            pagination={pagination}
-            sorting={sorting}
-            onPaginationChange={setPagination}
-            onSortingChange={setSorting}
-            renderToolbar={toolbarRenderer}
-          />
+          {isHydrated && (
+            <FootballTableClient
+              data={paginatedData}
+              isLoading={loading}
+              pageCount={pageCount}
+              pagination={pagination}
+              sorting={sorting}
+              onPaginationChange={setPagination}
+              onSortingChange={setSorting}
+              renderToolbar={toolbarRenderer}
+            />
+          )}
         </CardContent>
       </Card>
     </div>
