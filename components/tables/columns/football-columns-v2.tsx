@@ -9,11 +9,27 @@ import type { FixtureWithEnrichedOdds, OddWithDetails } from "@/types/fixture";
 
 type FootballTableRow = FixtureWithEnrichedOdds;
 
+export function getStaticFootballColumns(): ColumnDef<FootballTableRow>[] {
+  return getStaticColumns();
+}
+
+export function extractUniqueOddsFromFixtures(fixtures: FixtureWithEnrichedOdds[]): OddDefinition[] {
+  return extractUniqueOdds(fixtures);
+}
+
+export function buildOddColumnForFixture(
+  oddDef: OddDefinition,
+  priceType: "opening" | "closing"
+): ColumnDef<FootballTableRow> {
+  return buildOddColumn(oddDef, priceType);
+}
+
 export function createFootballColumns(fixtures?: FixtureWithEnrichedOdds[]): ColumnDef<FootballTableRow>[] {
   // Colonnes statiques (Date, Pays, Ligue, Équipes, Scores)
   const staticColumns = getStaticColumns();
 
-  // Si pas de fixtures, retourner juste les colonnes statiques
+  // Si pas de fixtures ou fixture vide, retourner juste les colonnes statiques
+  // (Les colonnes d'odds seront ajoutées côté client via useMemo)
   if (!fixtures || fixtures.length === 0) {
     return staticColumns;
   }
@@ -66,7 +82,7 @@ function extractUniqueOdds(fixtures: FixtureWithEnrichedOdds[]): OddDefinition[]
   });
 }
 
-interface OddDefinition {
+export interface OddDefinition {
   marketId: string | number;
   marketName: string;
   marketDescription: string;

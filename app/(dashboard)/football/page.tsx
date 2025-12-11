@@ -5,7 +5,7 @@ import type { PaginationState, SortingState, Table as TanstackTable } from "@tan
 import { Filter, RefreshCw } from "lucide-react";
 
 import { DataTable } from "@/components/tables/data-table";
-import { createFootballColumns } from "@/components/tables/columns/football-columns-v2";
+import { getStaticFootballColumns, extractUniqueOddsFromFixtures, buildOddColumnForFixture } from "@/components/tables/columns/football-columns-v2";
 import { ColumnVisibilityToggle } from "@/components/tables/column-visibility";
 import { ExportButtons } from "@/components/tables/export-buttons";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
@@ -48,7 +48,22 @@ export default function FootballPage() {
   }, [fixtures]);
 
   const columns = React.useMemo(() => {
-    return createFootballColumns(typedFixtures);
+    // Colonnes statiques
+    const staticColumns = getStaticFootballColumns();
+
+    // Si pas de fixtures, retourner juste les colonnes statiques
+    if (!typedFixtures || typedFixtures.length === 0) {
+      return staticColumns;
+    }
+
+    // Extraire les odds uniques et créer les colonnes
+    const oddsDefinitions = extractUniqueOddsFromFixtures(typedFixtures);
+    const oddsColumns = oddsDefinitions.flatMap((oddDef) => [
+      buildOddColumnForFixture(oddDef, "opening"),
+      buildOddColumnForFixture(oddDef, "closing"),
+    ]);
+
+    return [...staticColumns, ...oddsColumns];
   }, [typedFixtures]);
 
   const loading = fixturesLoading;
