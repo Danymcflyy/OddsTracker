@@ -5,7 +5,7 @@ import type { PaginationState, SortingState, Table as TanstackTable } from "@tan
 import { Filter, RefreshCw } from "lucide-react";
 
 import { DataTable } from "@/components/tables/data-table";
-import { footballColumns } from "@/components/tables/columns/football-columns";
+import { createFootballColumns } from "@/components/tables/columns/football-columns";
 import { ColumnVisibilityToggle } from "@/components/tables/column-visibility";
 import { ExportButtons } from "@/components/tables/export-buttons";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFilters } from "@/hooks/use-filters";
 import { useFixtures } from "@/hooks/use-fixtures";
+import { useMarkets } from "@/hooks/use-markets";
 import type { FixtureWithEnrichedOdds, OddWithDetails } from "@/types/fixture";
 import type { Filters } from "@/types/filters";
 
@@ -27,12 +28,11 @@ const MARKET_TYPE_OPTIONS = [
   { id: "1X2", name: "1X2" },
   { id: "OVER", name: "Over/Under" },
   { id: "HANDICAP", name: "Handicap" },
-  { id: "DOUBLE", name: "Double Chance" },
-  { id: "BTTS", name: "Both Teams To Score" },
 ];
 
 export default function FootballPage() {
-  const { fixtures, loading, error, isDemoData } = useFixtures("football");
+  const { fixtures, loading: fixturesLoading, error, isDemoData } = useFixtures("football");
+  const { markets, loading: marketsLoading } = useMarkets("football");
   const { filters, updateFilter, resetFilters } = useFilters();
 
   const [pagination, setPagination] = React.useState<PaginationState>({
@@ -40,6 +40,13 @@ export default function FootballPage() {
     pageSize: 25,
   });
   const [sorting, setSorting] = React.useState<SortingState>([]);
+
+  // Générer colonnes dynamiquement depuis les marchés DB
+  const columns = React.useMemo(() => {
+    return createFootballColumns(markets);
+  }, [markets]);
+
+  const loading = fixturesLoading || marketsLoading;
 
   const typedFixtures = React.useMemo(() => {
     if (!Array.isArray(fixtures)) {
@@ -146,7 +153,7 @@ export default function FootballPage() {
         </CardHeader>
         <CardContent>
           <DataTable
-            columns={footballColumns}
+            columns={columns}
             data={paginatedData}
             pageCount={pageCount}
             pagination={pagination}

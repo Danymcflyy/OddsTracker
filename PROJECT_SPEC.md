@@ -631,25 +631,21 @@ Les colonnes de cotes sont générées dynamiquement selon les marchés disponib
 - 101 : 1X2 (Home/Draw/Away) → `1-Open`, `1-Close`, `X-Open`, `X-Close`, `2-Open`, `2-Close`
 - Over/Under 0.5, 1.5, 2.5, 3.5, 4.5, 5.5 → `O0.5-Open`, `O0.5-Close`, `U0.5-Open`, etc.
 - Handicap Asiatique → `AH-0.5-Open`, `AH+0.5-Open`, etc.
-- Double Chance → `1X-Open`, `12-Open`, `X2-Open`, etc.
-- Both Teams To Score → `BTTS-Y-Open`, `BTTS-N-Open`, etc.
 
 **Marchés Hockey** :
-- Moneyline (1X2 ou Home/Away selon ligue)
-- Over/Under (totaux buts)
-- Puck Line (handicap)
+- Moneyline (Home/Away)
+- Over/Under (totaux buts principaux 4.5 / 5.5 / 6.5)
+- Puck Line (handicap ±1.5)
 
 **Marchés Tennis** :
 - Moneyline (vainqueur match)
-- Set Handicap
-- Total Games Over/Under
-- Set Betting
+- Handicap (sets / jeux)
+- Total Games Over/Under (20.5, 22.5, 24.5)
 
 **Marchés Volleyball** :
 - Moneyline
 - Set Handicap
-- Total Points
-- Set Betting
+- Total Points (145.5, 150.5, 155.5)
 
 ### Gestion visibilité colonnes
 

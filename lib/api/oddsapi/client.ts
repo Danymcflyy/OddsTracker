@@ -91,10 +91,12 @@ export class OddsApiClient {
       searchParams.set('league', params.league);
     }
     if (params.fromDate) {
-      searchParams.set('from', Math.floor(params.fromDate.getTime() / 1000).toString());
+      // L'API nécessite le format RFC3339, pas Unix timestamp
+      searchParams.set('from', this.dateToRFC3339(params.fromDate));
     }
     if (params.toDate) {
-      searchParams.set('to', Math.floor(params.toDate.getTime() / 1000).toString());
+      // L'API nécessite le format RFC3339, pas Unix timestamp
+      searchParams.set('to', this.dateToRFC3339(params.toDate));
     }
 
     // L'API retourne un array directement, pas un objet avec 'events'
@@ -281,6 +283,13 @@ export class OddsApiClient {
         null
       );
     }
+  }
+
+  /**
+   * Convertit une Date en format RFC3339 (requis par l'API)
+   */
+  private dateToRFC3339(date: Date): string {
+    return date.toISOString();
   }
 
   /**

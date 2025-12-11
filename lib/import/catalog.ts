@@ -160,4 +160,25 @@ export const BASE_MARKETS: Record<string, MarketDefinition> = {
       { key: "U25", oddspapiId: 10252, name: "U25", description: "Under 2.5" },
     ],
   },
+  ASIAN_HANDICAP: {
+    key: "ASIAN_HANDICAP",
+    oddspapiId: 1030,
+    name: "Asian Handicap",
+    description: "Handicap (Home/Away)",
+    outcomes: [
+      { key: "HOME", oddspapiId: 10301, name: "Home" },
+      { key: "AWAY", oddspapiId: 10302, name: "Away" },
+    ],
+  },
+};
+
+export const TOTALS_MARKET_TEMPLATE: MarketDefinition = {
+  key: "TOTALS_TEMPLATE",
+  oddspapiId: 1020,
+  name: "Total",
+  description: "Over/Under",
+  outcomes: [
+    { key: "OVER", oddspapiId: 10201, name: "Over" },
+    { key: "UNDER", oddspapiId: 10202, name: "Under" },
+  ],
 };

@@ -25,8 +25,8 @@ async function main() {
   console.log(`✅ Found event ID: ${eventId}\n`);
 
   // Test /v3/odds with this event
-  console.log("2️⃣ Testing GET /v3/odds?eventId=XXX&bookmakers=pinnacle\n");
-  const oddsUrl = `${baseUrl}/v3/odds?eventId=${eventId}&bookmakers=pinnacle&apiKey=${apiKey}`;
+  console.log("2️⃣ Testing GET /v3/odds?eventId=XXX&bookmakers=Pinnacle\n");
+  const oddsUrl = `${baseUrl}/v3/odds?eventId=${eventId}&bookmakers=Pinnacle&apiKey=${apiKey}`;
   console.log(`URL: ${oddsUrl}\n`);
 
   const oddsResponse = await fetch(oddsUrl);
@@ -55,9 +55,9 @@ async function main() {
   }
 
   // Test /v3/odds/updated with bookmaker
-  console.log("\n3️⃣ Testing GET /v3/odds/updated?sport=football&since=XXX&bookmaker=pinnacle\n");
+  console.log("\n3️⃣ Testing GET /v3/odds/updated?sport=football&since=XXX&bookmaker=Pinnacle\n");
   const sinceTimestamp = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
-  const updatedUrl = `${baseUrl}/v3/odds/updated?sport=football&since=${sinceTimestamp}&bookmaker=pinnacle&apiKey=${apiKey}`;
+  const updatedUrl = `${baseUrl}/v3/odds/updated?sport=football&since=${sinceTimestamp}&bookmaker=Pinnacle&apiKey=${apiKey}`;
   console.log(`URL: ${updatedUrl}\n`);
 
   const updatedResponse = await fetch(updatedUrl);

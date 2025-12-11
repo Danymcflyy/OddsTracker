@@ -106,16 +106,26 @@ async function discoverFootball() {
     try {
       console.log(`  📋 ${leagueKey}...`);
 
-      // Récupérer les événements
-      const events = await oddsApiClient.getEvents({
+      // Chercher d'abord les événements futurs
+      let events = await oddsApiClient.getEvents({
         sport: "football",
         league: leagueKey,
         fromDate: new Date(),
         toDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      });
+      }).catch(() => null as any);
+
+      // Si aucun événement futur, chercher les événements passés
+      if (!events || events.length === 0) {
+        events = await oddsApiClient.getEvents({
+          sport: "football",
+          league: leagueKey,
+          fromDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+          toDate: new Date(),
+        }).catch(() => null as any);
+      }
 
       if (!events || events.length === 0) {
-        console.log(`     ⚠️  No events found (league may not exist)`);
+        console.log(`     ⚠️  No events found (league may not exist or no odds available)`);
         continue;
       }
 
@@ -132,7 +142,7 @@ async function discoverFootball() {
       // Analyser les marchés du premier événement
       try {
         const odds = await oddsApiClient.getOdds(events[0].id);
-        const pinnacle = odds.bookmakers?.find((b) => b.key === "pinnacle");
+        const pinnacle = odds.bookmakers?.find((b) => b.key === "Pinnacle" || b.key?.toLowerCase() === "pinnacle");
 
         if (pinnacle) {
           const markets = pinnacle.markets.map((m) => m.key);
@@ -163,7 +173,7 @@ async function discoverTennis() {
     report.sports["Tennis"] = { leagues: {} };
   }
 
-  // Tournois présumés
+  // Tournois présumés - utiliser le sport slug "tennis" tout court
   const presumedTournaments = [
     // Grand Slams
     "australian-open",
@@ -171,7 +181,7 @@ async function discoverTennis() {
     "wimbledon",
     "us-open",
 
-    // ATP Masters
+    // ATP Masters 1000
     "atp-indian-wells",
     "atp-miami",
     "atp-madrid",
@@ -181,79 +191,94 @@ async function discoverTennis() {
     "atp-shanghai",
     "atp-paris",
 
-    // ATP Tour
-    "atp_main_tour",
+    // ATP Finals
+    "atp-finals",
 
-    // WTA
-    "wta_main_tour",
+    // WTA 1000
+    "wta-beijing",
+    "wta-dubai",
+    "wta-doha",
+
+    // WTA Finals
+    "wta-finals",
   ];
 
-  for (const tournamentKey of presumedTournaments) {
-    try {
-      console.log(`  📋 ${tournamentKey}...`);
+  // Essayer d'abord avec "tennis" comme sport slug
+  const sportSlugs = ["tennis", "tennis_atp", "tennis_wta", "atp", "wta"];
 
-      // Chercher d'abord avec ATP
-      let events = await oddsApiClient
-        .getEvents({
-          sport: "tennis_atp",
+  for (const tournamentKey of presumedTournaments) {
+    let found = false;
+
+    for (const sportSlug of sportSlugs) {
+      if (found) break;
+
+      try {
+        console.log(`  📋 ${tournamentKey} (${sportSlug})...`);
+
+        // Chercher d'abord les événements futurs
+        let events = await oddsApiClient.getEvents({
+          sport: sportSlug,
           league: tournamentKey,
           fromDate: new Date(),
           toDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        })
-        .catch(() => null as any);
+        }).catch(() => null as any);
 
-      // Si pas trouvé en ATP, essayer WTA
-      if (!events || events.length === 0) {
-        events = await oddsApiClient
-          .getEvents({
-            sport: "tennis_wta",
+        // Si aucun événement futur, chercher les événements passés
+        if (!events || events.length === 0) {
+          events = await oddsApiClient.getEvents({
+            sport: sportSlug,
             league: tournamentKey,
-            fromDate: new Date(),
-            toDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          })
-          .catch(() => null as any);
-      }
-
-      if (!events || events.length === 0) {
-        console.log(`     ⚠️  No events found`);
-        continue;
-      }
-
-      const tournamentName =
-        events[0].league_title || tournamentKey.replace(/-/g, " ");
-      report.sports["Tennis"].leagues[tournamentKey] = {
-        leagueName: tournamentName,
-        eventCount: events.length,
-        sample_event_id: events[0].id,
-      };
-
-      console.log(`     ✅ Found ${events.length} events`);
-
-      // Analyser les marchés
-      try {
-        const odds = await oddsApiClient.getOdds(events[0].id);
-        const pinnacle = odds.bookmakers?.find((b) => b.key === "pinnacle");
-
-        if (pinnacle) {
-          const markets = pinnacle.markets.map((m) => m.key);
-          const outcomes: { [market: string]: string[] } = {};
-
-          for (const market of pinnacle.markets) {
-            outcomes[market.key] = market.outcomes.map((o) => o.name);
-          }
-
-          report.sports["Tennis"].leagues[tournamentKey].markets = markets;
-          report.sports["Tennis"].leagues[tournamentKey].outcomes = outcomes;
-
-          console.log(
-            `     📈 Markets: ${markets.join(", ").substring(0, 60)}...`
-          );
+            fromDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+            toDate: new Date(),
+          }).catch(() => null as any);
         }
+
+        if (!events || events.length === 0) {
+          continue;
+        }
+
+        const tournamentName =
+          events[0].league_title || tournamentKey.replace(/-/g, " ");
+        report.sports["Tennis"].leagues[tournamentKey] = {
+          leagueName: tournamentName,
+          eventCount: events.length,
+          sample_event_id: events[0].id,
+        };
+
+        console.log(`     ✅ Found ${events.length} events (sport: ${sportSlug})`);
+
+        // Analyser les marchés
+        try {
+          const odds = await oddsApiClient.getOdds(events[0].id);
+          const pinnacle = odds.bookmakers?.find((b) => b.key === "Pinnacle" || b.key?.toLowerCase() === "pinnacle");
+
+          if (pinnacle) {
+            const markets = pinnacle.markets.map((m) => m.key);
+            const outcomes: { [market: string]: string[] } = {};
+
+            for (const market of pinnacle.markets) {
+              outcomes[market.key] = market.outcomes.map((o) => o.name);
+            }
+
+            report.sports["Tennis"].leagues[tournamentKey].markets = markets;
+            report.sports["Tennis"].leagues[tournamentKey].outcomes = outcomes;
+
+            console.log(
+              `     📈 Markets: ${markets.join(", ").substring(0, 60)}...`
+            );
+          }
+        } catch (error) {
+          console.log(`     ⚠️  Could not fetch odds details`);
+        }
+
+        found = true;
       } catch (error) {
-        console.log(`     ⚠️  Could not fetch odds details`);
+        // Continue trying other sport slugs
       }
-    } catch (error) {
-      console.log(`     ⚠️  Skipped`);
+    }
+
+    if (!found) {
+      console.log(`  📋 ${tournamentKey}... ⚠️  Not found in any sport slug`);
     }
   }
 }

@@ -16,84 +16,64 @@ import { supabaseAdmin } from '@/lib/db';
 import { oddsApiClient } from '@/lib/api/oddsapi/client';
 import { stateMachineService } from '@/lib/sync/state-machine-service';
 import { normalizeOddsApiEvent, normalizeTeamName, normalizePlayerName } from '@/lib/api/oddsapi/normalizer';
+import { FOOTBALL_LEAGUES, TENNIS_TOURNAMENTS } from '@/lib/config/leagues-config';
 import { addDays, subDays } from 'date-fns';
 import type { OddsApiEvent } from '@/lib/api/oddsapi/types';
 
-// Configuration des ligues à enrichir
-const FOOTBALL_LEAGUES = [
-  { slug: 'england-premier-league', name: 'Premier League' },
-  { slug: 'spain-la-liga', name: 'La Liga' },
-  { slug: 'italy-serie-a', name: 'Serie A' },
-  { slug: 'germany-bundesliga', name: 'Bundesliga' },
-  { slug: 'france-ligue-1', name: 'Ligue 1' },
-  { slug: 'uefa-champions-league', name: 'Champions League' },
-  { slug: 'uefa-europa-league', name: 'Europa League' },
-  { slug: 'portugal-primeira-liga', name: 'Primeira Liga' },
-  { slug: 'netherlands-eredivisie', name: 'Eredivisie' },
-  { slug: 'belgium-pro-league', name: 'Pro League' },
-  { slug: 'scotland-premiership', name: 'Scottish Premiership' },
-  { slug: 'turkey-super-lig', name: 'Süper Lig' },
-  { slug: 'austria-bundesliga', name: 'Bundesliga' },
-  { slug: 'switzerland-super-league', name: 'Super League' },
-  { slug: 'greece-super-league', name: 'Super League' },
-];
-
-const TENNIS_TOURNAMENTS = [
-  'atp_main_tour',
-  'wta_main_tour',
-];
+const FOOTBALL = 'football';
+const TENNIS = 'tennis';
 
 export class JobBEventsEnrichment {
   /**
    * Exécute le job B
    */
   async run(): Promise<void> {
-    console.log('\n🚀 Job B - Starting events enrichment...\n');
+    console.log('\n🚀 Job B - Enrichment and finalization via /v3/events polling...\n');
 
     const startTime = Date.now();
     let totalEnriched = 0;
     let totalSettled = 0;
 
     // Enrichir Football
-    console.log('🏈 Processing Football leagues...');
-    for (const league of FOOTBALL_LEAGUES) {
+    console.log('🏈 Processing Football leagues:');
+    const activeFootballLeagues = FOOTBALL_LEAGUES.filter(l => l.active);
+    for (const league of activeFootballLeagues) {
       try {
-        const [enriched, settled] = await this.enrichSportsLeague('Football', league.slug);
+        console.log(`\n  📋 ${league.name}`);
+        const [enriched, settled] = await this.enrichLeagueEvents(FOOTBALL, league.slug);
+        console.log(`     ✅ ${enriched} enriched, ${settled} settled`);
         totalEnriched += enriched;
         totalSettled += settled;
-        console.log(
-          `   ✅ ${league.name}: ${enriched} enriched, ${settled} settled`
-        );
       } catch (error) {
-        console.error(`   ❌ Error enriching ${league.name}:`, error);
+        console.error(`  ❌ Error enriching ${league.name}:`, error instanceof Error ? error.message : error);
       }
     }
 
     // Enrichir Tennis
-    console.log('\n🎾 Processing Tennis tournaments...');
-    for (const tournament of TENNIS_TOURNAMENTS) {
+    console.log('\n\n🎾 Processing Tennis tournaments:');
+    const activeTennisTournaments = TENNIS_TOURNAMENTS.filter(l => l.active);
+    for (const tournament of activeTennisTournaments) {
       try {
-        const [enriched, settled] = await this.enrichSportsTournament('Tennis', tournament);
+        console.log(`\n  📋 ${tournament.name}`);
+        const [enriched, settled] = await this.enrichLeagueEvents(TENNIS, tournament.slug);
+        console.log(`     ✅ ${enriched} enriched, ${settled} settled`);
         totalEnriched += enriched;
         totalSettled += settled;
-        console.log(`   ✅ ${tournament}: ${enriched} enriched, ${settled} settled`);
       } catch (error) {
-        console.error(`   ❌ Error enriching ${tournament}:`, error);
+        console.error(`  ❌ Error enriching ${tournament.name}:`, error instanceof Error ? error.message : error);
       }
     }
 
     const duration = Date.now() - startTime;
-    console.log(`
-✅ Job B completed in ${duration}ms
-   Total enriched: ${totalEnriched}
-   Total settled:  ${totalSettled}
-    `);
+    console.log(`\n✅ Job B completed in ${duration}ms`);
+    console.log(`   📊 Total enriched: ${totalEnriched}`);
+    console.log(`   🏁 Total settled:  ${totalSettled}`);
   }
 
   /**
-   * Enrichit une ligue de sport
+   * Enrichit les événements d'une ligue/tournoi
    */
-  private async enrichSportsLeague(sport: string, leagueSlug: string): Promise<[number, number]> {
+  private async enrichLeagueEvents(sport: string, leagueSlug: string): Promise<[number, number]> {
     const from = subDays(new Date(), 7);  // Derniers 7 jours
     const to = addDays(new Date(), 30);   // Prochains 30 jours
 
@@ -101,15 +81,22 @@ export class JobBEventsEnrichment {
 
     try {
       events = await oddsApiClient.getEvents({
-        sport: sport.toLowerCase(),
+        sport,
         league: leagueSlug,
         fromDate: from,
         toDate: to,
       });
     } catch (error) {
-      console.error(`Error fetching events for ${leagueSlug}:`, error);
+      console.warn(`     ⚠️  Could not fetch events: ${error instanceof Error ? error.message : error}`);
       return [0, 0];
     }
+
+    if (!events || events.length === 0) {
+      console.log(`     ℹ️  No events found`);
+      return [0, 0];
+    }
+
+    console.log(`     📌 Processing ${events.length} events`);
 
     let enriched = 0;
     let settled = 0;
@@ -120,44 +107,7 @@ export class JobBEventsEnrichment {
         if (isEnriched) enriched++;
         if (isSettled) settled++;
       } catch (error) {
-        console.error(`Error enriching event ${event.id}:`, error);
-      }
-    }
-
-    return [enriched, settled];
-  }
-
-  /**
-   * Enrichit un tournoi de tennis
-   */
-  private async enrichSportsTournament(sport: string, tournamentSlug: string): Promise<[number, number]> {
-    const from = subDays(new Date(), 7);
-    const to = addDays(new Date(), 30);
-
-    let events: OddsApiEvent[] = [];
-
-    try {
-      events = await oddsApiClient.getEvents({
-        sport: `tennis_${tournamentSlug.split('_')[0]}`,  // 'atp' ou 'wta'
-        league: tournamentSlug,
-        fromDate: from,
-        toDate: to,
-      });
-    } catch (error) {
-      console.error(`Error fetching events for ${tournamentSlug}:`, error);
-      return [0, 0];
-    }
-
-    let enriched = 0;
-    let settled = 0;
-
-    for (const event of events) {
-      try {
-        const [isEnriched, isSettled] = await this.enrichEvent(event, sport, tournamentSlug);
-        if (isEnriched) enriched++;
-        if (isSettled) settled++;
-      } catch (error) {
-        console.error(`Error enriching event ${event.id}:`, error);
+        console.warn(`     ⚠️  Error processing event ${event.id}: ${error instanceof Error ? error.message : error}`);
       }
     }
 
@@ -188,8 +138,8 @@ export class JobBEventsEnrichment {
     // Normaliser les données
     const normalized = normalizeOddsApiEvent(event);
 
-    // Mettre à jour les teams/players
-    if (sport === 'Football' && event.home_team && event.away_team) {
+    // Mettre à jour les teams/players si présents
+    if (sport === FOOTBALL && event.home_team && event.away_team) {
       const homeTeamId = await this.ensureTeam(event.home_team, sport);
       const awayTeamId = await this.ensureTeam(event.away_team, sport);
 
@@ -205,9 +155,9 @@ export class JobBEventsEnrichment {
       enriched = !error;
     }
 
-    if (sport === 'Tennis' && event.player1 && event.player2) {
-      const player1Id = await this.ensurePlayer(event.player1, 'match');
-      const player2Id = await this.ensurePlayer(event.player2, 'match');
+    if (sport === TENNIS && event.player1 && event.player2) {
+      const player1Id = await this.ensurePlayer(event.player1);
+      const player2Id = await this.ensurePlayer(event.player2);
 
       const { error } = await supabaseAdmin
         .from('events_to_track')
@@ -243,7 +193,7 @@ export class JobBEventsEnrichment {
               league_slug: leagueSlug,
               home_score: homeScore,
               away_score: awayScore,
-              event_date: normalized.eventDate.toISOString(),
+              event_date: normalized.eventDate?.toISOString(),
               status: 'settled',
               settled_at: new Date().toISOString(),
             },
@@ -293,15 +243,13 @@ export class JobBEventsEnrichment {
   /**
    * Récupère ou crée un joueur
    */
-  private async ensurePlayer(playerName: string, gender: 'male' | 'female' | 'match'): Promise<string> {
+  private async ensurePlayer(playerName: string): Promise<string> {
     const normalized = normalizePlayerName(playerName);
-    const playerGender = gender === 'match' ? 'male' : gender;
 
     const { data: existing } = await supabaseAdmin
       .from('players_v2')
       .select('id')
       .eq('normalized_name', normalized)
-      .eq('gender', playerGender)
       .single();
 
     if (existing) {
@@ -315,7 +263,6 @@ export class JobBEventsEnrichment {
           oddsapi_name: playerName,
           normalized_name: normalized,
           display_name: playerName,
-          gender: playerGender,
         },
       ])
       .select('id')

@@ -52,8 +52,8 @@ export async function GET() {
     .order("started_at", { ascending: false })
     .limit(10);
 
-  const { data: sports } = await supabaseAdmin.from("sports").select("id,name");
-  const sportsRows = (sports ?? []) as { id: number; name: string }[];
+  const { data: sports } = await supabaseAdmin.from("sports_v2").select("id,name");
+  const sportsRows = (sports ?? []) as { id: string; name: string }[];
   const sportsMap = new Map(sportsRows.map((sport) => [sport.id, sport.name]));
 
   const logRows =

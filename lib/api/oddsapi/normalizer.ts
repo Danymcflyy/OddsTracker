@@ -19,6 +19,7 @@ import type {
 // ============================================================================
 
 const MARKET_MAPPING: Record<string, string> = {
+  // ===== OLD FORMAT (OddsPapi) =====
   // Moneyline / 1X2
   'h2h': 'h2h',
   'moneyline': 'h2h',
@@ -40,7 +41,48 @@ const MARKET_MAPPING: Record<string, string> = {
   'totals_h1': 'totals_h1',
   'spreads_h1': 'spreads_h1',
 
-  // Player Props
+  // ===== NEW FORMAT (Odds-API.io v3) =====
+  // Moneyline / 1X2
+  'ML': 'h2h',
+  'ml': 'h2h',
+  'Moneyline': 'h2h',
+  'moneyline': 'h2h',
+
+  // Spreads / Handicaps
+  'Spread': 'spreads',
+  'spread': 'spreads',
+  'Spread HT': 'spreads_h1',
+  'spread ht': 'spreads_h1',
+
+  // Totals / Over-Under
+  'Totals': 'totals',
+  'totals': 'totals',
+  'Totals HT': 'totals_h1',
+  'totals ht': 'totals_h1',
+
+  // Team Totals
+  'Team Total Home': 'team_totals_home',
+  'team total home': 'team_totals_home',
+  'Team Total Away': 'team_totals_away',
+  'team total away': 'team_totals_away',
+
+  // Corners
+  'Corners Spread': 'corners_spread',
+  'corners spread': 'corners_spread',
+  'Corners Totals': 'corners_totals',
+  'corners totals': 'corners_totals',
+  'Corners Totals HT': 'corners_totals_h1',
+  'corners totals ht': 'corners_totals_h1',
+  'Corners Spread HT': 'corners_spread_h1',
+  'corners spread ht': 'corners_spread_h1',
+
+  // Bookings
+  'Bookings Spread': 'bookings_spread',
+  'bookings spread': 'bookings_spread',
+  'Bookings Totals': 'bookings_totals',
+  'bookings totals': 'bookings_totals',
+
+  // Player Props (Tennis)
   'player_aces': 'player_aces',
   'player_sets_won': 'player_sets_won',
   'player_games_won': 'player_games_won',
@@ -136,38 +178,86 @@ export function normalizeOddsApiEvent(event: OddsApiEvent): NormalizedOddsApiEve
 
 /**
  * Normalise les cotes OddsApi en format interne
+ * Gère la structure Odds-API.io v3: odds.bookmakers.Pinnacle = array de markets
  */
-export function normalizeOddsApiOdds(odds: OddsApiOddsResponse): NormalizedOddsApiOdds {
+export function normalizeOddsApiOdds(odds: any): NormalizedOddsApiOdds {
   const bookmakerOdds: Record<string, any> = {};
 
-  // Traiter chaque bookmaker (normalement juste Pinnacle)
-  for (const bookmaker of odds.bookmakers || []) {
-    const bookmakerKey = normalizeBookmakerKey(bookmaker.key);
-    bookmakerOdds[bookmakerKey] = {
-      markets: {},
-    };
-
-    // Traiter chaque marché
-    for (const market of bookmaker.markets || []) {
-      const marketKey = normalizeMarketKey(market.key);
-      bookmakerOdds[bookmakerKey].markets[marketKey] = {
-        outcomes: {},
+  // Gérer la structure Odds-API.io v3: bookmakers est un object avec bookmaker names comme clés
+  if (odds.bookmakers && typeof odds.bookmakers === 'object') {
+    for (const [bookmakerName, marketsArray] of Object.entries(odds.bookmakers)) {
+      const bookmakerKey = bookmakerName.toLowerCase();
+      bookmakerOdds[bookmakerKey] = {
+        markets: {},
       };
 
-      // Traiter chaque issue
-      for (const outcome of market.outcomes || []) {
-        const outcomeName = normalizeOutcomeName(outcome.name);
-        bookmakerOdds[bookmakerKey].markets[marketKey].outcomes[outcomeName] = {
-          price: outcome.price,
-          ...(outcome.point !== undefined && { line: outcome.point }),
-        };
+      // marketsArray est un array de { name, updatedAt, odds }
+      if (Array.isArray(marketsArray)) {
+        for (const market of marketsArray) {
+          const marketKey = market.name || market.key || 'unknown';
+          const normalizedMarketKey = normalizeMarketKey(marketKey);
+
+          bookmakerOdds[bookmakerKey].markets[normalizedMarketKey] = {
+            outcomes: {},
+            updatedAt: market.updatedAt,
+          };
+
+          // Traiter chaque odd dans le marché
+          if (Array.isArray(market.odds)) {
+            for (const oddItem of market.odds) {
+              // oddItem peut avoir:
+              // - home, draw, away (pour ML/1x2)
+              // - home, away, hdp (pour Spread)
+              // - over, under, hdp (pour Totals)
+              // - over, under (pour Totals HT)
+              // - home, away (pour Team Total)
+
+              const hdp = oddItem.hdp !== undefined ? oddItem.hdp : null;
+
+              // Extraire les outcomes selon le type de marché
+              if (oddItem.home !== undefined) {
+                bookmakerOdds[bookmakerKey].markets[normalizedMarketKey].outcomes['home'] = {
+                  price: parseFloat(oddItem.home),
+                  ...(hdp !== null && { line: hdp }),
+                };
+              }
+
+              if (oddItem.away !== undefined) {
+                bookmakerOdds[bookmakerKey].markets[normalizedMarketKey].outcomes['away'] = {
+                  price: parseFloat(oddItem.away),
+                  ...(hdp !== null && { line: hdp }),
+                };
+              }
+
+              if (oddItem.draw !== undefined) {
+                bookmakerOdds[bookmakerKey].markets[normalizedMarketKey].outcomes['draw'] = {
+                  price: parseFloat(oddItem.draw),
+                };
+              }
+
+              if (oddItem.over !== undefined) {
+                bookmakerOdds[bookmakerKey].markets[normalizedMarketKey].outcomes['over'] = {
+                  price: parseFloat(oddItem.over),
+                  ...(hdp !== null && { line: hdp }),
+                };
+              }
+
+              if (oddItem.under !== undefined) {
+                bookmakerOdds[bookmakerKey].markets[normalizedMarketKey].outcomes['under'] = {
+                  price: parseFloat(oddItem.under),
+                  ...(hdp !== null && { line: hdp }),
+                };
+              }
+            }
+          }
+        }
       }
     }
   }
 
   return {
     eventId: odds.id,
-    lastUpdated: new Date(odds.bookmakers?.[0]?.last_update || new Date()),
+    lastUpdated: new Date(),
     bookmakerOdds,
   };
 }

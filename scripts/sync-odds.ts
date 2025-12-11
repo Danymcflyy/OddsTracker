@@ -5,6 +5,8 @@
  * Récupère les cotes actuelles et les stocke dans la base de données
  */
 
+import "./load-env";
+
 import { getSyncService, SPORTS_CONFIG } from "../lib/oddspapi/sync-service";
 
 async function main() {

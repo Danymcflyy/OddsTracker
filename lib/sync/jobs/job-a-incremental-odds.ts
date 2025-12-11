@@ -1,17 +1,20 @@
 /**
- * Job A - Incremental Odds Polling
+ * Job A - Discover New Events via /v3/events Polling
  *
- * Fréquence: 60 secondes
- * Rôle: Découvrir nouvelles cotes Pinnacle
+ * Fréquence: Toutes les heures
+ * Rôle: Découvrir nouvelles cotes Pinnacle pour chaque ligue
  *
- * Logique:
- * 1. Poll /v3/odds/updated pour chaque sport depuis le dernier timestamp
- * 2. Pour chaque événement avec nouvelles cotes:
- *    - Créer entry dans events_to_track (état: DISCOVERED_NO_ODDS)
- *    - Récupérer les cotes complètes via /v3/odds
- *    - Insérer dans opening_closing_observed
- *    - Transition -> OPENING_CAPTURED_SLEEPING
- * 3. Sauvegarder le timestamp pour prochain poll
+ * Logique (REFACTORISÉE):
+ * 1. Pour chaque ligue football (15 ligues):
+ *    - Appeler /v3/events?sport=football&league=SLUG
+ *    - Comparer avec events_to_track pour détecter nouveaux matchs
+ *    - Pour chaque nouveau match: appeler /v3/odds?eventId=X
+ *    - Capturer opening_price_observed + opening_time_observed
+ *    - Insérer dans events_to_track + opening_closing_observed
+ * 2. Pour tennis: mêmes étapes
+ * 3. Transition -> OPENING_CAPTURED_SLEEPING
+ *
+ * NOTE: /v3/odds/updated n'existe pas! Cette approche est plus robuste de toute façon.
  */
 
 import { supabaseAdmin } from '@/lib/db';
@@ -26,209 +29,243 @@ import {
   isValidMarket,
   isValidOdd,
 } from '@/lib/api/oddsapi/normalizer';
-import type { OddsApiUpdatedEvent } from '@/lib/api/oddsapi/types';
+import { FOOTBALL_LEAGUES, TENNIS_TOURNAMENTS } from '@/lib/config/leagues-config';
+import type { OddsApiEvent } from '@/lib/api/oddsapi/types';
 
-interface JobAState {
-  [sport: string]: number;  // sport -> last_since timestamp
-}
-
-const SPORTS = ['Football', 'Tennis'];
+const FOOTBALL = 'football';
+const TENNIS = 'tennis';
 
 export class JobAIncrementalOdds {
-  private state: JobAState = {};
-
   /**
-   * Initialise l'état du job depuis la base de données
-   */
-  async initialize(): Promise<void> {
-    for (const sport of SPORTS) {
-      const lastSync = await this.getLastSyncTimestamp(sport);
-      this.state[sport] = lastSync;
-    }
-
-    console.log('🔄 Job A initialized with last sync timestamps:', this.state);
-  }
-
-  /**
-   * Exécute le job A
+   * Exécute le job A - Poll /v3/events pour chaque ligue
    */
   async run(): Promise<void> {
-    console.log('\n🚀 Job A - Starting incremental odds polling...\n');
+    console.log('\n🚀 Job A - Discover new events via /v3/events polling...\n');
 
     const startTime = Date.now();
-    let totalEventsProcessed = 0;
+    let totalLeaguesProcessed = 0;
+    let totalEventsDiscovered = 0;
 
-    for (const sport of SPORTS) {
+    // 1. Poll tous les championnats football
+    console.log('🏈 Football leagues:');
+    const activeFootballLeagues = FOOTBALL_LEAGUES.filter(l => l.active);
+    for (const league of activeFootballLeagues) {
       try {
-        const since = this.state[sport];
-        console.log(`\n📊 Polling ${sport} since ${new Date(since * 1000).toISOString()}`);
-
-        // 1. Récupérer les cotes mises à jour
-        const updated = await oddsApiClient.getOddsUpdated({
-          sport: sport.toLowerCase(),
-          since,
-          bookmakers: ['Pinnacle'],
-        });
-
-        if (!updated.events_updated || updated.events_updated.length === 0) {
-          console.log(`   ℹ️  No new odds for ${sport}`);
-          continue;
-        }
-
-        console.log(`   ✅ Found ${updated.events_updated.length} events with updated odds`);
-
-        // 2. Traiter chaque événement
-        let processed = 0;
-        for (const updatedEvent of updated.events_updated) {
-          try {
-            await this.processEvent(updatedEvent, sport);
-            processed++;
-          } catch (error) {
-            console.error(`   ❌ Error processing event ${updatedEvent.id}:`, error);
-            continue;
-          }
-        }
-
-        // 3. Mettre à jour le timestamp
-        this.state[sport] = updated.last_updated;
-        await this.saveLastSyncTimestamp(sport, updated.last_updated);
-
-        console.log(`   ✅ Processed ${processed}/${updated.events_updated.length} events`);
-        totalEventsProcessed += processed;
+        console.log(`\n  📋 ${league.name} (${league.slug})`);
+        const newEvents = await this.discoverLeagueEvents(FOOTBALL, league.slug);
+        console.log(`     ✅ Found ${newEvents} new events with odds`);
+        totalEventsDiscovered += newEvents;
       } catch (error) {
-        console.error(`❌ Error polling ${sport}:`, error);
+        console.error(`  ❌ Error polling ${league.slug}:`, error instanceof Error ? error.message : error);
       }
+      totalLeaguesProcessed++;
+    }
+
+    // 2. Poll tous les tournois tennis
+    console.log('\n\n🎾 Tennis tournaments:');
+    const activeTennisTournaments = TENNIS_TOURNAMENTS.filter(l => l.active);
+    for (const tournament of activeTennisTournaments) {
+      try {
+        console.log(`\n  📋 ${tournament.name} (${tournament.slug})`);
+        const newEvents = await this.discoverLeagueEvents(TENNIS, tournament.slug);
+        console.log(`     ✅ Found ${newEvents} new events with odds`);
+        totalEventsDiscovered += newEvents;
+      } catch (error) {
+        console.error(`  ❌ Error polling ${tournament.slug}:`, error instanceof Error ? error.message : error);
+      }
+      totalLeaguesProcessed++;
     }
 
     const duration = Date.now() - startTime;
-    console.log(`\n✅ Job A completed in ${duration}ms - Processed ${totalEventsProcessed} events`);
+    console.log(`\n✅ Job A completed in ${duration}ms`);
+    console.log(`   📊 Processed ${totalLeaguesProcessed} leagues/tournaments`);
+    console.log(`   🎯 Discovered ${totalEventsDiscovered} new events with odds`);
   }
 
   /**
-   * Traite un événement découvert
+   * Découvre les nouveaux matchs pour une ligue donnée
    */
-  private async processEvent(updatedEvent: OddsApiUpdatedEvent, sport: string): Promise<void> {
-    const eventId = updatedEvent.id;
+  private async discoverLeagueEvents(sport: string, leagueSlug: string): Promise<number> {
+    // 1. Récupérer tous les événements de la ligue
+    const events = await oddsApiClient.getEvents({
+      sport,
+      league: leagueSlug,
+      fromDate: new Date(),
+      toDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
 
-    // Vérifier si l'événement existe déjà
-    const { data: existing, error: fetchError } = await supabaseAdmin
+    if (!events || events.length === 0) {
+      console.log(`     ℹ️  No events found`);
+      return 0;
+    }
+
+    console.log(`     📌 ${events.length} events in API`);
+
+    // 2. Comparer avec DB pour trouver nouveaux
+    const { data: existingEventIds } = await supabaseAdmin
       .from('events_to_track')
-      .select('*')
-      .eq('event_id', eventId)
-      .single();
+      .select('event_id')
+      .eq('sport_slug', sport)
+      .eq('league_slug', leagueSlug);
 
-    if (existing) {
-      // L'événement existe déjà, on ne fait rien
-      return;
+    const existingIds = new Set(existingEventIds?.map(e => e.event_id) || []);
+    const newEvents = events.filter(e => !existingIds.has(e.id));
+
+    if (newEvents.length === 0) {
+      console.log(`     ℹ️  No new events`);
+      return 0;
     }
 
-    // 1. Récupérer les détails de l'événement et les cotes
-    const sportLower = sport.toLowerCase() === 'tennis' ? 'tennis' : 'football';
-    const odds = await oddsApiClient.getOdds(eventId);
-
-    // Valider et normaliser les données
-    if (!odds || !odds.bookmakers || odds.bookmakers.length === 0) {
-      console.warn(`   ⚠️  No Pinnacle odds found for event ${eventId}`);
-      return;
+    // Filter out cancelled events (no odds available)
+    const activeEvents = newEvents.filter(e => e.status !== 'cancelled');
+    if (activeEvents.length === 0) {
+      console.log(`     ⚠️  ${newEvents.length} new events but all cancelled`);
+      return 0;
     }
 
+    console.log(`     🆕 ${activeEvents.length} new active events (${newEvents.length - activeEvents.length} cancelled)`);
+
+    // 3. Traiter chaque nouvel événement
+    let processedCount = 0;
+    for (const event of activeEvents) {
+      try {
+        const processed = await this.processNewEvent(sport, leagueSlug, event);
+        if (processed) {
+          processedCount++;
+        }
+      } catch (error) {
+        console.warn(`     ⚠️  Error processing event ${event.id}: ${error instanceof Error ? error.message : error}`);
+      }
+    }
+
+    return processedCount;
+  }
+
+  /**
+   * Traite un nouvel événement - récupère les cotes et les enregistre
+   */
+  private async processNewEvent(sport: string, leagueSlug: string, event: OddsApiEvent): Promise<boolean> {
+    // 1. Récupérer les cotes pour cet événement
+    let odds;
+    try {
+      odds = await oddsApiClient.getOdds(event.id);
+    } catch (error) {
+      console.warn(`     ⚠️  Could not fetch odds for event ${event.id}`);
+      return false;
+    }
+
+    // Vérifier que Pinnacle est disponible
+    // Note: odds.bookmakers is an object keyed by bookmaker name
+    // odds.bookmakers.Pinnacle is an ARRAY of markets: [ { name, updatedAt, odds } ]
+    const pinnacleArray = odds.bookmakers?.['Pinnacle'] || odds.bookmakers?.Pinnacle;
+    if (!pinnacleArray || !Array.isArray(pinnacleArray) || pinnacleArray.length === 0) {
+      console.warn(`     ⚠️  No Pinnacle odds for event ${event.id}`);
+      return false;
+    }
+
+    // 2. Normaliser les données
     const normalizedEvent = normalizeOddsApiEvent(odds);
     const normalizedOdds = normalizeOddsApiOdds(odds);
 
-    // Vérifier que l'événement est valide pour ce sport
-    if (!isValidEvent(normalizedEvent, sport)) {
-      console.warn(`   ⚠️  Invalid event structure for ${sport}: ${eventId}`);
-      return;
-    }
-
-    // 2. Créer l'entrée event dans events_to_track
-    const eventData = {
-      event_id: eventId,
+    // 3. Préparer les données pour events_to_track
+    let eventData: any = {
+      event_id: event.id,
       sport_slug: sport,
-      league_slug: normalizedEvent.leagueSlug || null,
-      home_team_id: null as any,
-      away_team_id: null as any,
-      player1_id: null as any,
-      player2_id: null as any,
-      event_date: normalizedEvent.eventDate.toISOString(),
-      status: 'pending',
-      state: 'DISCOVERED_NO_ODDS',
+      league_slug: leagueSlug,
+      event_date: event.date || normalizedEvent.eventDate?.toISOString(),
+      status: event.status || 'pending',
+      state: 'OPENING_CAPTURED_SLEEPING',
+      next_scan_at: new Date(new Date(event.date).getTime() - 60 * 60 * 1000).toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    // Pour Football: mapper les équipes
-    if (sport === 'Football' && normalizedEvent.homeTeam && normalizedEvent.awayTeam) {
+    // 4. Mapper les équipes (Football)
+    if (sport === FOOTBALL && normalizedEvent.homeTeam && normalizedEvent.awayTeam) {
       const homeTeamId = await this.ensureTeam(normalizedEvent.homeTeam, sport);
       const awayTeamId = await this.ensureTeam(normalizedEvent.awayTeam, sport);
       eventData.home_team_id = homeTeamId;
       eventData.away_team_id = awayTeamId;
     }
 
-    // Pour Tennis: mapper les joueurs
-    if (sport === 'Tennis' && normalizedEvent.player1 && normalizedEvent.player2) {
-      const player1Id = await this.ensurePlayer(normalizedEvent.player1, 'match');
-      const player2Id = await this.ensurePlayer(normalizedEvent.player2, 'match');
+    // 5. Mapper les joueurs (Tennis)
+    if (sport === TENNIS && normalizedEvent.player1 && normalizedEvent.player2) {
+      const player1Id = await this.ensurePlayer(normalizedEvent.player1);
+      const player2Id = await this.ensurePlayer(normalizedEvent.player2);
       eventData.player1_id = player1Id;
       eventData.player2_id = player2Id;
     }
 
-    // Insérer l'événement
-    const { error: insertError } = await supabaseAdmin
+    // 6. Insérer l'événement
+    const { error: insertEventError } = await supabaseAdmin
       .from('events_to_track')
       .insert([eventData]);
 
-    if (insertError) {
-      console.error(`   ❌ Failed to insert event ${eventId}:`, insertError);
-      return;
+    if (insertEventError) {
+      console.warn(`     ⚠️  Failed to insert event ${event.id}: ${insertEventError.message}`);
+      return false;
     }
 
-    // 3. Insérer les cotes observées
+    // 7. Insérer les cotes observées
+    // pinnacleArray is: [ { name: "ML", updatedAt, odds: [ { home, draw, away } ] }, ... ]
     let oddsInserted = 0;
-    for (const [bookmakerKey, bookmakerData] of Object.entries(normalizedOdds.bookmakerOdds)) {
-      if (bookmakerKey !== 'pinnacle') continue;
+    const nowISO = new Date().toISOString();
 
-      for (const [marketKey, marketData] of Object.entries(bookmakerData.markets)) {
-        for (const [outcomeName, outcomeData] of Object.entries(marketData.outcomes)) {
+    for (const market of pinnacleArray) {
+      const marketName = market.name;  // e.g., "ML", "Spread", "Totals"
+      const updatedAt = market.updatedAt || nowISO;
+
+      if (!market.odds || !Array.isArray(market.odds)) continue;
+
+      for (const oddItem of market.odds) {
+        // Each oddItem can have: home, away, draw (for ML), or home, away, hdp (for Spread), or over, under, hdp (for Totals)
+        const hdp = oddItem.hdp !== undefined ? oddItem.hdp : null;
+
+        // Insert one row per outcome
+        const outcomes = [];
+        if (oddItem.home !== undefined) outcomes.push({ selection: 'home', price: oddItem.home });
+        if (oddItem.away !== undefined) outcomes.push({ selection: 'away', price: oddItem.away });
+        if (oddItem.draw !== undefined) outcomes.push({ selection: 'draw', price: oddItem.draw });
+        if (oddItem.over !== undefined) outcomes.push({ selection: 'over', price: oddItem.over });
+        if (oddItem.under !== undefined) outcomes.push({ selection: 'under', price: oddItem.under });
+
+        for (const outcome of outcomes) {
           const oddData = {
-            event_id: eventId,
+            event_id: event.id,
             sport_slug: sport,
-            league_slug: normalizedEvent.leagueSlug || null,
+            league_slug: leagueSlug,
             bookmaker: 'Pinnacle',
-            market_name: marketKey,
-            selection: outcomeName,
-            line: outcomeData.line || null,
-            opening_price_observed: outcomeData.price,
-            opening_time_observed: normalizedOdds.lastUpdated.toISOString(),
+            market_name: marketName,
+            selection: outcome.selection,
+            line: hdp,
+            opening_price_observed: parseFloat(outcome.price),
+            opening_time_observed: updatedAt,
             closing_price_observed: null,
             closing_time_observed: null,
             is_winner: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            created_at: nowISO,
+            updated_at: nowISO,
           };
 
           const { error: oddError } = await supabaseAdmin
             .from('opening_closing_observed')
-            .upsert([oddData], {
-              onConflict: 'event_id,bookmaker,market_name,selection,line',
-            });
+            .insert([oddData]);
 
           if (!oddError) {
             oddsInserted++;
-          } else {
-            console.error(`   ❌ Failed to insert odd: ${oddError.message}`);
+          } else if (!oddError.message.includes('duplicate key')) {
+            console.warn(`     ⚠️  Error inserting odd: ${oddError.message}`);
           }
         }
       }
     }
 
     if (oddsInserted > 0) {
-      // 4. Transition à OPENING_CAPTURED_SLEEPING
-      await stateMachineService.captureOpening(eventId, sport);
-      console.log(`   ✅ Event ${eventId}: discovered + ${oddsInserted} odds captured`);
-    } else {
-      console.warn(`   ⚠️  No odds captured for event ${eventId}`);
+      console.log(`     ✅ Event ${event.id}: inserted with ${oddsInserted} odds`);
+      return true;
     }
+
+    return false;
   }
 
   /**
@@ -274,23 +311,21 @@ export class JobAIncrementalOdds {
   /**
    * Récupère ou crée un joueur (Tennis)
    */
-  private async ensurePlayer(playerName: string, gender: 'male' | 'female' | 'match'): Promise<string> {
+  private async ensurePlayer(playerName: string): Promise<string> {
     const normalized = normalizePlayerName(playerName);
-    const playerGender = gender === 'match' ? 'male' : gender;  // Default for simplicity
 
     // Chercher le joueur existant
     const { data: existing } = await supabaseAdmin
       .from('players_v2')
       .select('id')
       .eq('normalized_name', normalized)
-      .eq('gender', playerGender)
       .single();
 
     if (existing) {
       return existing.id;
     }
 
-    // Créer le joueur
+    // Créer le joueur (gender sera NULL jusqu'à enrichissement)
     const { data: created, error } = await supabaseAdmin
       .from('players_v2')
       .insert([
@@ -298,7 +333,6 @@ export class JobAIncrementalOdds {
           oddsapi_name: playerName,
           normalized_name: normalized,
           display_name: playerName,
-          gender: playerGender,
         },
       ])
       .select('id')
@@ -329,41 +363,6 @@ export class JobAIncrementalOdds {
     return data.id;
   }
 
-  /**
-   * Récupère le dernier timestamp de sync pour un sport
-   */
-  private async getLastSyncTimestamp(sport: string): Promise<number> {
-    const { data, error } = await supabaseAdmin
-      .from('settings')
-      .select('value')
-      .eq('key', `job_a_last_sync_${sport.toLowerCase()}`)
-      .single();
-
-    if (error || !data?.value) {
-      // Retourner 24h avant
-      return Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
-    }
-
-    return parseInt(data.value, 10);
-  }
-
-  /**
-   * Sauvegarde le dernier timestamp de sync
-   */
-  private async saveLastSyncTimestamp(sport: string, timestamp: number): Promise<void> {
-    await supabaseAdmin
-      .from('settings')
-      .upsert(
-        [
-          {
-            key: `job_a_last_sync_${sport.toLowerCase()}`,
-            value: String(timestamp),
-            updated_at: new Date().toISOString(),
-          },
-        ],
-        { onConflict: 'key' }
-      );
-  }
 }
 
 // Export singleton

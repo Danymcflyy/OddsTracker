@@ -18,7 +18,7 @@ type QueryParams = Record<string, QueryValue | undefined>;
 const DEFAULT_BASE_URL = process.env.ODDSPAPI_BASE_URL || "https://api.oddspapi.io";
 const DEFAULT_API_KEY = process.env.ODDSPAPI_API_KEY || "";
 const DEFAULT_QUERY_PARAMS: Record<string, string> = {
-  bookmakers: "pinnacle",
+  bookmaker: "pinnacle",
 };
 
 const RATE_LIMITS_MS: Record<string, number> = {

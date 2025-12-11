@@ -3,8 +3,10 @@
 import { format } from "date-fns";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import { HOCKEY_TOTAL_LINES } from "@/lib/config/markets";
 import { cn } from "@/lib/utils";
 import type { FixtureWithEnrichedOdds, OddWithDetails } from "@/types/fixture";
+import type { Market } from "@/hooks/use-markets";
 
 type HockeyRow = FixtureWithEnrichedOdds;
 
@@ -15,7 +17,9 @@ interface OddsDefinition {
 }
 
 const MONEYLINE_CODES = ["1", "2"] as const;
-const TOTAL_LINES = ["4.5", "5.5", "6.5"];
+const TOTAL_LINES = HOCKEY_TOTAL_LINES.map((line) =>
+  line % 1 === 0 ? line.toFixed(0) : line.toFixed(1)
+);
 const PUCK_LINES = ["-1.5", "+1.5"];
 
 const HOCKEY_ODDS_DEFINITIONS: OddsDefinition[] = [
@@ -33,13 +37,13 @@ const HOCKEY_ODDS_DEFINITIONS: OddsDefinition[] = [
         id: overId,
         label: overId,
         matcher: (odd: OddWithDetails) =>
-          matchesMarket(odd, "OVER") && matchesOutcome(odd, overId.replace(".", "")),
+          matchesMarket(odd, "TOTAL") && matchesOutcome(odd, overId.replace(".", "")),
       },
       {
         id: underId,
         label: underId,
         matcher: (odd: OddWithDetails) =>
-          matchesMarket(odd, "UNDER") && matchesOutcome(odd, underId.replace(".", "")),
+          matchesMarket(odd, "TOTAL") && matchesOutcome(odd, underId.replace(".", "")),
       },
     ];
   }),
@@ -57,55 +61,157 @@ const HOCKEY_ODDS_DEFINITIONS: OddsDefinition[] = [
   }),
 ];
 
-export const hockeyColumns: ColumnDef<HockeyRow>[] = [
-  {
-    accessorKey: "start_time",
-    header: "Date",
-    cell: ({ getValue }) => {
-      const value = getValue<string>();
-      return (
-        <div className="font-medium">
-          {value ? format(new Date(value), "dd MMM yyyy HH:mm") : "-"}
-        </div>
-      );
+// ===== GÉNÉRATION DYNAMIQUE DES COLONNES =====
+
+/**
+ * Formate une ligne de handicap/total
+ */
+function formatLine(value: number): string {
+  return value % 1 === 0 ? value.toFixed(0) : value.toFixed(1);
+}
+
+/**
+ * Crée une définition d'odds pour un outcome donné selon son type de marché
+ */
+function buildDefinitionForOutcome(
+  market: Market,
+  outcome: { id: number; oddspapi_id: number; name: string; description: string | null }
+): OddsDefinition | null {
+  const marketType = market.market_type.toLowerCase();
+  const handicap = market.handicap;
+
+  // 1X2 (Moneyline)
+  if (marketType === "1x2") {
+    return {
+      id: outcome.name,
+      label: outcome.name,
+      matcher: (odd: OddWithDetails) =>
+        matchesMarket(odd, "MONEYLINE") && matchesOutcome(odd, outcome.name),
+    };
+  }
+
+  // Totals (Over/Under)
+  if (marketType === "totals" && handicap !== null) {
+    const line = formatLine(handicap);
+    const outcomeName = outcome.name.toUpperCase();
+    const isOver = outcomeName.includes("OVER") || outcomeName.startsWith("O");
+    const id = isOver ? `O${line}` : `U${line}`;
+
+    return {
+      id,
+      label: id,
+      matcher: (odd: OddWithDetails) =>
+        matchesMarket(odd, "TOTAL") && matchesOutcome(odd, id.replace(".", "")),
+    };
+  }
+
+  // Spreads (Puck Line)
+  if (marketType === "spreads" && handicap !== null) {
+    const line = handicap > 0 ? `+${formatLine(handicap)}` : formatLine(handicap);
+    const id = `PL${line}`;
+
+    return {
+      id,
+      label: `PL${line}`,
+      matcher: (odd: OddWithDetails) =>
+        matchesMarket(odd, "PUCK") &&
+        (matchesOutcome(odd, line) || matchesOutcome(odd, `PL${line}`)),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Crée les définitions d'odds depuis les marchés DB
+ */
+function createOddsDefinitionsFromMarkets(markets: Market[]): OddsDefinition[] {
+  const definitions: OddsDefinition[] = [];
+
+  for (const market of markets) {
+    for (const outcome of market.outcomes) {
+      const def = buildDefinitionForOutcome(market, outcome);
+      if (def) {
+        definitions.push(def);
+      }
+    }
+  }
+
+  return definitions;
+}
+
+/**
+ * Colonnes statiques (non dynamiques)
+ */
+function getStaticColumns(): ColumnDef<HockeyRow>[] {
+  return [
+    {
+      accessorKey: "start_time",
+      header: "Date",
+      cell: ({ getValue }) => {
+        const value = getValue<string>();
+        return (
+          <div className="font-medium">
+            {value ? format(new Date(value), "dd MMM yyyy HH:mm") : "-"}
+          </div>
+        );
+      },
+      enableSorting: true,
     },
-    enableSorting: true,
-  },
-  {
-    id: "country",
-    header: "Pays",
-    cell: ({ row }) => (
-      <div className="text-sm text-muted-foreground">
-        {row.original.league?.country?.name ?? "-"}
-      </div>
-    ),
-    enableSorting: true,
-  },
-  {
-    id: "league",
-    header: "Ligue",
-    cell: ({ row }) => <div className="font-medium">{row.original.league?.name ?? "-"}</div>,
-    enableSorting: true,
-  },
-  {
-    accessorKey: "home_team.name",
-    header: "Home",
-    cell: ({ row }) => (
-      <div className="font-semibold text-slate-900">{row.original.home_team?.name ?? "-"}</div>
-    ),
-    enableSorting: true,
-  },
-  {
-    accessorKey: "away_team.name",
-    header: "Away",
-    cell: ({ row }) => (
-      <div className="font-semibold text-slate-900">{row.original.away_team?.name ?? "-"}</div>
-    ),
-    enableSorting: true,
-  },
-  ...scoreColumns(),
-  ...createOddsColumns(),
-];
+    {
+      id: "country",
+      header: "Pays",
+      cell: ({ row }) => (
+        <div className="text-sm text-muted-foreground">
+          {row.original.league?.country?.name ?? "-"}
+        </div>
+      ),
+      enableSorting: true,
+    },
+    {
+      id: "league",
+      header: "Ligue",
+      cell: ({ row }) => <div className="font-medium">{row.original.league?.name ?? "-"}</div>,
+      enableSorting: true,
+    },
+    {
+      accessorKey: "home_team.name",
+      header: "Home",
+      cell: ({ row }) => (
+        <div className="font-semibold text-slate-900">{row.original.home_team?.name ?? "-"}</div>
+      ),
+      enableSorting: true,
+    },
+    {
+      accessorKey: "away_team.name",
+      header: "Away",
+      cell: ({ row }) => (
+        <div className="font-semibold text-slate-900">{row.original.away_team?.name ?? "-"}</div>
+      ),
+      enableSorting: true,
+    },
+    ...scoreColumns(),
+  ];
+}
+
+/**
+ * Factory pour créer les colonnes Hockey dynamiquement
+ * @param markets - Marchés actifs depuis la DB (optionnel, utilise fallback hardcodé si absent)
+ */
+export function createHockeyColumns(markets?: Market[]): ColumnDef<HockeyRow>[] {
+  const oddsDefinitions =
+    markets && markets.length > 0
+      ? createOddsDefinitionsFromMarkets(markets)
+      : HOCKEY_ODDS_DEFINITIONS;
+
+  return [
+    ...getStaticColumns(),
+    ...createOddsColumnsFromDefinitions(oddsDefinitions),
+  ];
+}
+
+// Export pour compatibilité (colonnes hardcodées)
+export const hockeyColumns = createHockeyColumns();
 
 function scoreColumns(): ColumnDef<HockeyRow>[] {
   return [
@@ -132,8 +238,8 @@ function scoreColumns(): ColumnDef<HockeyRow>[] {
   ];
 }
 
-function createOddsColumns(): ColumnDef<HockeyRow>[] {
-  return HOCKEY_ODDS_DEFINITIONS.flatMap((definition) => [
+function createOddsColumnsFromDefinitions(definitions: OddsDefinition[]): ColumnDef<HockeyRow>[] {
+  return definitions.flatMap((definition) => [
     buildOddsColumn(definition, "opening"),
     buildOddsColumn(definition, "closing"),
   ]);

@@ -32,7 +32,7 @@ export async function GET(
     }
 
     const { data: sportRow, error: sportError } = await client
-      .from("sports")
+      .from("sports_v2")
       .select("id, slug")
       .eq("slug", sportSlug)
       .single();
@@ -44,7 +44,7 @@ export async function GET(
       );
     }
 
-    const sportId = (sportRow as { id: number }).id;
+    const sportId = (sportRow as { id: string }).id;
 
     const url = new URL(request.url);
     const searchParams = url.searchParams;
@@ -86,7 +86,7 @@ export async function GET(
     if (countryId && !leagueId) {
       filters.push(async () => {
         const { data, error } = await client
-          .from("leagues")
+          .from("leagues_v2")
           .select("id")
           .eq("country_id", countryId)
           .eq("sport_id", sportId);
@@ -95,7 +95,7 @@ export async function GET(
           throw error;
         }
 
-        const leagueRows = (data ?? []) as { id: number }[];
+        const leagueRows = (data ?? []) as { id: string }[];
         return {
           leagueIds: leagueRows.map((league) => league.id),
         };
@@ -105,7 +105,7 @@ export async function GET(
     if (teamSearch.length >= 2) {
       filters.push(async () => {
         const { data, error } = await client
-          .from("teams")
+          .from("teams_v2")
           .select("id")
           .ilike("name", `%${teamSearch}%`)
           .limit(50);
@@ -114,7 +114,7 @@ export async function GET(
           throw error;
         }
 
-        const teamRows = (data ?? []) as { id: number }[];
+        const teamRows = (data ?? []) as { id: string }[];
         const teamIds = teamRows.map((team) => team.id);
         return { teamIds };
       });
@@ -122,10 +122,10 @@ export async function GET(
 
     if (marketType || oddsMin !== null || oddsMax !== null) {
       filters.push(async () => {
-        let marketIds: number[] | undefined;
+        let marketIds: string[] | undefined;
         if (marketType) {
           const { data: marketsData, error: marketsError } = await client
-            .from("markets")
+            .from("markets_v2")
             .select("id, name, description")
             .or(
               `name.ilike.%${marketType}%,description.ilike.%${marketType}%`
@@ -135,7 +135,7 @@ export async function GET(
             throw marketsError;
           }
 
-          const marketRows = (marketsData ?? []) as { id: number }[];
+          const marketRows = (marketsData ?? []) as { id: string }[];
           marketIds = marketRows.map((market) => market.id);
           if (!marketIds.length) {
             return { fixtureIds: [] };
@@ -150,11 +150,9 @@ export async function GET(
           .select(
             `
             fixture_id,
-            ${priceColumn},
-            fixtures!inner ( id, sport_id )
+            ${priceColumn}
           `
-          )
-          .eq("fixtures.sport_id", sportId);
+          );
 
         if (marketIds && marketIds.length) {
           oddsQuery = oddsQuery.in("market_id", marketIds);
@@ -208,6 +206,7 @@ export async function GET(
       return createEmptyResponse(page, pageSize);
     }
 
+    // Requête simplifiée: on charge les fixtures sans les relations (qui ne fonctionnent pas sur les vues)
     let query = client
       .from("fixtures")
       .select(
@@ -221,43 +220,7 @@ export async function GET(
         start_time,
         home_score,
         away_score,
-        status,
-        league:leagues (
-          id,
-          name,
-          country:countries (
-            id,
-            name
-          )
-        ),
-        home_team:teams!fixtures_home_team_id_fkey (
-          id,
-          name
-        ),
-        away_team:teams!fixtures_away_team_id_fkey (
-          id,
-          name
-        ),
-        odds:odds (
-          id,
-          market_id,
-          outcome_id,
-          opening_price,
-          closing_price,
-          opening_timestamp,
-          closing_timestamp,
-          is_winner,
-          market:markets (
-            id,
-            name,
-            description
-          ),
-          outcome:outcomes (
-            id,
-            name,
-            description
-          )
-        )
+        status
       `,
         { count: "exact" }
       )
@@ -314,8 +277,148 @@ export async function GET(
     const total = count ?? 0;
     const totalPages = Math.max(Math.ceil(total / pageSize), 1);
 
+    // Charger les données manquantes (leagues, teams, odds) manuellement
+    const fixtures = (data ?? []) as any[];
+
+    // Fetch all unique league IDs
+    const leagueIds = [...new Set(fixtures.map(f => f.league_id).filter(Boolean))];
+    const leagueMap = new Map();
+    const countryMap = new Map();
+    if (leagueIds.length > 0) {
+      const { data: leagues } = await client
+        .from("leagues_v2")
+        .select("id, name, country_id")
+        .in("id", leagueIds);
+
+      if (leagues) {
+        leagues.forEach(l => leagueMap.set(l.id, l));
+
+        // Fetch countries for these leagues
+        const countryIds = [...new Set(
+          (leagues as any[])
+            .map(l => l.country_id)
+            .filter(Boolean)
+        )];
+
+        if (countryIds.length > 0) {
+          const { data: countries } = await client
+            .from("countries_v2")
+            .select("id, name")
+            .in("id", countryIds);
+
+          if (countries) {
+            countries.forEach(c => countryMap.set(c.id, c));
+          }
+        }
+      }
+    }
+
+    // Fetch all unique team IDs
+    const teamIds = [...new Set(
+      fixtures
+        .flatMap(f => [f.home_team_id, f.away_team_id])
+        .filter(Boolean)
+    )];
+    const teamMap = new Map();
+    if (teamIds.length > 0) {
+      const { data: teams } = await client
+        .from("teams_v2")
+        .select("id, display_name, normalized_name")
+        .in("id", teamIds);
+
+      if (teams) {
+        teams.forEach(t => teamMap.set(t.id, t));
+      }
+    }
+
+    // Fetch all odds for these fixtures
+    const fixtureIds = fixtures.map(f => f.id).filter(Boolean);
+    const oddsMap = new Map();
+    if (fixtureIds.length > 0) {
+      const { data: odds } = await client
+        .from("opening_closing_observed")
+        .select("*")
+        .in("event_id", fixtureIds);
+
+      if (odds) {
+        // Fetch all markets_v2 for enrichment
+        const { data: marketsV2 } = await client
+          .from("markets_v2")
+          .select("*");
+
+        const marketsByKey = new Map();
+        if (marketsV2) {
+          (marketsV2 as any[]).forEach(m => {
+            // Use oddsapi_key as the primary key
+            marketsByKey.set(m.oddsapi_key, m);
+          });
+        }
+
+        (odds as any[]).forEach(odd => {
+          if (!oddsMap.has(odd.event_id)) {
+            oddsMap.set(odd.event_id, []);
+          }
+
+          // Find matching market (from markets_v2)
+          const market = marketsByKey.get(odd.market_name);
+
+          // Create enriched odd structure that matches OddWithDetails
+          const enrichedOdd: any = {
+            id: odd.id,
+            fixture_id: odd.event_id, // Map event_id to fixture_id for API compatibility
+            opening_price: odd.opening_price_observed,
+            closing_price: odd.closing_price_observed,
+            opening_timestamp: odd.opening_time_observed,
+            closing_timestamp: odd.closing_time_observed,
+            is_winner: odd.is_winner,
+            market_id: market?.id || null,
+            outcome_id: null,
+            // Add enriched market object
+            market: market ? {
+              id: market.id,
+              oddspapi_id: null,
+              name: market.oddsapi_key,
+              description: market.market_type || null,
+            } : null,
+            // Add enriched outcome object (infer from selection)
+            outcome: {
+              id: null,
+              oddspapi_id: null,
+              market_id: market?.id || null,
+              name: odd.selection.toUpperCase(),
+              description: odd.selection,
+            },
+          };
+
+          oddsMap.get(odd.event_id).push(enrichedOdd);
+        });
+      }
+    }
+
+    // Enrich fixtures with loaded data
+    const fixturesWithRelations = fixtures.map((fixture: any) => {
+      const league = leagueMap.get(fixture.league_id);
+      const country = league ? countryMap.get(league.country_id) : null;
+      const homeTeam = teamMap.get(fixture.home_team_id);
+      const awayTeam = teamMap.get(fixture.away_team_id);
+      const odds = oddsMap.get(fixture.id) || [];
+
+      return {
+        ...fixture,
+        league: league ? {
+          id: league.id,
+          name: league.name,
+          country_id: league.country_id,
+          country: country ? { id: country.id, name: country.name } : null,
+        } : null,
+        home_team: homeTeam ? { id: homeTeam.id, name: homeTeam.display_name || homeTeam.normalized_name } : null,
+        away_team: awayTeam ? { id: awayTeam.id, name: awayTeam.display_name || awayTeam.normalized_name } : null,
+        odds: odds
+      };
+    });
+
     return NextResponse.json({
-      data: (data ?? []) as FixtureWithEnrichedOdds[],
+      data: fixturesWithRelations as FixtureWithEnrichedOdds[],
       pagination: {
         total,
         page,
@@ -348,10 +451,10 @@ function mergeFilterValues(
   results: FixtureFilterResult[],
   key: keyof FixtureFilterResult
 ) {
-  const collected: number[] = [];
+  const collected: (string | number)[] = [];
   results.forEach((result) => {
     if (Array.isArray(result[key])) {
-      collected.push(...((result[key] as number[]) ?? []));
+      collected.push(...((result[key] as (string | number)[]) ?? []));
     }
   });
   return collected.length ? collected : undefined;
@@ -370,8 +473,8 @@ function createEmptyResponse(page: number, pageSize: number) {
 }
 
 interface FixtureFilterResult {
-  leagueIds?: number[];
-  teamIds?: number[];
+  leagueIds?: string[];
+  teamIds?: string[];
   fixtureIds?: number[];
 }
 

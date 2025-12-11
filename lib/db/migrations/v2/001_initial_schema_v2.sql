@@ -153,10 +153,12 @@ CREATE TABLE IF NOT EXISTS opening_closing_observed (
 
   -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-  UNIQUE(event_id, bookmaker, market_name, selection, COALESCE(line, 0))
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Use partial unique index instead of constraint to handle COALESCE
+CREATE UNIQUE INDEX IF NOT EXISTS idx_opening_closing_unique
+ON opening_closing_observed(event_id, bookmaker, market_name, selection, COALESCE(line, 0));
 
 CREATE INDEX IF NOT EXISTS idx_opening_closing_event ON opening_closing_observed(event_id);
 CREATE INDEX IF NOT EXISTS idx_opening_closing_market ON opening_closing_observed(market_name);
@@ -191,14 +193,17 @@ CREATE INDEX IF NOT EXISTS idx_match_results_sport ON match_results(sport_slug);
 CREATE TABLE IF NOT EXISTS markets_v2 (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   sport_id UUID NOT NULL REFERENCES sports_v2(id),
-  oddsapi_key VARCHAR(100) NOT NULL,  -- 'h2h', 'spreads', 'totals', etc.
-  market_type VARCHAR(50) NOT NULL,  -- '1x2', 'spreads', 'totals', 'moneyline', 'player_prop', etc.
-  period VARCHAR(50) DEFAULT 'fulltime',  -- 'fulltime', 'p1', 'p2', 'match', etc.
-  handicap NUMERIC,  -- Pour spreads/totals dynamiques
+  oddsapi_key VARCHAR(100) NOT NULL,
+  market_type VARCHAR(50) NOT NULL,
+  period VARCHAR(50) DEFAULT 'fulltime',
+  handicap NUMERIC,
   active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(sport_id, oddsapi_key, period, COALESCE(handicap, 0))
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Use partial unique index instead of constraint to handle COALESCE
+CREATE UNIQUE INDEX IF NOT EXISTS idx_markets_v2_unique
+ON markets_v2(sport_id, oddsapi_key, period, COALESCE(handicap, 0));
 
 CREATE INDEX IF NOT EXISTS idx_markets_v2_sport ON markets_v2(sport_id);
 CREATE INDEX IF NOT EXISTS idx_markets_v2_type ON markets_v2(market_type);

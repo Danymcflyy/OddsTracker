@@ -9,7 +9,7 @@ import type {
   OddsPapiSettlement,
   OddsPapiTournamentOdds,
 } from "@/lib/api/types";
-import { BASE_MARKETS, normalizeTeamName } from "@/lib/import/catalog";
+import { BASE_MARKETS, normalizeTeamName, TOTALS_MARKET_TEMPLATE } from "@/lib/import/catalog";
 import { supabaseAdmin } from "@/lib/db";
 const adminDb = supabaseAdmin as any;
 import { loadFollowedTournaments } from "@/lib/settings/followed-tournaments";
@@ -17,6 +17,7 @@ import type { FollowedTournamentsMap } from "@/lib/config/tournaments";
 import { loadClosingStrategy } from "@/lib/settings/closing-strategy";
 import { loadOddsApiKey } from "@/lib/settings/odds-api-key";
 import type { OddsClosingStrategy } from "@/types/settings";
+import { getTotalsLinesForSport } from "@/lib/config/markets";
 
 interface AutoSyncStats {
   fixturesCreated: number;
@@ -59,6 +60,7 @@ type MarketMetadataEntry = {
 };
 
 const HISTORICAL_COOLDOWN_MS = 5000;
+const SETTLEMENT_LOOKBACK_DAYS = 10;
 
 type SyncOptions = {
   sportIds?: number[];
@@ -143,9 +145,9 @@ export class AutoSyncService {
           if (!entries.length) continue;
           stats.fixturesCreated += entries.length;
 
-          const marketCache = await this.ensureBaseMarkets();
+          const activeMarkets = await this.loadActiveMarketsForSport(sportId);
           const marketMetadata = await this.loadMarketMetadata(sportId);
-          await this.syncHistoricalOdds(entries, marketCache, marketMetadata, stats, sportId);
+          await this.syncHistoricalOdds(entries, activeMarkets, marketMetadata, stats, sportId);
         } catch (error) {
           stats.errors.push(
             `Tournoi ${tournamentId} (sport ${sportId}): ${
@@ -163,7 +165,7 @@ export class AutoSyncService {
     closingStrategy: OddsClosingStrategy,
     options?: SyncOptions
   ) {
-    const fromDate = subDays(new Date(), 3).toISOString();
+    const fromDate = subDays(new Date(), SETTLEMENT_LOOKBACK_DAYS).toISOString();
     const toDate = new Date().toISOString();
     const allowedSports = options?.sportIds ? new Set(options.sportIds) : null;
 
@@ -264,7 +266,7 @@ export class AutoSyncService {
         continue;
       }
 
-      const marketCache = await this.ensureBaseMarkets();
+      const activeMarkets = await this.loadActiveMarketsForSport(sportId);
       const marketMetadata = await this.loadMarketMetadata(sportId);
       if (closingStrategy === "tournament") {
         const closingsWithTournament = closings.filter((entry) => entry.tournamentId);
@@ -273,7 +275,7 @@ export class AutoSyncService {
         if (closingsWithTournament.length) {
           await this.syncTournamentClosings(
             closingsWithTournament,
-            marketCache,
+            activeMarkets,
             marketMetadata,
             stats,
             sportId
@@ -282,7 +284,7 @@ export class AutoSyncService {
         if (fallbackClosings.length) {
           await this.syncHistoricalOdds(
             fallbackClosings,
-            marketCache,
+            activeMarkets,
             marketMetadata,
             stats,
             sportId,
@@ -292,7 +294,7 @@ export class AutoSyncService {
       } else {
         await this.syncHistoricalOdds(
           closings,
-          marketCache,
+          activeMarkets,
           marketMetadata,
           stats,
           sportId,
@@ -366,7 +368,7 @@ export class AutoSyncService {
 
   private async syncHistoricalOdds(
     entries: FixtureRecord[],
-    marketCache: Record<string, MarketCache>,
+    activeMarkets: Map<string, { dbMarketId: number; outcomes: Map<number, number> }>,
     marketMetadata: Map<number, MarketMetadataEntry>,
     stats: AutoSyncStats,
     sportId: number,
@@ -375,7 +377,13 @@ export class AutoSyncService {
     for (const entry of entries) {
       try {
         const history = await this.getHistoricalOddsWithCooldown(entry.oddspapiId);
-        const rows = await buildRowsFromHistory(history, marketCache, entry.dbId, marketMetadata);
+        const rows = await buildRowsFromHistory(
+          history,
+          activeMarkets,
+          entry.dbId,
+          marketMetadata,
+          sportId
+        );
         console.log(
           `[AutoSync] Fixture ${entry.oddspapiId} • Rows historiques: ${rows.length}`
         );
@@ -399,7 +407,7 @@ export class AutoSyncService {
 
   private async syncTournamentClosings(
     entries: FixtureRecord[],
-    marketCache: Record<string, MarketCache>,
+    activeMarkets: Map<string, { dbMarketId: number; outcomes: Map<number, number> }>,
     marketMetadata: Map<number, MarketMetadataEntry>,
     stats: AutoSyncStats,
     sportId: number
@@ -465,8 +473,9 @@ export class AutoSyncService {
             odds,
             entry.dbId,
             existing,
-            marketCache,
-            marketMetadata
+            activeMarkets,
+            marketMetadata,
+            sportId
           );
           if (!rows.length) continue;
           await persistOddsRows(entry.dbId, rows);
@@ -583,7 +592,7 @@ export class AutoSyncService {
     const map = new Map<number, MarketMetadataEntry>();
 
     definitions
-      .filter((definition) => definition.sportId === sportId && definition.period === "fulltime")
+      .filter((definition) => definition.sportId === sportId)
       .forEach((definition) => {
         const normalized = normalizeMarketDefinition(definition);
         if (normalized) {
@@ -595,6 +604,63 @@ export class AutoSyncService {
     );
 
     this.marketMetadataCache.set(sportId, map);
+    return map;
+  }
+
+  private async loadActiveMarketsForSport(sportId: number) {
+    console.log(`[AutoSync] Loading active markets for sport ${sportId}...`);
+
+    // Obtenir sport_id DB
+    const { data: sport } = await this.db
+      .from("sports")
+      .select("id")
+      .eq("oddspapi_id", sportId)
+      .single();
+
+    if (!sport) {
+      throw new Error(`Sport ${sportId} not found in database`);
+    }
+
+    // Charger marchés actifs avec outcomes
+    const { data, error } = await this.db
+      .from("markets")
+      .select(`
+        id,
+        oddspapi_id,
+        market_type,
+        period,
+        handicap,
+        outcomes:outcomes(id, oddspapi_id, name)
+      `)
+      .eq("sport_id", sport.id)
+      .eq("active", true);
+
+    if (error) throw error;
+
+    // Créer map de lookup
+    const map = new Map<string, { dbMarketId: number; outcomes: Map<number, number> }>();
+
+    data?.forEach((market: any) => {
+      const outcomes = new Map<number, number>();
+      market.outcomes?.forEach((outcome: any) => {
+        outcomes.set(outcome.oddspapi_id, outcome.id);
+      });
+
+      // Index par oddspapi_id
+      map.set(`api:${market.oddspapi_id}`, {
+        dbMarketId: market.id,
+        outcomes,
+      });
+
+      // Index par clé composite (pour totals/spreads dynamiques)
+      const composite = `${market.market_type}:${market.period}:${market.handicap ?? "null"}`;
+      map.set(`composite:${composite}`, {
+        dbMarketId: market.id,
+        outcomes,
+      });
+    });
+
+    console.log(`[AutoSync] Loaded ${map.size / 2} active markets for sport ${sportId}`);
     return map;
   }
 
@@ -748,9 +814,10 @@ async function persistOddsRows(fixtureDbId: number, rows: any[]) {
 
 async function buildRowsFromHistory(
   history: OddsPapiHistoricalOddsResponse | null,
-  marketCache: Record<string, MarketCache>,
+  activeMarkets: Map<string, { dbMarketId: number; outcomes: Map<number, number> }>,
   fixtureDbId: number,
-  marketMetadata: Map<number, MarketMetadataEntry>
+  marketMetadata: Map<number, MarketMetadataEntry>,
+  sportId: number
 ) {
   const pinnacleMarkets = history?.bookmakers?.pinnacle?.markets;
   if (!pinnacleMarkets) {
@@ -766,6 +833,27 @@ async function buildRowsFromHistory(
       continue;
     }
 
+    // NOUVEAU: Chercher marché dans DB
+    let dbMarket = activeMarkets.get(`api:${marketId}`);
+
+    // Fallback sur clé composite pour totals/spreads dynamiques
+    if (!dbMarket && metadata.type === "TOTALS" && metadata.handicap !== undefined) {
+      const key = `composite:totals:fulltime:${metadata.handicap}`;
+      dbMarket = activeMarkets.get(key);
+    }
+
+    if (!dbMarket && metadata.type === "SPREAD" && metadata.handicap !== undefined) {
+      const key = `composite:spreads:fulltime:${metadata.handicap}`;
+      dbMarket = activeMarkets.get(key);
+    }
+
+    // CRITIQUE: Ignorer si marché absent de DB
+    if (!dbMarket) {
+      console.log(`[Sync] Skipping market ${marketId} (${metadata.type}) - not in DB`);
+      continue;
+    }
+
+    // Traiter outcomes
     const outcomes = market.outcomes ?? {};
     for (const [outcomeIdStr, outcome] of Object.entries(outcomes)) {
       const outcomeId = Number(outcomeIdStr);
@@ -777,32 +865,23 @@ async function buildRowsFromHistory(
       const summary = summarizePriceHistory(pricePoints);
       if (!summary) continue;
 
-      if (metadata.type === "1X2" && marketCache["1X2"]) {
-        const key = normalizeOneXTwoOutcome(metadata.outcomes[outcomeId]);
-        if (!key || !marketCache["1X2"].outcomes[key]) continue;
-        const row = buildHistoricalOddFromSummary(summary, marketCache["1X2"], key, fixtureDbId);
-        if (row) rows.push(row);
-      } else if (
-        metadata.type === "TOTALS" &&
-        marketCache["OVER_UNDER_25"] &&
-        isLineMatch(metadata.handicap, 2.5)
-      ) {
-        const key = normalizeTotalsOutcome(metadata.outcomes[outcomeId]);
-        if (!key) continue;
-        const row = buildHistoricalOddFromSummary(
-          summary,
-          marketCache["OVER_UNDER_25"],
-          key,
-          fixtureDbId
-        );
-        if (row) rows.push(row);
-      } else if (metadata.type === "SPREAD" && typeof metadata.handicap === "number") {
-        const key = normalizeSpreadOutcome(metadata.outcomes[outcomeId]);
-        if (!key) continue;
-        const marketEntry = await ensureAsianHandicapMarket(metadata.handicap, marketCache);
-        const row = buildHistoricalOddFromSummary(summary, marketEntry, key, fixtureDbId);
-        if (row) rows.push(row);
+      // Mapper outcome API → outcome DB
+      const dbOutcomeId = dbMarket.outcomes.get(outcomeId);
+      if (!dbOutcomeId) {
+        console.log(`[Sync] Skipping outcome ${outcomeId} for market ${marketId} - not in DB`);
+        continue;
       }
+
+      rows.push({
+        fixture_id: fixtureDbId,
+        market_id: dbMarket.dbMarketId,
+        outcome_id: dbOutcomeId,
+        opening_price: summary.opening?.price ?? null,
+        closing_price: summary.closing?.price ?? null,
+        opening_timestamp: summary.opening?.createdAt ?? null,
+        closing_timestamp: summary.closing?.createdAt ?? null,
+        is_winner: null,
+      });
     }
   }
 
@@ -813,8 +892,9 @@ async function buildRowsFromTournamentOdds(
   odds: OddsPapiTournamentOdds,
   fixtureDbId: number,
   existingRows: any[],
-  marketCache: Record<string, MarketCache>,
-  marketMetadata: Map<number, MarketMetadataEntry>
+  activeMarkets: Map<string, { dbMarketId: number; outcomes: Map<number, number> }>,
+  marketMetadata: Map<number, MarketMetadataEntry>,
+  sportId: number
 ) {
   const map = new Map<string, any>();
   existingRows.forEach((row) => {
@@ -835,74 +915,50 @@ async function buildRowsFromTournamentOdds(
     const metadata = marketMetadata.get(market.marketId);
     if (!metadata) continue;
 
-    for (const outcome of market.outcomes ?? []) {
-      const normalizedOutcome =
-        metadata.outcomes[outcome.outcomeId] ?? outcome.outcomeName;
-      if (!normalizedOutcome) continue;
+    // NOUVEAU: Chercher marché dans DB
+    let dbMarket = activeMarkets.get(`api:${market.marketId}`);
 
-      if (metadata.type === "1X2" && marketCache["1X2"]) {
-        const key = normalizeOneXTwoOutcome(normalizedOutcome);
-        if (!key || !marketCache["1X2"].outcomes[key]) continue;
-        const rowKey = `${marketCache["1X2"].marketId}:${marketCache["1X2"].outcomes[key]}`;
-        const row =
-          map.get(rowKey) ??
-          {
-            fixture_id: fixtureDbId,
-            market_id: marketCache["1X2"].marketId,
-            outcome_id: marketCache["1X2"].outcomes[key],
-            opening_price: null,
-            opening_timestamp: null,
-            closing_price: null,
-            closing_timestamp: null,
-            is_winner: null,
-          };
-        row.closing_price = outcome.price ?? row.closing_price;
-        row.closing_timestamp = outcome.lastUpdated ?? row.closing_timestamp;
-        map.set(rowKey, row);
-      } else if (metadata.type === "TOTALS" && marketCache["OVER_UNDER_25"]) {
-        const line = typeof outcome.line === "number" ? outcome.line : metadata.handicap;
-        if (!isLineMatch(line, 2.5)) continue;
-        const key = normalizeTotalsOutcome(normalizedOutcome);
-        if (!key || !marketCache["OVER_UNDER_25"].outcomes[key]) continue;
-        const entry = marketCache["OVER_UNDER_25"];
-        const rowKey = `${entry.marketId}:${entry.outcomes[key]}`;
-        const row =
-          map.get(rowKey) ??
-          {
-            fixture_id: fixtureDbId,
-            market_id: entry.marketId,
-            outcome_id: entry.outcomes[key],
-            opening_price: null,
-            opening_timestamp: null,
-            closing_price: null,
-            closing_timestamp: null,
-            is_winner: null,
-          };
-        row.closing_price = outcome.price ?? row.closing_price;
-        row.closing_timestamp = outcome.lastUpdated ?? row.closing_timestamp;
-        map.set(rowKey, row);
-      } else if (metadata.type === "SPREAD" && typeof metadata.handicap === "number") {
-        const line = typeof outcome.line === "number" ? outcome.line : metadata.handicap;
-        const key = normalizeSpreadOutcome(normalizedOutcome);
-        if (key === null) continue;
-        const entry = await ensureAsianHandicapMarket(line, marketCache);
-        const rowKey = `${entry.marketId}:${entry.outcomes[key]}`;
-        const row =
-          map.get(rowKey) ??
-          {
-            fixture_id: fixtureDbId,
-            market_id: entry.marketId,
-            outcome_id: entry.outcomes[key],
-            opening_price: null,
-            opening_timestamp: null,
-            closing_price: null,
-            closing_timestamp: null,
-            is_winner: null,
-          };
-        row.closing_price = outcome.price ?? row.closing_price;
-        row.closing_timestamp = outcome.lastUpdated ?? row.closing_timestamp;
-        map.set(rowKey, row);
+    // Fallback sur clé composite pour totals/spreads dynamiques
+    if (!dbMarket && metadata.type === "TOTALS" && metadata.handicap !== undefined) {
+      const key = `composite:totals:fulltime:${metadata.handicap}`;
+      dbMarket = activeMarkets.get(key);
+    }
+
+    if (!dbMarket && metadata.type === "SPREAD" && metadata.handicap !== undefined) {
+      const key = `composite:spreads:fulltime:${metadata.handicap}`;
+      dbMarket = activeMarkets.get(key);
+    }
+
+    // CRITIQUE: Ignorer si marché absent de DB
+    if (!dbMarket) {
+      console.log(`[Sync] Skipping tournament market ${market.marketId} (${metadata.type}) - not in DB`);
+      continue;
+    }
+
+    for (const outcome of market.outcomes ?? []) {
+      // Mapper outcome API → outcome DB
+      const dbOutcomeId = dbMarket.outcomes.get(outcome.outcomeId);
+      if (!dbOutcomeId) {
+        console.log(`[Sync] Skipping tournament outcome ${outcome.outcomeId} for market ${market.marketId} - not in DB`);
+        continue;
       }
+
+      const rowKey = `${dbMarket.dbMarketId}:${dbOutcomeId}`;
+      const row =
+        map.get(rowKey) ??
+        {
+          fixture_id: fixtureDbId,
+          market_id: dbMarket.dbMarketId,
+          outcome_id: dbOutcomeId,
+          opening_price: null,
+          opening_timestamp: null,
+          closing_price: null,
+          closing_timestamp: null,
+          is_winner: null,
+        };
+      row.closing_price = outcome.price ?? row.closing_price;
+      row.closing_timestamp = outcome.lastUpdated ?? row.closing_timestamp;
+      map.set(rowKey, row);
     }
   }
 
@@ -920,13 +976,17 @@ async function ensureAsianHandicapMarket(handicap: number, marketCache: Record<s
   }
 
   const baseDefinition = BASE_MARKETS.ASIAN_HANDICAP;
+  const marketOddspapiId = deriveHandicapOddspapiId(baseDefinition.oddspapiId, handicap);
   const { data: market, error } = await adminDb
     .from("markets")
-    .insert({
-      oddspapi_id: baseDefinition.oddspapiId,
-      name: `${baseDefinition.name} ${handicap}`,
-      description: baseDefinition.description ?? null,
-    })
+    .upsert(
+      {
+        oddspapi_id: marketOddspapiId,
+        name: `${baseDefinition.name} ${handicap}`,
+        description: baseDefinition.description ?? null,
+      },
+      { onConflict: "oddspapi_id" }
+    )
     .select("id")
     .single();
 
@@ -936,19 +996,86 @@ async function ensureAsianHandicapMarket(handicap: number, marketCache: Record<s
 
   const outcomes: Record<string, number> = {};
   for (const outcomeDef of baseDefinition.outcomes) {
+    const outcomeOddspapiId = deriveOutcomeOddspapiId(
+      marketOddspapiId,
+      outcomeDef.key === "HOME" ? 1 : 2
+    );
     const { data: outcome, error: outcomeError } = await adminDb
       .from("outcomes")
-      .insert({
-        oddspapi_id: outcomeDef.oddspapiId,
-        market_id: market.id,
-        name: `${outcomeDef.name} ${handicap}`,
-        description: outcomeDef.description ?? null,
-      })
+      .upsert(
+        {
+          oddspapi_id: outcomeOddspapiId,
+          market_id: market.id,
+          name: `${outcomeDef.name} ${handicap}`,
+          description: outcomeDef.description ?? null,
+        },
+        { onConflict: "oddspapi_id" }
+      )
       .select("id")
       .single();
 
     if (outcomeError || !outcome) {
       throw outcomeError ?? new Error("Impossible de créer outcome AH");
+    }
+    outcomes[outcomeDef.key] = outcome.id;
+  }
+
+  marketCache[key] = { marketId: market.id, outcomes };
+  return marketCache[key];
+}
+
+async function ensureTotalsMarket(
+  line: number,
+  marketCache: Record<string, MarketCache>
+) {
+  const key = `TOTAL_${line}`;
+  if (marketCache[key]) {
+    return marketCache[key];
+  }
+
+  const template = TOTALS_MARKET_TEMPLATE;
+  const formattedLine = line % 1 === 0 ? line.toFixed(0) : line.toFixed(1);
+  const marketOddspapiId = deriveTotalsOddspapiId(template.oddspapiId, line);
+
+  const { data: market, error } = await adminDb
+    .from("markets")
+    .upsert(
+      {
+        oddspapi_id: marketOddspapiId,
+        name: `${template.name} ${formattedLine}`,
+        description: template.description ?? null,
+      },
+      { onConflict: "oddspapi_id" }
+    )
+    .select("id")
+    .single();
+
+  if (error || !market) {
+    throw error ?? new Error("Impossible de créer le marché Total");
+  }
+
+  const outcomes: Record<string, number> = {};
+  for (const outcomeDef of template.outcomes) {
+    const outcomeOddspapiId = deriveOutcomeOddspapiId(
+      marketOddspapiId,
+      outcomeDef.key === "OVER" ? 1 : 2
+    );
+    const { data: outcome, error: outcomeError } = await adminDb
+      .from("outcomes")
+      .upsert(
+        {
+          oddspapi_id: outcomeOddspapiId,
+          market_id: market.id,
+          name: `${outcomeDef.name} ${formattedLine}`,
+          description: outcomeDef.description ?? null,
+        },
+        { onConflict: "oddspapi_id" }
+      )
+      .select("id")
+      .single();
+
+    if (outcomeError || !outcome) {
+      throw outcomeError ?? new Error("Impossible de créer outcome Total");
     }
     outcomes[outcomeDef.key] = outcome.id;
   }
@@ -1037,8 +1164,8 @@ function normalizeOneXTwoOutcome(value?: string) {
 function normalizeTotalsOutcome(value?: string) {
   const token = value?.toUpperCase();
   if (!token) return null;
-  if (token.includes("OVER")) return "O25";
-  if (token.includes("UNDER")) return "U25";
+  if (token.includes("OVER") || token.startsWith("O")) return "OVER";
+  if (token.includes("UNDER") || token.startsWith("U")) return "UNDER";
   return null;
 }
 
@@ -1053,4 +1180,24 @@ function normalizeSpreadOutcome(value?: string) {
 function isLineMatch(line: number | undefined, target: number) {
   if (typeof line !== "number") return false;
   return Math.abs(line - target) < 0.01;
+}
+
+function pickAllowedLine(line: number | undefined, allowed: number[]) {
+  if (typeof line !== "number") return null;
+  return allowed.find((item) => isLineMatch(line, item)) ?? null;
+}
+
+function deriveTotalsOddspapiId(base: number, line: number) {
+  const suffix = Math.round(line * 1000); // conserve 0.001 précision
+  return base * 100000 + suffix;
+}
+
+function deriveHandicapOddspapiId(base: number, handicap: number) {
+  const shift = 50; // assure un suffixe positif (handicap ±50 max)
+  const suffix = Math.round((handicap + shift) * 1000);
+  return base * 100000 + suffix;
+}
+
+function deriveOutcomeOddspapiId(marketOddspapiId: number, index: number) {
+  return marketOddspapiId * 10 + index;
 }

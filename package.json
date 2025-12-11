@@ -34,7 +34,11 @@
     "generate-config": "tsx scripts/generate-config-from-discovery.ts",
     "test-odds-api": "tsx scripts/test-odds-api-connection.ts",
     "test-odds-endpoint": "tsx scripts/test-odds-endpoint.ts",
-    "list-bookmakers": "tsx scripts/list-available-bookmakers.ts"
+    "list-bookmakers": "tsx scripts/list-available-bookmakers.ts",
+    "test-sports-slugs": "tsx scripts/test-sports-slugs.ts",
+    "debug-odds-structure": "tsx scripts/debug-odds-structure.ts",
+    "test-job-a-single": "tsx scripts/test-job-a-single-league.ts",
+    "test-job-a-two": "tsx scripts/test-job-a-two-leagues.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
