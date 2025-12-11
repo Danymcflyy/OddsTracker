@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 
 import { supabase, supabaseAdmin, isAdminAvailable } from "@/lib/db";
-import { normalizeMarketKey } from "@/lib/api/oddsapi/normalizer";
+import { normalizeMarketKey, normalizeOutcomeName } from "@/lib/api/oddsapi/normalizer";
 import type { FixtureWithEnrichedOdds } from "@/types/fixture";
 
 const SORTABLE_COLUMNS: Record<string, string> = {
@@ -366,6 +366,9 @@ export async function GET(
           // Find matching market (from markets_v2)
           const market = marketsByKey.get(normalizedMarketKey);
 
+          // Normalize outcome name (e.g., "home" -> "1", "over" -> "OVER")
+          const normalizedOutcomeName = normalizeOutcomeName(odd.selection);
+
           // Create enriched odd structure that matches OddWithDetails
           const enrichedOdd: any = {
             id: odd.id,
@@ -384,12 +387,12 @@ export async function GET(
               name: market.oddsapi_key,
               description: market.market_type || null,
             } : null,
-            // Add enriched outcome object (infer from selection)
+            // Add enriched outcome object with normalized name (e.g., "home" -> "1", "over" -> "OVER")
             outcome: {
               id: null,
               oddspapi_id: null,
               market_id: market?.id || null,
-              name: odd.selection.toUpperCase(),
+              name: normalizedOutcomeName,
               description: odd.selection,
             },
           };
