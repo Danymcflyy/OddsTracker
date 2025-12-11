@@ -149,7 +149,7 @@ export default function FootballPage() {
         leagueOptions={leagueOptions}
       />
 
-      <Card>
+      <Card suppressHydrationWarning>
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-lg font-semibold text-slate-900">
             Résultats : {filteredData.length.toLocaleString("fr-FR")} matchs
