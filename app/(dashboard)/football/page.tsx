@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import dynamic from "next/dynamic";
 import type { PaginationState, SortingState, Table as TanstackTable } from "@tanstack/react-table";
 import { Filter, RefreshCw } from "lucide-react";
 
+import { DataTable } from "@/components/tables/data-table";
+import { footballColumnsStatic } from "@/components/tables/columns/football-columns-static";
 import { ColumnVisibilityToggle } from "@/components/tables/column-visibility";
 import { ExportButtons } from "@/components/tables/export-buttons";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
@@ -19,12 +20,6 @@ import { useFilters } from "@/hooks/use-filters";
 import { useFixtures } from "@/hooks/use-fixtures";
 import type { FixtureWithEnrichedOdds, OddWithDetails } from "@/types/fixture";
 import type { Filters } from "@/types/filters";
-
-// Import dynamically with no SSR to avoid hydration issues
-const FootballTableClient = dynamic(
-  () => import("@/components/tables/football-table-client").then(mod => ({ default: mod.FootballTableClient })),
-  { ssr: false }
-);
 
 const COLUMN_STORAGE_KEY = "oddstracker_columns_football";
 
@@ -147,7 +142,8 @@ export default function FootballPage() {
           )}
         </CardHeader>
         <CardContent>
-          <FootballTableClient
+          <DataTable
+            columns={footballColumnsStatic}
             data={paginatedData}
             isLoading={loading}
             pageCount={pageCount}
