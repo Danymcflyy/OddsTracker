@@ -18,7 +18,7 @@ import type {
 } from './types';
 
 const DEFAULT_BASE_URL = 'https://api2.odds-api.io';
-const DEFAULT_BOOKMAKERS = ['pinnacle'];
+const DEFAULT_BOOKMAKERS = ['Pinnacle'];  // Note: case-sensitive!
 const DEFAULT_MARKETS = [
   'h2h',
   'spreads',
@@ -97,12 +97,13 @@ export class OddsApiClient {
       searchParams.set('to', Math.floor(params.toDate.getTime() / 1000).toString());
     }
 
-    const response = await this.request<OddsApiEventsResponse>(
+    // L'API retourne un array directement, pas un objet avec 'events'
+    const response = await this.request<OddsApiEvent[]>(
       `/v3/events?${searchParams.toString()}`,
       { endpoint: '/v3/events' }
     );
 
-    return response.events || [];
+    return Array.isArray(response) ? response : [];
   }
 
   /**
@@ -142,6 +143,7 @@ export class OddsApiClient {
   /**
    * Récupère les cotes mises à jour depuis un timestamp
    * Utilisé pour incremental polling (Job A)
+   * Note: bookmaker (singulier) est OBLIGATOIRE sur cet endpoint
    */
   async getOddsUpdated(params: {
     sport: string;
@@ -152,7 +154,8 @@ export class OddsApiClient {
     const searchParams = new URLSearchParams();
     searchParams.set('sport', params.sport);
     searchParams.set('since', params.since.toString());
-    searchParams.set('bookmakers', (params.bookmakers || this.defaultBookmakers).join(','));
+    // Note: 'bookmaker' singulier est REQUIS
+    searchParams.set('bookmaker', (params.bookmakers || this.defaultBookmakers)[0]);
     searchParams.set('markets', (params.markets || this.defaultMarkets).join(','));
 
     return this.request<OddsApiUpdatedResponse>(

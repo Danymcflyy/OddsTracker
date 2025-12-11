@@ -67,7 +67,7 @@ export class JobAIncrementalOdds {
         const updated = await oddsApiClient.getOddsUpdated({
           sport: sport.toLowerCase(),
           since,
-          bookmakers: ['pinnacle'],
+          bookmakers: ['Pinnacle'],
         });
 
         if (!updated.events_updated || updated.events_updated.length === 0) {
