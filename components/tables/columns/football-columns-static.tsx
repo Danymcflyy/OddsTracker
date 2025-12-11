@@ -18,59 +18,59 @@ interface OddsDefinition {
 
 // Définitions statiques de TOUTES les colonnes possibles
 const ODDS_DEFINITIONS: OddsDefinition[] = [
-  // 1X2 (h2h market)
-  { id: "1X2_1", label: "1X2 | 1 (Home Win)", marketKey: "h2h", outcomeName: "1" },
-  { id: "1X2_X", label: "1X2 | X (Draw)", marketKey: "h2h", outcomeName: "X" },
-  { id: "1X2_2", label: "1X2 | 2 (Away Win)", marketKey: "h2h", outcomeName: "2" },
+  // 1X2 (h2h market) - Résultat du match
+  { id: "1X2_1", label: "Match Result | 1 Home Win", marketKey: "h2h", outcomeName: "1" },
+  { id: "1X2_X", label: "Match Result | X Draw", marketKey: "h2h", outcomeName: "X" },
+  { id: "1X2_2", label: "Match Result | 2 Away Win", marketKey: "h2h", outcomeName: "2" },
 
-  // Totals (totals market)
-  { id: "TOTALS_OVER", label: "Totals | Over", marketKey: "totals", outcomeName: "OVER" },
-  { id: "TOTALS_UNDER", label: "Totals | Under", marketKey: "totals", outcomeName: "UNDER" },
+  // Totals (totals market) - Over/Under buts
+  { id: "TOTALS_OVER", label: "Total Goals | Over", marketKey: "totals", outcomeName: "OVER" },
+  { id: "TOTALS_UNDER", label: "Total Goals | Under", marketKey: "totals", outcomeName: "UNDER" },
 
-  // Spreads (spreads market)
-  { id: "SPREADS_1", label: "Spreads | Home", marketKey: "spreads", outcomeName: "1" },
-  { id: "SPREADS_2", label: "Spreads | Away", marketKey: "spreads", outcomeName: "2" },
+  // Spreads (spreads market) - Asian Handicap
+  { id: "SPREADS_1", label: "Asian Handicap | Home", marketKey: "spreads", outcomeName: "1" },
+  { id: "SPREADS_2", label: "Asian Handicap | Away", marketKey: "spreads", outcomeName: "2" },
 
-  // Corners Spread
-  { id: "CORNERS_SPREAD_1", label: "Corners Spread | Home", marketKey: "corners_spread", outcomeName: "1" },
-  { id: "CORNERS_SPREAD_2", label: "Corners Spread | Away", marketKey: "corners_spread", outcomeName: "2" },
+  // Corners Spread - Asian Handicap on corners
+  { id: "CORNERS_SPREAD_1", label: "Corners Handicap | Home", marketKey: "corners_spread", outcomeName: "1" },
+  { id: "CORNERS_SPREAD_2", label: "Corners Handicap | Away", marketKey: "corners_spread", outcomeName: "2" },
 
-  // Corners Totals
-  { id: "CORNERS_TOTALS_OVER", label: "Corners Totals | Over", marketKey: "corners_totals", outcomeName: "OVER" },
-  { id: "CORNERS_TOTALS_UNDER", label: "Corners Totals | Under", marketKey: "corners_totals", outcomeName: "UNDER" },
+  // Corners Totals - Over/Under corners
+  { id: "CORNERS_TOTALS_OVER", label: "Total Corners | Over", marketKey: "corners_totals", outcomeName: "OVER" },
+  { id: "CORNERS_TOTALS_UNDER", label: "Total Corners | Under", marketKey: "corners_totals", outcomeName: "UNDER" },
 
   // Corners Half-Time Spread
-  { id: "CORNERS_SPREAD_H1_1", label: "Corners Spread HT | Home", marketKey: "corners_spread_h1", outcomeName: "1" },
-  { id: "CORNERS_SPREAD_H1_2", label: "Corners Spread HT | Away", marketKey: "corners_spread_h1", outcomeName: "2" },
+  { id: "CORNERS_SPREAD_H1_1", label: "Corners HT Handicap | Home", marketKey: "corners_spread_h1", outcomeName: "1" },
+  { id: "CORNERS_SPREAD_H1_2", label: "Corners HT Handicap | Away", marketKey: "corners_spread_h1", outcomeName: "2" },
 
   // Corners Half-Time Totals
-  { id: "CORNERS_TOTALS_H1_OVER", label: "Corners Totals HT | Over", marketKey: "corners_totals_h1", outcomeName: "OVER" },
-  { id: "CORNERS_TOTALS_H1_UNDER", label: "Corners Totals HT | Under", marketKey: "corners_totals_h1", outcomeName: "UNDER" },
+  { id: "CORNERS_TOTALS_H1_OVER", label: "Total Corners HT | Over", marketKey: "corners_totals_h1", outcomeName: "OVER" },
+  { id: "CORNERS_TOTALS_H1_UNDER", label: "Total Corners HT | Under", marketKey: "corners_totals_h1", outcomeName: "UNDER" },
 
-  // Bookings Spread
-  { id: "BOOKINGS_SPREAD_1", label: "Bookings Spread | Home", marketKey: "bookings_spread", outcomeName: "1" },
-  { id: "BOOKINGS_SPREAD_2", label: "Bookings Spread | Away", marketKey: "bookings_spread", outcomeName: "2" },
+  // Bookings Spread - Asian Handicap on cards
+  { id: "BOOKINGS_SPREAD_1", label: "Cards Handicap | Home", marketKey: "bookings_spread", outcomeName: "1" },
+  { id: "BOOKINGS_SPREAD_2", label: "Cards Handicap | Away", marketKey: "bookings_spread", outcomeName: "2" },
 
-  // Bookings Totals
-  { id: "BOOKINGS_TOTALS_OVER", label: "Bookings Totals | Over", marketKey: "bookings_totals", outcomeName: "OVER" },
-  { id: "BOOKINGS_TOTALS_UNDER", label: "Bookings Totals | Under", marketKey: "bookings_totals", outcomeName: "UNDER" },
+  // Bookings Totals - Over/Under cards
+  { id: "BOOKINGS_TOTALS_OVER", label: "Total Cards | Over", marketKey: "bookings_totals", outcomeName: "OVER" },
+  { id: "BOOKINGS_TOTALS_UNDER", label: "Total Cards | Under", marketKey: "bookings_totals", outcomeName: "UNDER" },
 
-  // Team Totals Home
-  { id: "TEAM_TOTALS_HOME_OVER", label: "Team Totals Home | Over", marketKey: "team_totals_home", outcomeName: "OVER" },
-  { id: "TEAM_TOTALS_HOME_UNDER", label: "Team Totals Home | Under", marketKey: "team_totals_home", outcomeName: "UNDER" },
+  // Team Totals Home - Goals scored by home team
+  { id: "TEAM_TOTALS_HOME_OVER", label: "Home Goals | Over", marketKey: "team_totals_home", outcomeName: "OVER" },
+  { id: "TEAM_TOTALS_HOME_UNDER", label: "Home Goals | Under", marketKey: "team_totals_home", outcomeName: "UNDER" },
 
-  // Team Totals Away
-  { id: "TEAM_TOTALS_AWAY_OVER", label: "Team Totals Away | Over", marketKey: "team_totals_away", outcomeName: "OVER" },
-  { id: "TEAM_TOTALS_AWAY_UNDER", label: "Team Totals Away | Under", marketKey: "team_totals_away", outcomeName: "UNDER" },
+  // Team Totals Away - Goals scored by away team
+  { id: "TEAM_TOTALS_AWAY_OVER", label: "Away Goals | Over", marketKey: "team_totals_away", outcomeName: "OVER" },
+  { id: "TEAM_TOTALS_AWAY_UNDER", label: "Away Goals | Under", marketKey: "team_totals_away", outcomeName: "UNDER" },
 
-  // Half-Time 1X2
-  { id: "1X2_H1_1", label: "HT 1X2 | 1", marketKey: "h2h_h1", outcomeName: "1" },
-  { id: "1X2_H1_X", label: "HT 1X2 | X", marketKey: "h2h_h1", outcomeName: "X" },
-  { id: "1X2_H1_2", label: "HT 1X2 | 2", marketKey: "h2h_h1", outcomeName: "2" },
+  // Half-Time 1X2 - Match result at 45'
+  { id: "1X2_H1_1", label: "HT Result | 1 Home Win", marketKey: "h2h_h1", outcomeName: "1" },
+  { id: "1X2_H1_X", label: "HT Result | X Draw", marketKey: "h2h_h1", outcomeName: "X" },
+  { id: "1X2_H1_2", label: "HT Result | 2 Away Win", marketKey: "h2h_h1", outcomeName: "2" },
 
-  // Half-Time Totals
-  { id: "TOTALS_H1_OVER", label: "HT Totals | Over", marketKey: "totals_h1", outcomeName: "OVER" },
-  { id: "TOTALS_H1_UNDER", label: "HT Totals | Under", marketKey: "totals_h1", outcomeName: "UNDER" },
+  // Half-Time Totals - Total goals at 45'
+  { id: "TOTALS_H1_OVER", label: "HT Total Goals | Over", marketKey: "totals_h1", outcomeName: "OVER" },
+  { id: "TOTALS_H1_UNDER", label: "HT Total Goals | Under", marketKey: "totals_h1", outcomeName: "UNDER" },
 ];
 
 /**
