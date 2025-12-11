@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import type { PaginationState, SortingState, Table as TanstackTable } from "@tanstack/react-table";
 import { Filter, RefreshCw } from "lucide-react";
 
-import { FootballTableClient } from "@/components/tables/football-table-client";
 import { ColumnVisibilityToggle } from "@/components/tables/column-visibility";
 import { ExportButtons } from "@/components/tables/export-buttons";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
@@ -19,6 +19,12 @@ import { useFilters } from "@/hooks/use-filters";
 import { useFixtures } from "@/hooks/use-fixtures";
 import type { FixtureWithEnrichedOdds, OddWithDetails } from "@/types/fixture";
 import type { Filters } from "@/types/filters";
+
+// Import dynamically with no SSR to avoid hydration issues
+const FootballTableClient = dynamic(
+  () => import("@/components/tables/football-table-client").then(mod => ({ default: mod.FootballTableClient })),
+  { ssr: false }
+);
 
 const COLUMN_STORAGE_KEY = "oddstracker_columns_football";
 
@@ -94,13 +100,6 @@ export default function FootballPage() {
     []
   );
 
-  // Only render table after initial hydration to avoid SSR mismatch
-  const [isHydrated, setIsHydrated] = React.useState(false);
-
-  React.useEffect(() => {
-    setIsHydrated(true);
-  }, []);
-
   return (
     <div className="space-y-8">
       <header className="space-y-2">
@@ -124,48 +123,42 @@ export default function FootballPage() {
         </div>
       </header>
 
-      <div suppressHydrationWarning>
-        {isHydrated && (
-          <>
-            <FiltersPanel
-              filters={filters}
-              updateFilter={updateFilter}
-              resetFilters={resetFilters}
-              countryOptions={countryOptions}
-              leagueOptions={leagueOptions}
-            />
+      <FiltersPanel
+        filters={filters}
+        updateFilter={updateFilter}
+        resetFilters={resetFilters}
+        countryOptions={countryOptions}
+        leagueOptions={leagueOptions}
+      />
 
-            <Card suppressHydrationWarning>
-              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  Résultats : {filteredData.length.toLocaleString("fr-FR")} matchs
-                </CardTitle>
-                {error ? (
-                  <p className="text-sm text-destructive">Erreur : {error}</p>
-                ) : (
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>Pagination côté serveur</span>
-                    <span>•</span>
-                    <span>Tri multi-colonnes</span>
-                  </div>
-                )}
-              </CardHeader>
-              <CardContent suppressHydrationWarning>
-                <FootballTableClient
-                  data={paginatedData}
-                  isLoading={loading}
-                  pageCount={pageCount}
-                  pagination={pagination}
-                  sorting={sorting}
-                  onPaginationChange={setPagination}
-                  onSortingChange={setSorting}
-                  renderToolbar={toolbarRenderer}
-                />
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
+      <Card>
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-lg font-semibold text-slate-900">
+            Résultats : {filteredData.length.toLocaleString("fr-FR")} matchs
+          </CardTitle>
+          {error ? (
+            <p className="text-sm text-destructive">Erreur : {error}</p>
+          ) : (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span>Pagination côté serveur</span>
+              <span>•</span>
+              <span>Tri multi-colonnes</span>
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          <FootballTableClient
+            data={paginatedData}
+            isLoading={loading}
+            pageCount={pageCount}
+            pagination={pagination}
+            sorting={sorting}
+            onPaginationChange={setPagination}
+            onSortingChange={setSorting}
+            renderToolbar={toolbarRenderer}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
