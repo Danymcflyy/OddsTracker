@@ -348,10 +348,16 @@ export async function GET(
           .select("*");
 
         const marketsByKey = new Map();
+        const marketsByKeyAndHandicap = new Map();
         if (marketsV2) {
           (marketsV2 as any[]).forEach(m => {
-            // Use oddsapi_key as the primary key
+            // Use oddsapi_key as the primary key for backwards compatibility
             marketsByKey.set(m.oddsapi_key, m);
+            // Also store by key + handicap for precise matching
+            const handicapKey = m.handicap !== null && m.handicap !== undefined
+              ? `${m.oddsapi_key}:${m.handicap}`
+              : m.oddsapi_key;
+            marketsByKeyAndHandicap.set(handicapKey, m);
           });
         }
 
@@ -364,7 +370,11 @@ export async function GET(
           const normalizedMarketKey = normalizeMarketKey(odd.market_name);
 
           // Find matching market (from markets_v2)
-          const market = marketsByKey.get(normalizedMarketKey);
+          // Try first with handicap key (for spreads/totals with specific line values)
+          const handicapKey = odd.line !== null && odd.line !== undefined
+            ? `${normalizedMarketKey}:${odd.line}`
+            : normalizedMarketKey;
+          const market = marketsByKeyAndHandicap.get(handicapKey) || marketsByKey.get(normalizedMarketKey);
 
           // Normalize outcome name (e.g., "home" -> "1", "over" -> "OVER")
           const normalizedOutcomeName = normalizeOutcomeName(odd.selection);
@@ -380,12 +390,16 @@ export async function GET(
             is_winner: odd.is_winner,
             market_id: market?.id || null,
             outcome_id: null,
+            // Add line value for handicap/totals
+            line: odd.line,
             // Add enriched market object
             market: market ? {
               id: market.id,
               oddspapi_id: null,
               name: market.oddsapi_key,
               description: market.market_type || null,
+              handicap: market.handicap,  // Include handicap in market object
+              period: market.period,      // Include period for HT markets
             } : null,
             // Add enriched outcome object with normalized name (e.g., "home" -> "1", "over" -> "OVER")
             outcome: {

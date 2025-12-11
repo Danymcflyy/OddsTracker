@@ -14,6 +14,7 @@ interface OddsDefinition {
   label: string;
   marketKey: string; // e.g., "h2h", "spreads", "totals"
   outcomeName: string; // e.g., "1", "X", "2", "OVER", "UNDER"
+  line?: number | null; // Handicap/total line (e.g., 2.5, 3.0, -0.5)
 }
 
 // Définitions statiques de TOUTES les colonnes possibles
@@ -71,6 +72,36 @@ const ODDS_DEFINITIONS: OddsDefinition[] = [
   // Half-Time Totals - Total goals at 45'
   { id: "TOTALS_H1_OVER", label: "HT Total Goals | Over", marketKey: "totals_h1", outcomeName: "OVER" },
   { id: "TOTALS_H1_UNDER", label: "HT Total Goals | Under", marketKey: "totals_h1", outcomeName: "UNDER" },
+
+  // ============================================================================
+  // LIGNES SPÉCIFIQUES (Over/Under avec handicap et Spreads avec lignes)
+  // ============================================================================
+
+  // Totals avec lignes spécifiques
+  { id: "TOTALS_OVER_2.5", label: "Total Goals 2.5 | Over", marketKey: "totals", outcomeName: "OVER", line: 2.5 },
+  { id: "TOTALS_UNDER_2.5", label: "Total Goals 2.5 | Under", marketKey: "totals", outcomeName: "UNDER", line: 2.5 },
+  { id: "TOTALS_OVER_3.0", label: "Total Goals 3.0 | Over", marketKey: "totals", outcomeName: "OVER", line: 3.0 },
+  { id: "TOTALS_UNDER_3.0", label: "Total Goals 3.0 | Under", marketKey: "totals", outcomeName: "UNDER", line: 3.0 },
+  { id: "TOTALS_OVER_3.5", label: "Total Goals 3.5 | Over", marketKey: "totals", outcomeName: "OVER", line: 3.5 },
+  { id: "TOTALS_UNDER_3.5", label: "Total Goals 3.5 | Under", marketKey: "totals", outcomeName: "UNDER", line: 3.5 },
+
+  // Spreads avec lignes spécifiques
+  { id: "SPREADS_HOME_-0.5", label: "Asian Handicap -0.5 | Home", marketKey: "spreads", outcomeName: "1", line: -0.5 },
+  { id: "SPREADS_AWAY_+0.5", label: "Asian Handicap +0.5 | Away", marketKey: "spreads", outcomeName: "2", line: 0.5 },
+  { id: "SPREADS_HOME_-1.0", label: "Asian Handicap -1.0 | Home", marketKey: "spreads", outcomeName: "1", line: -1.0 },
+  { id: "SPREADS_AWAY_+1.0", label: "Asian Handicap +1.0 | Away", marketKey: "spreads", outcomeName: "2", line: 1.0 },
+
+  // Corners avec lignes
+  { id: "CORNERS_TOTALS_OVER_9.5", label: "Total Corners 9.5 | Over", marketKey: "corners_totals", outcomeName: "OVER", line: 9.5 },
+  { id: "CORNERS_TOTALS_UNDER_9.5", label: "Total Corners 9.5 | Under", marketKey: "corners_totals", outcomeName: "UNDER", line: 9.5 },
+  { id: "CORNERS_TOTALS_OVER_10.5", label: "Total Corners 10.5 | Over", marketKey: "corners_totals", outcomeName: "OVER", line: 10.5 },
+  { id: "CORNERS_TOTALS_UNDER_10.5", label: "Total Corners 10.5 | Under", marketKey: "corners_totals", outcomeName: "UNDER", line: 10.5 },
+
+  // Team Totals avec lignes
+  { id: "TEAM_TOTALS_HOME_OVER_1.5", label: "Home Goals 1.5 | Over", marketKey: "team_totals_home", outcomeName: "OVER", line: 1.5 },
+  { id: "TEAM_TOTALS_HOME_UNDER_1.5", label: "Home Goals 1.5 | Under", marketKey: "team_totals_home", outcomeName: "UNDER", line: 1.5 },
+  { id: "TEAM_TOTALS_AWAY_OVER_1.5", label: "Away Goals 1.5 | Over", marketKey: "team_totals_away", outcomeName: "OVER", line: 1.5 },
+  { id: "TEAM_TOTALS_AWAY_UNDER_1.5", label: "Away Goals 1.5 | Under", marketKey: "team_totals_away", outcomeName: "UNDER", line: 1.5 },
 ];
 
 /**
@@ -182,8 +213,8 @@ function buildOddColumn(
     id: `${definition.id}_${suffix}`,
     header: `${definition.label} ${suffix}`,
     cell: ({ row }) => {
-      // Chercher l'odd qui correspond à cette définition
-      const odd = findOdd(row.original, definition.marketKey, definition.outcomeName);
+      // Chercher l'odd qui correspond à cette définition (avec ligne si applicable)
+      const odd = findOdd(row.original, definition.marketKey, definition.outcomeName, definition.line);
 
       if (!odd) {
         return <div className="text-center text-muted-foreground">-</div>;
@@ -215,7 +246,8 @@ function buildOddColumn(
 function findOdd(
   row: FootballTableRow,
   marketKey: string,
-  outcomeName: string
+  outcomeName: string,
+  line?: number | null
 ): OddWithDetails | undefined {
   return row.odds?.find((odd) => {
     // Comparer le market name (exact match avec oddsapi_key)
@@ -224,7 +256,13 @@ function findOdd(
     // Comparer le outcome name (exact match avec nom normalisé)
     const matchesOutcome = odd.outcome?.name === outcomeName;
 
-    return matchesMarket && matchesOutcome;
+    // Comparer la ligne si spécifiée (pour spreads/totals avec handicap)
+    let matchesLine = true;
+    if (line !== undefined && line !== null) {
+      matchesLine = odd.line === line || (odd.market?.handicap !== undefined && odd.market.handicap === line);
+    }
+
+    return matchesMarket && matchesOutcome && matchesLine;
   });
 }
 
