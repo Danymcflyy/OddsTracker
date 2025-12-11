@@ -39,7 +39,8 @@
     "debug-odds-structure": "tsx scripts/debug-odds-structure.ts",
     "test-job-a-single": "tsx scripts/test-job-a-single-league.ts",
     "test-job-a-two": "tsx scripts/test-job-a-two-leagues.ts",
-    "check-available-odds": "tsx scripts/check-available-odds.ts"
+    "check-available-odds": "tsx scripts/check-available-odds.ts",
+    "seed-ht-markets": "tsx scripts/seed-ht-markets.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",

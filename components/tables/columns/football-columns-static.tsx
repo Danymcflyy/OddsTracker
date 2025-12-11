@@ -51,6 +51,13 @@ const ODDS_DEFINITIONS: OddsDefinition[] = [
   { id: "TEAM_TOTALS_HOME_UNDER_1.5", label: "Home Goals 1.5 | Under", marketKey: "team_totals_home", outcomeName: "UNDER", line: 1.5 },
   { id: "TEAM_TOTALS_AWAY_OVER_1.5", label: "Away Goals 1.5 | Over", marketKey: "team_totals_away", outcomeName: "OVER", line: 1.5 },
   { id: "TEAM_TOTALS_AWAY_UNDER_1.5", label: "Away Goals 1.5 | Under", marketKey: "team_totals_away", outcomeName: "UNDER", line: 1.5 },
+
+  // ============================================================================
+  // HALF-TIME RESULTS (1X2 à la 45e minute)
+  // ============================================================================
+  { id: "1X2_H1_1", label: "HT Result | 1 Home Win", marketKey: "h2h_h1", outcomeName: "1" },
+  { id: "1X2_H1_X", label: "HT Result | X Draw", marketKey: "h2h_h1", outcomeName: "X" },
+  { id: "1X2_H1_2", label: "HT Result | 2 Away Win", marketKey: "h2h_h1", outcomeName: "2" },
 ];
 
 /**
