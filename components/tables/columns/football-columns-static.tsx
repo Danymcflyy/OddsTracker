@@ -2,6 +2,7 @@
 
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { utcToZonedTime } from "date-fns-tz";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { cn } from "@/lib/utils";
@@ -70,9 +71,14 @@ function getStaticColumns(): ColumnDef<FootballTableRow>[] {
       header: "Date",
       cell: ({ getValue }) => {
         const value = getValue<string>();
+        if (!value) return <div className="font-medium">-</div>;
+
+        // Convert to Paris timezone (Europe/Paris)
+        const parisTime = utcToZonedTime(new Date(value), "Europe/Paris");
+
         return (
           <div className="font-medium">
-            {value ? format(new Date(value), "dd MMM yyyy HH:mm", { locale: fr }) : "-"}
+            {format(parisTime, "dd MMM yyyy HH:mm", { locale: fr })}
           </div>
         );
       },
