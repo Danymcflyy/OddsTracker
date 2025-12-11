@@ -5,7 +5,7 @@ import type { PaginationState, SortingState, Table as TanstackTable } from "@tan
 import { Filter, RefreshCw } from "lucide-react";
 
 import { DataTable } from "@/components/tables/data-table";
-import { createFootballColumns } from "@/components/tables/columns/football-columns";
+import { createFootballColumns } from "@/components/tables/columns/football-columns-v2";
 import { ColumnVisibilityToggle } from "@/components/tables/column-visibility";
 import { ExportButtons } from "@/components/tables/export-buttons";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFilters } from "@/hooks/use-filters";
 import { useFixtures } from "@/hooks/use-fixtures";
-import { useMarkets } from "@/hooks/use-markets";
 import type { FixtureWithEnrichedOdds, OddWithDetails } from "@/types/fixture";
 import type { Filters } from "@/types/filters";
 
@@ -32,7 +31,6 @@ const MARKET_TYPE_OPTIONS = [
 
 export default function FootballPage() {
   const { fixtures, loading: fixturesLoading, error, isDemoData } = useFixtures("football");
-  const { markets, loading: marketsLoading } = useMarkets("football");
   const { filters, updateFilter, resetFilters } = useFilters();
 
   const [pagination, setPagination] = React.useState<PaginationState>({
@@ -41,19 +39,19 @@ export default function FootballPage() {
   });
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
-  // Générer colonnes dynamiquement depuis les marchés DB
-  const columns = React.useMemo(() => {
-    return createFootballColumns(markets);
-  }, [markets]);
-
-  const loading = fixturesLoading || marketsLoading;
-
+  // Générer colonnes dynamiquement depuis les fixtures (plus simple et robuste)
   const typedFixtures = React.useMemo(() => {
     if (!Array.isArray(fixtures)) {
       return [];
     }
     return fixtures as FixtureWithEnrichedOdds[];
   }, [fixtures]);
+
+  const columns = React.useMemo(() => {
+    return createFootballColumns(typedFixtures);
+  }, [typedFixtures]);
+
+  const loading = fixturesLoading;
 
   const countryOptions = React.useMemo(() => {
     const map = new Map<number, string>();
