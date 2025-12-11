@@ -47,13 +47,17 @@ export default function FootballPage() {
     return fixtures as FixtureWithEnrichedOdds[];
   }, [fixtures]);
 
-  const columns = React.useMemo(() => {
-    // Colonnes statiques
+  // Toujours commencer avec les colonnes statiques pour éviter SSR mismatch
+  const [columns, setColumns] = React.useState(() => getStaticFootballColumns());
+
+  // Ajouter les colonnes d'odds côté client seulement
+  React.useEffect(() => {
     const staticColumns = getStaticFootballColumns();
 
-    // Si pas de fixtures, retourner juste les colonnes statiques
+    // Si pas de fixtures, garder juste les colonnes statiques
     if (!typedFixtures || typedFixtures.length === 0) {
-      return staticColumns;
+      setColumns(staticColumns);
+      return;
     }
 
     // Extraire les odds uniques et créer les colonnes
@@ -63,7 +67,7 @@ export default function FootballPage() {
       buildOddColumnForFixture(oddDef, "closing"),
     ]);
 
-    return [...staticColumns, ...oddsColumns];
+    setColumns([...staticColumns, ...oddsColumns]);
   }, [typedFixtures]);
 
   const loading = fixturesLoading;
@@ -164,7 +168,7 @@ export default function FootballPage() {
             </div>
           )}
         </CardHeader>
-        <CardContent>
+        <CardContent suppressHydrationWarning>
           <DataTable
             columns={columns}
             data={paginatedData}
