@@ -4,8 +4,7 @@ import * as React from "react";
 import type { PaginationState, SortingState, Table as TanstackTable } from "@tanstack/react-table";
 import { Filter, RefreshCw } from "lucide-react";
 
-import { DataTable } from "@/components/tables/data-table";
-import { getStaticFootballColumns, extractUniqueOddsFromFixtures, buildOddColumnForFixture } from "@/components/tables/columns/football-columns-v2";
+import { FootballTableClient } from "@/components/tables/football-table-client";
 import { ColumnVisibilityToggle } from "@/components/tables/column-visibility";
 import { ExportButtons } from "@/components/tables/export-buttons";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
@@ -39,36 +38,9 @@ export default function FootballPage() {
   });
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
-  // Générer colonnes dynamiquement depuis les fixtures (plus simple et robuste)
-  const typedFixtures = React.useMemo(() => {
-    if (!Array.isArray(fixtures)) {
-      return [];
-    }
-    return fixtures as FixtureWithEnrichedOdds[];
-  }, [fixtures]);
-
-  // Toujours commencer avec les colonnes statiques pour éviter SSR mismatch
-  const [columns, setColumns] = React.useState(() => getStaticFootballColumns());
-
-  // Ajouter les colonnes d'odds côté client seulement
-  React.useEffect(() => {
-    const staticColumns = getStaticFootballColumns();
-
-    // Si pas de fixtures, garder juste les colonnes statiques
-    if (!typedFixtures || typedFixtures.length === 0) {
-      setColumns(staticColumns);
-      return;
-    }
-
-    // Extraire les odds uniques et créer les colonnes
-    const oddsDefinitions = extractUniqueOddsFromFixtures(typedFixtures);
-    const oddsColumns = oddsDefinitions.flatMap((oddDef) => [
-      buildOddColumnForFixture(oddDef, "opening"),
-      buildOddColumnForFixture(oddDef, "closing"),
-    ]);
-
-    setColumns([...staticColumns, ...oddsColumns]);
-  }, [typedFixtures]);
+  const typedFixtures = Array.isArray(fixtures)
+    ? (fixtures as FixtureWithEnrichedOdds[])
+    : [];
 
   const loading = fixturesLoading;
 
@@ -169,15 +141,14 @@ export default function FootballPage() {
           )}
         </CardHeader>
         <CardContent suppressHydrationWarning>
-          <DataTable
-            columns={columns}
+          <FootballTableClient
             data={paginatedData}
+            isLoading={loading}
             pageCount={pageCount}
             pagination={pagination}
             sorting={sorting}
             onPaginationChange={setPagination}
             onSortingChange={setSorting}
-            isLoading={loading}
             renderToolbar={toolbarRenderer}
           />
         </CardContent>
