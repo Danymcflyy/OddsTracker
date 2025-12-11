@@ -19,58 +19,58 @@ interface OddsDefinition {
 // Définitions statiques de TOUTES les colonnes possibles
 const ODDS_DEFINITIONS: OddsDefinition[] = [
   // 1X2 (h2h market)
-  { id: "1X2_1", label: "1 (Home)", marketKey: "h2h", outcomeName: "1" },
-  { id: "1X2_X", label: "X (Draw)", marketKey: "h2h", outcomeName: "X" },
-  { id: "1X2_2", label: "2 (Away)", marketKey: "h2h", outcomeName: "2" },
+  { id: "1X2_1", label: "1X2 | 1 (Home Win)", marketKey: "h2h", outcomeName: "1" },
+  { id: "1X2_X", label: "1X2 | X (Draw)", marketKey: "h2h", outcomeName: "X" },
+  { id: "1X2_2", label: "1X2 | 2 (Away Win)", marketKey: "h2h", outcomeName: "2" },
 
   // Totals (totals market)
-  { id: "TOTALS_OVER", label: "Over", marketKey: "totals", outcomeName: "OVER" },
-  { id: "TOTALS_UNDER", label: "Under", marketKey: "totals", outcomeName: "UNDER" },
+  { id: "TOTALS_OVER", label: "Totals | Over", marketKey: "totals", outcomeName: "OVER" },
+  { id: "TOTALS_UNDER", label: "Totals | Under", marketKey: "totals", outcomeName: "UNDER" },
 
   // Spreads (spreads market)
-  { id: "SPREADS_1", label: "Spread Home", marketKey: "spreads", outcomeName: "1" },
-  { id: "SPREADS_2", label: "Spread Away", marketKey: "spreads", outcomeName: "2" },
+  { id: "SPREADS_1", label: "Spreads | Home", marketKey: "spreads", outcomeName: "1" },
+  { id: "SPREADS_2", label: "Spreads | Away", marketKey: "spreads", outcomeName: "2" },
 
   // Corners Spread
-  { id: "CORNERS_SPREAD_1", label: "Corners Spread Home", marketKey: "corners_spread", outcomeName: "1" },
-  { id: "CORNERS_SPREAD_2", label: "Corners Spread Away", marketKey: "corners_spread", outcomeName: "2" },
+  { id: "CORNERS_SPREAD_1", label: "Corners Spread | Home", marketKey: "corners_spread", outcomeName: "1" },
+  { id: "CORNERS_SPREAD_2", label: "Corners Spread | Away", marketKey: "corners_spread", outcomeName: "2" },
 
   // Corners Totals
-  { id: "CORNERS_TOTALS_OVER", label: "Corners Over", marketKey: "corners_totals", outcomeName: "OVER" },
-  { id: "CORNERS_TOTALS_UNDER", label: "Corners Under", marketKey: "corners_totals", outcomeName: "UNDER" },
+  { id: "CORNERS_TOTALS_OVER", label: "Corners Totals | Over", marketKey: "corners_totals", outcomeName: "OVER" },
+  { id: "CORNERS_TOTALS_UNDER", label: "Corners Totals | Under", marketKey: "corners_totals", outcomeName: "UNDER" },
 
   // Corners Half-Time Spread
-  { id: "CORNERS_SPREAD_H1_1", label: "Corners Spread HT Home", marketKey: "corners_spread_h1", outcomeName: "1" },
-  { id: "CORNERS_SPREAD_H1_2", label: "Corners Spread HT Away", marketKey: "corners_spread_h1", outcomeName: "2" },
+  { id: "CORNERS_SPREAD_H1_1", label: "Corners Spread HT | Home", marketKey: "corners_spread_h1", outcomeName: "1" },
+  { id: "CORNERS_SPREAD_H1_2", label: "Corners Spread HT | Away", marketKey: "corners_spread_h1", outcomeName: "2" },
 
   // Corners Half-Time Totals
-  { id: "CORNERS_TOTALS_H1_OVER", label: "Corners Over HT", marketKey: "corners_totals_h1", outcomeName: "OVER" },
-  { id: "CORNERS_TOTALS_H1_UNDER", label: "Corners Under HT", marketKey: "corners_totals_h1", outcomeName: "UNDER" },
+  { id: "CORNERS_TOTALS_H1_OVER", label: "Corners Totals HT | Over", marketKey: "corners_totals_h1", outcomeName: "OVER" },
+  { id: "CORNERS_TOTALS_H1_UNDER", label: "Corners Totals HT | Under", marketKey: "corners_totals_h1", outcomeName: "UNDER" },
 
   // Bookings Spread
-  { id: "BOOKINGS_SPREAD_1", label: "Bookings Spread Home", marketKey: "bookings_spread", outcomeName: "1" },
-  { id: "BOOKINGS_SPREAD_2", label: "Bookings Spread Away", marketKey: "bookings_spread", outcomeName: "2" },
+  { id: "BOOKINGS_SPREAD_1", label: "Bookings Spread | Home", marketKey: "bookings_spread", outcomeName: "1" },
+  { id: "BOOKINGS_SPREAD_2", label: "Bookings Spread | Away", marketKey: "bookings_spread", outcomeName: "2" },
 
   // Bookings Totals
-  { id: "BOOKINGS_TOTALS_OVER", label: "Bookings Over", marketKey: "bookings_totals", outcomeName: "OVER" },
-  { id: "BOOKINGS_TOTALS_UNDER", label: "Bookings Under", marketKey: "bookings_totals", outcomeName: "UNDER" },
+  { id: "BOOKINGS_TOTALS_OVER", label: "Bookings Totals | Over", marketKey: "bookings_totals", outcomeName: "OVER" },
+  { id: "BOOKINGS_TOTALS_UNDER", label: "Bookings Totals | Under", marketKey: "bookings_totals", outcomeName: "UNDER" },
 
   // Team Totals Home
-  { id: "TEAM_TOTALS_HOME_OVER", label: "Home Team Over", marketKey: "team_totals_home", outcomeName: "OVER" },
-  { id: "TEAM_TOTALS_HOME_UNDER", label: "Home Team Under", marketKey: "team_totals_home", outcomeName: "UNDER" },
+  { id: "TEAM_TOTALS_HOME_OVER", label: "Team Totals Home | Over", marketKey: "team_totals_home", outcomeName: "OVER" },
+  { id: "TEAM_TOTALS_HOME_UNDER", label: "Team Totals Home | Under", marketKey: "team_totals_home", outcomeName: "UNDER" },
 
   // Team Totals Away
-  { id: "TEAM_TOTALS_AWAY_OVER", label: "Away Team Over", marketKey: "team_totals_away", outcomeName: "OVER" },
-  { id: "TEAM_TOTALS_AWAY_UNDER", label: "Away Team Under", marketKey: "team_totals_away", outcomeName: "UNDER" },
+  { id: "TEAM_TOTALS_AWAY_OVER", label: "Team Totals Away | Over", marketKey: "team_totals_away", outcomeName: "OVER" },
+  { id: "TEAM_TOTALS_AWAY_UNDER", label: "Team Totals Away | Under", marketKey: "team_totals_away", outcomeName: "UNDER" },
 
   // Half-Time 1X2
-  { id: "1X2_H1_1", label: "1 HT", marketKey: "h2h_h1", outcomeName: "1" },
-  { id: "1X2_H1_X", label: "X HT", marketKey: "h2h_h1", outcomeName: "X" },
-  { id: "1X2_H1_2", label: "2 HT", marketKey: "h2h_h1", outcomeName: "2" },
+  { id: "1X2_H1_1", label: "HT 1X2 | 1", marketKey: "h2h_h1", outcomeName: "1" },
+  { id: "1X2_H1_X", label: "HT 1X2 | X", marketKey: "h2h_h1", outcomeName: "X" },
+  { id: "1X2_H1_2", label: "HT 1X2 | 2", marketKey: "h2h_h1", outcomeName: "2" },
 
   // Half-Time Totals
-  { id: "TOTALS_H1_OVER", label: "Over HT", marketKey: "totals_h1", outcomeName: "OVER" },
-  { id: "TOTALS_H1_UNDER", label: "Under HT", marketKey: "totals_h1", outcomeName: "UNDER" },
+  { id: "TOTALS_H1_OVER", label: "HT Totals | Over", marketKey: "totals_h1", outcomeName: "OVER" },
+  { id: "TOTALS_H1_UNDER", label: "HT Totals | Under", marketKey: "totals_h1", outcomeName: "UNDER" },
 ];
 
 /**
