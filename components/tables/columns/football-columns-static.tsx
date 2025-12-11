@@ -104,7 +104,14 @@ function getStaticColumns(): ColumnDef<FootballTableRow>[] {
     {
       id: "league",
       header: "Ligue",
-      cell: ({ row }) => <div className="font-medium">{row.original.league?.name ?? "-"}</div>,
+      cell: ({ row }) => {
+        const leagueName = row.original.league?.name ?? "-";
+        // Extract only the league name (after " - " if present)
+        const displayName = leagueName.includes(" - ")
+          ? leagueName.split(" - ").pop()
+          : leagueName;
+        return <div className="font-medium">{displayName}</div>;
+      },
       enableSorting: true,
     },
     {
