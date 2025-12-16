@@ -49,22 +49,22 @@ export default function FootballPage() {
     const map = new Map<number, string>();
     typedFixtures.forEach((fixture) => {
       const country = fixture.league?.country;
-      if (country) {
+      if (country && typeof country.id === "number") {
         map.set(country.id, country.name);
       }
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(map.entries()).map(([id, name]) => ({ id: id.toString(), name }));
   }, [typedFixtures]);
 
   const leagueOptions = React.useMemo(() => {
     const map = new Map<number, string>();
     typedFixtures.forEach((fixture) => {
       const league = fixture.league;
-      if (league) {
+      if (league && typeof league.id === "number") {
         map.set(league.id, league.name);
       }
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(map.entries()).map(([id, name]) => ({ id: id.toString(), name }));
   }, [typedFixtures]);
 
   const filteredData = React.useMemo(() => {
@@ -107,7 +107,7 @@ export default function FootballPage() {
             </p>
             {isDemoData && (
               <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Données démo chargées pour les tests. Remplacez par les données réelles (Supabase/OddsPapi) avant la mise en production.
+                Données démo chargées pour les tests. Remplacez par les données réelles (Supabase/Odds-API.io) avant la mise en production.
               </p>
             )}
           </div>
@@ -165,8 +165,8 @@ interface FiltersPanelProps {
   filters: Filters;
   updateFilter: UpdateFilterFn;
   resetFilters: () => void;
-  countryOptions: { id: number; name: string }[];
-  leagueOptions: { id: number; name: string }[];
+  countryOptions: { id: string; name: string }[];
+  leagueOptions: { id: string; name: string }[];
 }
 
 function FiltersPanel({
