@@ -40,7 +40,7 @@ oddstracker/
 │   └── tables/                  ✅ DataTable, columns
 ├── lib/                         ✅ Logique métier
 │   ├── db/                      ✅ Supabase client + queries
-│   ├── api/                     ✅ Client OddsPapi + types
+│   ├── api/                     ✅ Client Odds-API.io + types
 │   ├── auth/                    ✅ Session JWT
 │   ├── sync/                    ✅ Services de synchronisation
 │   ├── export/                  ✅ Export CSV/XLSX
@@ -144,7 +144,7 @@ Remplir :
 - `NEXT_PUBLIC_SUPABASE_URL` - URL Supabase
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Clé anonyme Supabase
 - `SUPABASE_SERVICE_ROLE_KEY` - Clé service role Supabase
-- `ODDSPAPI_API_KEY` - Clé API OddsPapi
+- `ODDSPAPI_API_KEY` - Clé API Odds-API.io
 - `CRON_SECRET` - Secret pour le cron Vercel
 
 ### 4. Lancer le projet
@@ -169,7 +169,7 @@ vercel --prod
 Consultez `NEXT_STEPS.md` pour le plan détaillé en 10 phases :
 1. ✅ Setup (Jour 1 - 2h) - **COMPLÉTÉ**
 2. ⏳ Authentification (Jour 1 - 1h)
-3. ⏳ Intégration API OddsPapi (Jour 2 - 3h)
+3. ⏳ Intégration API Odds-API.io (Jour 2 - 3h)
 4. ⏳ Import Historique (Jour 2-3 - 4h)
 5. ⏳ Interface Tableau (Jour 3-4 - 4h)
 6. ⏳ Filtres (Jour 4 - 2h)
@@ -197,7 +197,7 @@ Consultez `NEXT_STEPS.md` pour le plan détaillé en 10 phases :
 
 ### ⏳ À Implémenter
 - Logique d'authentification complète
-- Intégration API OddsPapi fonctionnelle
+- Intégration API Odds-API.io fonctionnelle
 - Import des données historiques
 - Tableaux avec TanStack Table
 - Filtres fonctionnels

@@ -9,21 +9,24 @@
 
 export interface OddsApiEvent {
   id: number;
-  sport_key: string;  // 'football' or 'tennis_atp' / 'tennis_wta'
-  sport_title: string;
-  league_key: string;  // e.g., 'soccer_uefa_champs_league'
-  league_title: string;
-  commence_time: string;  // ISO 8601 date
-  home_team?: string;  // Football
-  away_team?: string;  // Football
-  player1?: string;  // Tennis
-  player2?: string;  // Tennis
-  scores?: {
-    home?: number;
-    away?: number;
-    [key: string]: any;  // Additional fields
+  home: string;           // Home team name
+  away: string;           // Away team name
+  homeId: number;         // Home team ID
+  awayId: number;         // Away team ID
+  date: string;           // ISO 8601 date
+  sport: {
+    name: string;         // "Football"
+    slug: string;         // "football"
   };
-  status?: 'pending' | 'live' | 'settled';
+  league: {
+    name: string;         // "EPL - Premier League"
+    slug: string;         // "england-premier-league"
+  };
+  status: 'pending' | 'live' | 'settled';
+  scores: {
+    home: number;
+    away: number;
+  };
   bookmakers?: OddsApiBookmakerResponse[];
 }
 
@@ -38,35 +41,57 @@ export interface OddsApiEventsResponse {
 
 export interface OddsApiOddsResponse {
   id: number;
-  sport_key: string;
-  sport_title: string;
-  league_key: string;
-  league_title: string;
-  commence_time: string;
-  home_team?: string;
-  away_team?: string;
-  player1?: string;
-  player2?: string;
-  bookmakers: OddsApiBookmakerResponse[];
+  home: string;
+  away: string;
+  homeId: number;
+  awayId: number;
+  date: string;
+  sport: {
+    name: string;
+    slug: string;
+  };
+  league: {
+    name: string;
+    slug: string;
+  };
+  status: 'pending' | 'live' | 'settled';
+  scores: {
+    home: number;
+    away: number;
+  };
+  urls: Record<string, string>;  // URLs vers les bookmakers
+  bookmakers: Record<string, OddsApiMarket[]>;  // Objet: { "Pinnacle": [...], "Bet365": [...] }
 }
 
-export interface OddsApiBookmakerResponse {
-  key: string;  // 'pinnacle'
-  title: string;  // 'Pinnacle'
-  last_update: string;  // ISO 8601 timestamp
-  markets: OddsApiMarketResponse[];
+export interface OddsApiMarket {
+  name: string;  // "ML" (Money Line/h2h), "Spreads", "Totals", etc.
+  updatedAt: string;  // ISO 8601 timestamp
+  odds: OddsApiOddsData[];  // Array d'objets de cotes
 }
 
-export interface OddsApiMarketResponse {
-  key: string;  // 'h2h', 'spreads', 'totals', etc.
-  last_update: string;  // ISO 8601 timestamp
-  outcomes: OddsApiOutcomeResponse[];
-}
+export interface OddsApiOddsData {
+  // For h2h/ML markets
+  home?: string;  // Decimal odds as string
+  away?: string;
+  draw?: string;
 
-export interface OddsApiOutcomeResponse {
-  name: string;  // e.g., 'Home', 'Away', 'Draw', 'Over', 'Under'
-  price: number;  // Decimal odds
-  point?: number;  // For spreads/totals (the handicap/line)
+  // For totals markets
+  over?: string;
+  under?: string;
+  label?: string;  // Line value (e.g., "2.5")
+
+  // For spreads markets
+  hdp?: number;  // Handicap value
+
+  // Links to bookmaker pages
+  homeLink?: string;
+  awayLink?: string;
+  drawLink?: string;
+  overLink?: string;
+  underLink?: string;
+
+  // Max stake
+  max?: number;
 }
 
 // ============================================================================

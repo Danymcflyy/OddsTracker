@@ -1,4 +1,18 @@
+export default function VolleyballPage() {
+  return (
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
+      <p className="text-lg font-semibold text-slate-900">Cette page Volleyball est temporairement désactivée.</p>
+      <p>Merci d'utiliser la nouvelle interface dédiée lorsque disponible.</p>
+    </div>
+  );
+}
+
+/*
+Ancienne implémentation conservée pour référence :
+
 "use client";
+
+import Link from "next/link";
 
 import * as React from "react";
 import type { PaginationState, SortingState, Table as TanstackTable } from "@tanstack/react-table";
@@ -59,22 +73,22 @@ export default function VolleyballPage() {
     const map = new Map<number, string>();
     typedFixtures.forEach((fixture) => {
       const country = fixture.league?.country;
-      if (country) {
+      if (country && typeof country.id === "number") {
         map.set(country.id, country.name);
       }
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(map.entries()).map(([id, name]) => ({ id: id.toString(), name }));
   }, [typedFixtures]);
 
   const leagueOptions = React.useMemo(() => {
     const map = new Map<number, string>();
     typedFixtures.forEach((fixture) => {
       const league = fixture.league;
-      if (league) {
+      if (league && typeof league.id === "number") {
         map.set(league.id, league.name);
       }
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(map.entries()).map(([id, name]) => ({ id: id.toString(), name }));
   }, [typedFixtures]);
 
   const filteredData = React.useMemo(() => {
@@ -92,7 +106,7 @@ export default function VolleyballPage() {
   const paginatedData = React.useMemo(() => {
     const start = pagination.pageIndex * pagination.pageSize;
     const end = start + pagination.pageSize;
-    return filteredData.slice(start, end);
+    return filteredData slice(start, end);
   }, [filteredData, pagination]);
 
   const toolbarRenderer = React.useCallback(
@@ -111,7 +125,7 @@ export default function VolleyballPage() {
         <p className="text-sm uppercase tracking-[0.3em] text-primary/70">Tableau Volleyball</p>
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-slate-900">🏐 Volleyball</h1>
+            <h1 className="text-3l font-semibold text-slate-900">🏐 Volleyball</h1>
             <p className="text-sm text-muted-foreground">
               Analyse des moneylines, handicaps sets et totaux points.
             </p>
@@ -168,128 +182,4 @@ export default function VolleyballPage() {
     </div>
   );
 }
-
-interface FiltersPanelProps {
-  filters: Filters;
-  updateFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
-  resetFilters: () => void;
-  countryOptions: { id: number; name: string }[];
-  leagueOptions: { id: number; name: string }[];
-}
-
-function FiltersPanel({
-  filters,
-  updateFilter,
-  resetFilters,
-  countryOptions,
-  leagueOptions,
-}: FiltersPanelProps) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-base">Filtres</CardTitle>
-        <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Réinitialiser
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-4">
-          <DateRangeFilter value={filters.dateRange} onChange={(range) => updateFilter("dateRange", range)} />
-          <CountryFilter value={filters.countryId} options={countryOptions} onChange={(value) => updateFilter("countryId", value)} />
-          <LeagueFilter value={filters.leagueId} options={leagueOptions} onChange={(value) => updateFilter("leagueId", value)} />
-          <TeamFilter value={filters.teamSearch} onChange={(value) => updateFilter("teamSearch", value)} />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-4">
-          <MarketFilter
-            value={filters.marketType}
-            options={MARKET_TYPE_OPTIONS}
-            onChange={(value) => updateFilter("marketType", value)}
-          />
-          <OddsRangeFilter
-            value={filters.oddsRange}
-            onChange={(range) => updateFilter("oddsRange", range)}
-            className="md:col-span-2"
-          />
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground font-medium">Raccourcis</p>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" className="gap-2">
-                <Filter className="h-4 w-4" />
-                Favorites
-              </Button>
-              <Button variant="secondary" size="sm">
-                Top ligues
-              </Button>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function applyFilters(fixture: FixtureWithEnrichedOdds, filters: Filters) {
-  const { dateRange, countryId, leagueId, teamSearch, marketType, oddsRange } = filters;
-
-  if (dateRange.from && new Date(fixture.start_time) < dateRange.from) {
-    return false;
-  }
-  if (dateRange.to && new Date(fixture.start_time) > dateRange.to) {
-    return false;
-  }
-
-  if (countryId && fixture.league?.country?.id !== countryId) {
-    return false;
-  }
-
-  if (leagueId && fixture.league?.id !== leagueId) {
-    return false;
-  }
-
-  if (teamSearch) {
-    const term = teamSearch.toLowerCase();
-    const homeMatch = fixture.home_team?.name?.toLowerCase().includes(term);
-    const awayMatch = fixture.away_team?.name?.toLowerCase().includes(term);
-    if (!homeMatch && !awayMatch) {
-      return false;
-    }
-  }
-
-  if (marketType) {
-    const hasMarket = fixture.odds?.some((odd) => matchesMarket(odd, marketType));
-    if (!hasMarket) {
-      return false;
-    }
-  }
-
-  if (oddsRange.min !== null || oddsRange.max !== null) {
-    const matchOdds = fixture.odds?.some((odd) => {
-      const price =
-        oddsRange.type === "opening"
-          ? odd.opening_price
-          : odd.closing_price ?? odd.opening_price;
-      if (price == null) return false;
-      if (oddsRange.min !== null && price < oddsRange.min) return false;
-      if (oddsRange.max !== null && price > oddsRange.max) return false;
-      return true;
-    });
-    if (!matchOdds) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function matchesMarket(odd: OddWithDetails, marketType: string) {
-  const token = normalizeText(marketType);
-  const marketName = normalizeText(odd.market?.name);
-  const marketDesc = normalizeText(odd.market?.description);
-  return marketName.includes(token) || marketDesc.includes(token);
-}
-
-function normalizeText(value?: string | null) {
-  return value?.toUpperCase() ?? "";
-}
+*/

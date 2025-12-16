@@ -38,8 +38,8 @@ Si vous voyez encore des vulnérabilités, consultez [SECURITY_FIXES.md](SECURIT
 - [ ] Exécuter le SQL depuis `lib/db/migrations/001_initial_schema.sql`
 - [ ] Récupérer les clés d'API (URL, anon key, service role key)
 
-### 2. Configuration OddsPapi
-- [ ] Obtenir une clé API OddsPapi
+### 2. Configuration Odds-API.io
+- [ ] Obtenir une clé API Odds-API.io
 - [ ] Vérifier les quotas disponibles
 
 ### 3. Variables d'Environnement (.env.local)
@@ -53,7 +53,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxxx
 SUPABASE_SERVICE_ROLE_KEY=eyJxxxx
 
-# OddsPapi API
+# Odds-API.io API
 ODDSPAPI_API_KEY=votre_cle_api
 ODDSPAPI_BASE_URL=https://api.oddspapi.io
 
@@ -93,7 +93,7 @@ oddstracker/
 │   └── tables/           # Tableaux
 ├── lib/                   # Logique métier
 │   ├── db/               # Supabase
-│   ├── api/              # OddsPapi
+│   ├── api/              # Odds-API.io
 │   ├── auth/             # JWT
 │   ├── sync/             # Synchronisation
 │   ├── export/           # CSV/XLSX
@@ -153,7 +153,7 @@ Voir [npm-commands.md](npm-commands.md) pour plus de commandes.
    - Implémenter la logique de login
    - Protéger les routes
 
-2. **Phase 3 - API OddsPapi** (3h)
+2. **Phase 3 - API Odds-API.io** (3h)
    - Intégration complète
    - Gestion des rate limits
 

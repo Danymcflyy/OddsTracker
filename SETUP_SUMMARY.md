@@ -136,7 +136,7 @@ NEXT_PUBLIC_SUPABASE_URL=        # ⚠️ Depuis Supabase
 NEXT_PUBLIC_SUPABASE_ANON_KEY=   # ⚠️ Depuis Supabase
 SUPABASE_SERVICE_ROLE_KEY=       # ⚠️ Depuis Supabase
 
-# OddsPapi API
+# Odds-API.io API
 ODDSPAPI_API_KEY=                # ⚠️ Votre clé API
 ODDSPAPI_BASE_URL=https://api.oddspapi.io
 

@@ -1,6 +1,8 @@
-import type { Fixture, Team, League, Country, Odd } from "./database";
+import { Database } from "./supabase";
 import type { OddWithDetails } from "./odds";
 export type { OddWithDetails } from "./odds";
+
+type Fixture = Database['public']['Tables']['events_to_track']['Row'];
 
 /**
  * Fixture avec les détails complets (équipes, ligue, pays)
@@ -8,18 +10,18 @@ export type { OddWithDetails } from "./odds";
  */
 export interface FixtureWithDetails extends Fixture {
   home_team: {
-    id: number;
+    id: Database['public']['Tables']['teams_v2']['Row']['id'];
     name: string;
   };
   away_team: {
-    id: number;
+    id: Database['public']['Tables']['teams_v2']['Row']['id'];
     name: string;
   };
   league: {
-    id: number;
+    id: Database['public']['Tables']['leagues_v2']['Row']['id'];
     name: string;
     country: {
-      id: number;
+      id: Database['public']['Tables']['countries_v2']['Row']['id'];
       name: string;
     };
   };
@@ -51,10 +53,10 @@ export type FixtureStatus = "scheduled" | "live" | "finished" | "postponed" | "c
  */
 export interface CreateFixtureInput {
   oddspapi_id: string;
-  sport_id: number;
-  league_id: number;
-  home_team_id: number;
-  away_team_id: number;
+  sport_id: Database['public']['Tables']['sports_v2']['Row']['id'];
+  league_id: Database['public']['Tables']['leagues_v2']['Row']['id'];
+  home_team_id: Database['public']['Tables']['teams_v2']['Row']['id'];
+  away_team_id: Database['public']['Tables']['teams_v2']['Row']['id'];
   start_time: string;
   status?: FixtureStatus;
 }

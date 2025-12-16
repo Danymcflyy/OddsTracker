@@ -46,7 +46,7 @@ Tous les changements notables du projet sont documentés ici.
 
 #### Bibliothèques et Services
 - ✅ Client Supabase configuré
-- ✅ Client OddsPapi avec types
+- ✅ Client Odds-API.io avec types
 - ✅ Service d'authentification (JWT avec jose)
 - ✅ Services de synchronisation (historique et quotidienne)
 - ✅ Services d'export (CSV et XLSX avec ExcelJS)
@@ -60,7 +60,7 @@ Tous les changements notables du projet sont documentés ici.
 
 #### Types TypeScript
 - ✅ Types pour fixtures, odds, filtres, API
-- ✅ Types pour les réponses OddsPapi
+- ✅ Types pour les réponses Odds-API.io
 - ✅ Interfaces complètes pour toutes les entités
 
 #### Base de Données
@@ -130,7 +130,7 @@ Voir [NEXT_STEPS.md](NEXT_STEPS.md) pour le plan détaillé de développement.
 - [ ] Protéger les routes avec le middleware
 - [ ] Implémenter le changement de mot de passe
 
-### Phase 3 - Intégration API OddsPapi (Jour 2 - 3h)
+### Phase 3 - Intégration API Odds-API.io (Jour 2 - 3h)
 - [ ] Compléter le client API
 - [ ] Tester les endpoints
 - [ ] Implémenter la gestion des rate limits

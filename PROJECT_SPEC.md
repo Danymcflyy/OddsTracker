@@ -12,7 +12,7 @@
 
 ## 🎯 Objectif
 
-Créer une application web permettant de consulter et analyser les cotes historiques sportives depuis janvier 2019, avec données issues de l'API OddsPapi (bookmaker Pinnacle uniquement).
+Créer une application web permettant de consulter et analyser les cotes historiques sportives depuis janvier 2019, avec données issues de l'API Odds-API.io (bookmaker Pinnacle uniquement).
 
 ---
 
@@ -27,7 +27,7 @@ Créer une application web permettant de consulter et analyser les cotes histori
 | Base de données | PostgreSQL via Supabase | Free Tier |
 | Hébergement | Vercel | Hobby (gratuit) |
 | Cron Jobs | Vercel Cron | 1x/jour |
-| API Cotes | OddsPapi | ~69€/mois (client) |
+| API Cotes | Odds-API.io | ~69€/mois (client) |
 
 ---
 
@@ -51,7 +51,7 @@ APP_SESSION_SECRET=random_32_chars_secret
 
 ## 📊 Sports Couverts (4 sports)
 
-| Sport | ID OddsPapi | Ligues | Historique depuis |
+| Sport | ID Odds-API.io | Ligues | Historique depuis |
 |-------|-------------|--------|-------------------|
 | Football (Soccer) | 10 | Toutes disponibles via Pinnacle | Janvier 2019 |
 | Hockey sur glace | 4 | Toutes disponibles via Pinnacle | Janvier 2019 |
@@ -230,7 +230,7 @@ CREATE INDEX idx_sync_logs_status ON sync_logs(status);
 
 ---
 
-## 🔌 Intégration API OddsPapi
+## 🔌 Intégration API Odds-API.io
 
 ### Configuration
 
@@ -260,7 +260,7 @@ const DEFAULT_PARAMS = {
 };
 ```
 
-### Clé OddsPapi
+### Clé Odds-API.io
 
 - La clé API est stockée dans Supabase (`settings.oddspapi_api_key`) et éditable depuis la page ⚙️ Réglages.  
 - En production (Vercel), mettez d’abord une valeur via l’interface puis, si besoin, synchronisez avec la variable d’environnement.  
@@ -325,7 +325,7 @@ L’option se règle depuis la page Réglages → bloc “Clôture des cotes”.
   1. **Phase ouverture** déclenchée manuellement ou via cron pour charger les matchs à venir.
   2. **Phase clôture** (quotidienne) qui repère les fixtures terminées, récupère l'historique (`--historical=true`) puis verrouille `odds_locked_at`.
 - L’implémentation pourra simplement orchestrer le même script via `tsx` ou réutiliser ses helpers (normalisation, cooldown, mapping équipes).
-- Couverture : même avec 4 sports suivis (ex. football, hockey, tennis, volleyball) et 3–5 championnats par sport, on reste <200 requêtes/jour (40 matches/jour ⇒ ~40 imports ouverture + 40 finalisations + 4 calls settlements). Les quotas OddsPapi sont donc largement respectés tant que l’on limite la liste des tournois à ceux définis dans `TOURNAMENT_IDS.md`.
+- Couverture : même avec 4 sports suivis (ex. football, hockey, tennis, volleyball) et 3–5 championnats par sport, on reste <200 requêtes/jour (40 matches/jour ⇒ ~40 imports ouverture + 40 finalisations + 4 calls settlements). Les quotas Odds-API.io sont donc largement respectés tant que l’on limite la liste des tournois à ceux définis dans `TOURNAMENT_IDS.md`.
 
 ---
 
@@ -405,7 +405,7 @@ oddstracker/
 │   │   └── migrations/
 │   │       └── 001_initial_schema.sql
 │   ├── api/
-│   │   ├── oddspapi.ts                 # Client API OddsPapi
+│   │   ├── oddspapi.ts                 # Client API Odds-API.io
 │   │   └── types.ts                    # Types API responses
 │   ├── sync/
 │   │   ├── sync-service.ts             # Service de synchronisation
@@ -627,7 +627,7 @@ Légende couleurs :
 
 Les colonnes de cotes sont générées dynamiquement selon les marchés disponibles via l'API pour chaque match. Format : `{MarketName}-Open` et `{MarketName}-Close`.
 
-**Marchés Football (Soccer) - ID OddsPapi** :
+**Marchés Football (Soccer) - ID Odds-API.io** :
 - 101 : 1X2 (Home/Draw/Away) → `1-Open`, `1-Close`, `X-Open`, `X-Close`, `2-Open`, `2-Close`
 - Over/Under 0.5, 1.5, 2.5, 3.5, 4.5, 5.5 → `O0.5-Open`, `O0.5-Close`, `U0.5-Open`, etc.
 - Handicap Asiatique → `AH-0.5-Open`, `AH+0.5-Open`, etc.
@@ -876,7 +876,7 @@ export async function exportToXLSX(
 ```typescript
 // lib/sync/sync-service.ts
 export class SyncService {
-  private api: OddsPapiClient;
+  private api: Odds-API.ioClient;
   private db: SupabaseClient;
   
   async syncSport(sportId: number): Promise<SyncResult> {
@@ -971,9 +971,9 @@ export async function GET(request: Request) {
 4. [ ] Implémenter le changement de mot de passe
 5. [ ] Tester la protection des routes
 
-### Phase 3 : Intégration API OddsPapi (Jour 2 - 3h)
+### Phase 3 : Intégration API Odds-API.io (Jour 2 - 3h)
 
-1. [ ] Créer le client API OddsPapi
+1. [ ] Créer le client API Odds-API.io
 2. [ ] Implémenter les types TypeScript
 3. [ ] Tester les endpoints principaux
 4. [ ] Gérer les rate limits
@@ -997,7 +997,7 @@ export async function GET(request: Request) {
   - Insertion des marchés/outcomes (1X2, O/U 2.5) alignés avec les colonnes UI
   - `--dry-run` disponible pour valider un import sans toucher à la base
   - Journalisation dans `sync_logs` (records_fetched/inserted/status)
-- Usage : principalement pour jeux de données ponctuels/démo. La sync principale reste l'API OddsPapi.
+- Usage : principalement pour jeux de données ponctuels/démo. La sync principale reste l'API Odds-API.io.
 
 ### Phase 5 : Interface Tableau (Jour 3-4 - 4h)
 
@@ -1068,7 +1068,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxxx
 SUPABASE_SERVICE_ROLE_KEY=eyJxxxx
 
-# OddsPapi API
+# Odds-API.io API
 ODDSPAPI_API_KEY=votre_cle_api_oddspapi
 ODDSPAPI_BASE_URL=https://api.oddspapi.io
 
@@ -1092,7 +1092,7 @@ Application web d'analyse de cotes sportives historiques.
 
 - Node.js 18+
 - Compte Supabase
-- Clé API OddsPapi
+- Clé API Odds-API.io
 - Compte Vercel
 
 ## Installation

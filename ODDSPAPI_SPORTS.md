@@ -1,9 +1,9 @@
-# OddsPapi – Liste des sports et IDs
+# Odds-API.io – Liste des sports et IDs
 
 Ce document conserve la correspondance `sportId` ↔ `slug` ↔ `nom` renvoyée par l’endpoint `/v4/sports`.  
 Les IDs marqués ✅ sont ceux utilisés par OddsTracker (Football, Hockey sur glace, Tennis, Volleyball).
 
-| # | sportId | Nom OddsPapi            | Slug               | Suivi |
+| # | sportId | Nom Odds-API.io            | Slug               | Suivi |
 |---|--------:|------------------------|--------------------|:-----:|
 | 1 | 10 | Soccer | soccer | ✅ |
 | 2 | 11 | Basketball | basketball | |

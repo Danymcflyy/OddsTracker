@@ -85,9 +85,9 @@
 
 6. [ ] Tester l'authentification complète
 
-## 📋 À Faire - Phase 3 : Intégration API OddsPapi (Jour 2 - 3h)
+## 📋 À Faire - Phase 3 : Intégration API Odds-API.io (Jour 2 - 3h)
 
-1. [ ] Compléter le client API OddsPapi (`lib/api/oddspapi.ts`)
+1. [ ] Compléter le client API Odds-API.io (`lib/api/oddspapi.ts`)
    - Implémenter toutes les méthodes
    - Gérer les rate limits
    - Logger les erreurs
@@ -218,4 +218,4 @@ npx shadcn-ui@latest add [component-name]
 - [shadcn/ui Components](https://ui.shadcn.com)
 - [TanStack Table](https://tanstack.com/table/v8)
 - [Tailwind CSS](https://tailwindcss.com/docs)
-- [OddsPapi API](https://oddspapi.io/docs)
+- [Odds-API.io API](https://oddspapi.io/docs)

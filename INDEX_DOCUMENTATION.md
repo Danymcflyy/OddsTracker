@@ -57,7 +57,7 @@ Guide complet de toute la documentation disponible dans le projet.
   - Schéma de base de données
   - Structure des fichiers
   - Interface utilisateur
-  - API OddsPapi
+  - API Odds-API.io
   - Étapes de développement
 - **[INSTALLATION_COMPLETE.md](INSTALLATION_COMPLETE.md)** - Vue d'ensemble complète
   - Infrastructure

@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 
 interface Option {
-  id: number;
+  id: string;
   name: string;
 }
 
@@ -29,7 +29,7 @@ export function LeagueFilter({
     <div className={className}>
       <Label className="mb-1 block text-xs text-muted-foreground">{label}</Label>
       <Select
-        value={value?.toString() ?? "all"}
+        value={value !== null ? value.toString() : "all"}
         onValueChange={(selected) => onChange(selected === "all" ? null : Number(selected))}
       >
         <SelectTrigger>

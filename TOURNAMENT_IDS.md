@@ -1,6 +1,6 @@
-# IDs des Tournois OddsPapi
+# IDs des Tournois Odds-API.io
 
-Ce fichier référence les IDs des tournois suivis par OddsTracker et conserve les exports complets générés depuis l’API OddsPapi.
+Ce fichier référence les IDs des tournois suivis par OddsTracker et conserve les exports complets générés depuis l’API Odds-API.io.
 
 ## ⚽ Football (sportId : 10)
 

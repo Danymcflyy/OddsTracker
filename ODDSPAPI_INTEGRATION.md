@@ -1,11 +1,11 @@
-# ✅ Intégration OddsPapi → Supabase Terminée
+# ✅ Intégration Odds-API.io → Supabase Terminée
 
-L'intégration complète de l'API OddsPapi avec votre base de données Supabase est maintenant fonctionnelle !
+L'intégration complète de l'API Odds-API.io avec votre base de données Supabase est maintenant fonctionnelle !
 
 ## 🎉 Ce qui a été créé
 
 ### 1. Client API (`lib/oddspapi/client.ts`)
-- ✅ Connexion à l'API OddsPapi
+- ✅ Connexion à l'API Odds-API.io
 - ✅ Rate limiting automatique (1 req/seconde)
 - ✅ Compteur de requêtes dans Supabase
 - ✅ Extraction des cotes Pinnacle
@@ -19,7 +19,7 @@ L'intégration complète de l'API OddsPapi avec votre base de données Supabase 
 - `extractPinnacleOdds(event)` - Extraire cotes Pinnacle
 
 ### 2. Service de Synchronisation (`lib/oddspapi/sync-service.ts`)
-- ✅ Mapping complet OddsPapi → Supabase
+- ✅ Mapping complet Odds-API.io → Supabase
 - ✅ Gestion automatique des relations (sports, leagues, teams, fixtures, odds)
 - ✅ Upsert des données (mise à jour si existe)
 - ✅ Progression en temps réel
@@ -108,7 +108,7 @@ npm run sync:odds
 
 Par défaut, ces ligues sont synchronisées :
 
-| Sport | Ligue | Clé OddsPapi |
+| Sport | Ligue | Clé Odds-API.io |
 |-------|-------|--------------|
 | ⚽ Football | Premier League | `soccer_epl` |
 | ⚽ Football | La Liga | `soccer_spain_la_liga` |
@@ -124,7 +124,7 @@ Par défaut, ces ligues sont synchronisées :
 export const SPORTS_CONFIG = [
   // Ligues existantes...
   {
-    key: "soccer_italy_serie_a",    // Clé OddsPapi
+    key: "soccer_italy_serie_a",    // Clé Odds-API.io
     name: "Serie A",                // Nom affiché
     sport_slug: "football",         // Slug sport (dans notre DB)
     country: "Italy",               // Pays
@@ -242,7 +242,7 @@ LIMIT 10;
 
 ### Données actuelles vs historiques
 
-⚠️ **L'API OddsPapi ne fournit QUE les cotes actuelles** (closing)
+⚠️ **L'API Odds-API.io ne fournit QUE les cotes actuelles** (closing)
 
 Pour récupérer les cotes **opening** :
 - Soit synchroniser 2 fois par jour (opening + closing)
@@ -272,7 +272,7 @@ TRUNCATE TABLE odds, outcomes, markets, fixtures, teams, leagues, countries CASC
 
 ## 📚 Ressources
 
-- [Documentation OddsPapi](https://the-odds-api.com/liveapi/guides/v4/)
+- [Documentation Odds-API.io](https://the-odds-api.com/liveapi/guides/v4/)
 - [Sports disponibles](https://the-odds-api.com/sports-odds-data/sports-apis.html)
 - [Schéma Supabase](lib/db/migrations/001_initial_schema.sql)
 - [Guide complet](lib/oddspapi/README.md)

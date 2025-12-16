@@ -17,9 +17,11 @@ const SPORTS_META = [
     sportId: 10,
     name: "Football",
     slug: "football",
+    href: "/football-v3",
     accent: "bg-emerald-50 text-emerald-600",
     emoji: "⚽",
     description: "Toutes les ligues Pinnacle depuis 2019",
+    comingSoon: false,
   },
   {
     sportId: 4,
@@ -28,6 +30,7 @@ const SPORTS_META = [
     accent: "bg-sky-50 text-sky-600",
     emoji: "🏒",
     description: "Lignes Moneyline & puck line",
+    comingSoon: true,
   },
   {
     sportId: 2,
@@ -36,6 +39,7 @@ const SPORTS_META = [
     accent: "bg-amber-50 text-amber-600",
     emoji: "🎾",
     description: "ATP, WTA et tournois majeurs",
+    comingSoon: true,
   },
   {
     sportId: 34,
@@ -44,17 +48,20 @@ const SPORTS_META = [
     accent: "bg-purple-50 text-purple-600",
     emoji: "🏐",
     description: "Cotes Moneyline & handicaps sets",
+    comingSoon: true,
   },
 ] as const;
 
 type SportCardData = {
   name: string;
   slug: string;
+  href?: string;
   accent: string;
   emoji: string;
   description: string;
   matches: string;
   lastSync: string;
+  comingSoon: boolean;
 };
 
 type SyncLogRow = {
@@ -71,7 +78,7 @@ async function fetchSportCards(): Promise<SportCardData[]> {
     const fixturesQuery = client
       .from("fixtures")
       .select("id", { count: "exact", head: true })
-      .eq("sport_id", sport.sportId);
+      .eq("sport_id", String(sport.sportId));
 
     const logQuery = client
       .from("sync_logs")
@@ -104,6 +111,7 @@ async function fetchSportCards(): Promise<SportCardData[]> {
       ...sport,
       matches,
       lastSync,
+      href: 'href' in sport && sport.href ? sport.href : `/${sport.slug}`,
     });
   }
 
@@ -225,7 +233,7 @@ export default async function DashboardHomePage() {
           <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="text-sm text-amber-900">
               <span className="font-medium">Mode démo :</span> Les données
-              affichées sont des exemples. Configurez Supabase et OddsPapi pour
+              affichées sont des exemples. Configurez Supabase et Odds-API.io pour
               utiliser des données réelles.{" "}
               <Link
                 href="/settings"
@@ -249,48 +257,73 @@ export default async function DashboardHomePage() {
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
             {sportCards.map(
-              ({ emoji, slug, name, matches, accent, description, lastSync }) => (
-                <Link
-                  key={slug}
-                  href={`/${slug}`}
-                  className="group flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
-                >
-                  <div className="flex items-center gap-4">
+              ({ emoji, slug, name, matches, accent, description, lastSync, comingSoon, href }) => {
+                const cardContent = (
+                  <>
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`flex h-14 w-14 items-center justify-center rounded-2xl text-2xl ${accent}`}
+                      >
+                        <span role="img" aria-hidden="true">
+                          {emoji}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">
+                          {name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {description}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-end justify-between border-t border-slate-100 pt-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          Matchs disponibles
+                        </p>
+                        <p className="text-3xl font-semibold text-slate-900">
+                          {matches}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Sync : {lastSync}
+                        </p>
+                      </div>
+                      {comingSoon ? (
+                        <span className="inline-flex items-center rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs font-semibold text-slate-500">
+                          Feature à venir
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-2 text-sm font-medium text-primary transition group-hover:gap-3">
+                          Explorer
+                          <ArrowRight className="h-4 w-4" />
+                        </span>
+                      )}
+                    </div>
+                  </>
+                );
+
+                if (comingSoon) {
+                  return (
                     <div
-                      className={`flex h-14 w-14 items-center justify-center rounded-2xl text-2xl ${accent}`}
+                      key={slug}
+                      className="group flex flex-col rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-5 text-slate-500"
                     >
-                      <span role="img" aria-hidden="true">
-                        {emoji}
-                      </span>
+                      {cardContent}
                     </div>
-                    <div>
-                      <p className="text-base font-semibold text-slate-900">
-                        {name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {description}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-end justify-between border-t border-slate-100 pt-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Matchs disponibles
-                      </p>
-                      <p className="text-3xl font-semibold text-slate-900">
-                        {matches}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Sync : {lastSync}
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center gap-2 text-sm font-medium text-primary transition group-hover:gap-3">
-                      Explorer
-                      <ArrowRight className="h-4 w-4" />
-                    </span>
-                  </div>
-                </Link>
-              )
+                  );
+                }
+
+                return (
+                  <Link
+                    key={slug}
+                    href={href ?? `/${slug}`}
+                    className="group flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
+                  >
+                    {cardContent}
+                  </Link>
+                );
+              }
             )}
           </div>
         </CardContent>

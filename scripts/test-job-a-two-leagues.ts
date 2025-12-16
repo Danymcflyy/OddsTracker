@@ -11,7 +11,7 @@
 import './load-env';
 import { supabaseAdmin } from '@/lib/db';
 import { oddsApiClient } from '@/lib/api/oddsapi/client';
-import { normalizeTeamName } from '@/lib/api/oddsapi/normalizer';
+import { normalizeTeamName, normalizeMarketKey } from '@/lib/api/oddsapi/normalizer';
 
 const FOOTBALL = 'football';
 const LEAGUES = [
@@ -208,7 +208,7 @@ async function processLeague(leagueSlug: string, leagueName: string): Promise<Ev
         // pinnacleArray is: [ { name: "ML", updatedAt, odds: [ { home, draw, away } ] }, ... ]
         let oddsCount = 0;
         for (const market of pinnacleArray) {
-          const marketName = market.name;  // e.g., "ML", "Spread", "Totals"
+          const marketName = normalizeMarketKey(market.name);  // e.g., "ML" → "h2h", "Spread" → "spreads"
           const updatedAt = market.updatedAt || nowISO;
 
           if (!market.odds || !Array.isArray(market.odds)) continue;
@@ -218,39 +218,84 @@ async function processLeague(leagueSlug: string, leagueName: string): Promise<Ev
             const hdp = oddItem.hdp !== undefined ? oddItem.hdp : null;
 
             // Insert one row per outcome (home, away, draw, over, under)
+            // Map to normalized names to match outcomes_v2
             const outcomes = [];
-            if (oddItem.home !== undefined) outcomes.push({ selection: 'home', price: oddItem.home });
-            if (oddItem.away !== undefined) outcomes.push({ selection: 'away', price: oddItem.away });
-            if (oddItem.draw !== undefined) outcomes.push({ selection: 'draw', price: oddItem.draw });
-            if (oddItem.over !== undefined) outcomes.push({ selection: 'over', price: oddItem.over });
-            if (oddItem.under !== undefined) outcomes.push({ selection: 'under', price: oddItem.under });
+            if (oddItem.home !== undefined) outcomes.push({ selection: '1', price: oddItem.home });
+            if (oddItem.away !== undefined) outcomes.push({ selection: '2', price: oddItem.away });
+            if (oddItem.draw !== undefined) outcomes.push({ selection: 'X', price: oddItem.draw });
+            if (oddItem.over !== undefined) outcomes.push({ selection: 'OVER', price: oddItem.over });
+            if (oddItem.under !== undefined) outcomes.push({ selection: 'UNDER', price: oddItem.under });
 
             for (const outcome of outcomes) {
-              const oddData = {
-                event_id: event.id,
-                sport_slug: FOOTBALL,
-                league_slug: leagueSlug,
-                bookmaker: 'Pinnacle',
-                market_name: marketName,
-                selection: outcome.selection,
-                line: hdp,
-                opening_price_observed: parseFloat(outcome.price),
-                opening_time_observed: updatedAt,
-                closing_price_observed: null,
-                closing_time_observed: null,
-                is_winner: null,
-                created_at: nowISO,
-                updated_at: nowISO,
-              };
+              const price = parseFloat(outcome.price);
 
-              const { error: oddError } = await supabaseAdmin
+              // Check if odd already exists in DB
+              let query = supabaseAdmin
                 .from('opening_closing_observed')
-                .insert([oddData]);
+                .select('id, opening_price_observed')
+                .eq('event_id', event.id)
+                .eq('bookmaker', 'Pinnacle')
+                .eq('market_name', marketName)
+                .eq('selection', outcome.selection);
 
-              if (!oddError) {
-                oddsCount++;
-              } else if (!oddError.message.includes('duplicate key')) {
-                console.log(`     ⚠️  Error inserting odd: ${oddError.message}`);
+              // Handle NULL line values properly in Supabase
+              if (hdp === null) {
+                query = query.is('line', null);
+              } else {
+                query = query.eq('line', hdp);
+              }
+
+              const { data: existingOdd, error: searchError } = await query.limit(1);
+
+              if (searchError) {
+                console.log(`     ⚠️  Error checking existing odd: ${searchError.message}`);
+                continue;
+              }
+
+              if (existingOdd && existingOdd.length > 0) {
+                // Odd exists: update with closing price
+                const { error: updateError } = await supabaseAdmin
+                  .from('opening_closing_observed')
+                  .update({
+                    closing_price_observed: price,
+                    closing_time_observed: updatedAt,
+                    updated_at: nowISO,
+                  })
+                  .eq('id', existingOdd[0].id);
+
+                if (!updateError) {
+                  oddsCount++;
+                } else {
+                  console.log(`     ⚠️  Error updating odd: ${updateError.message}`);
+                }
+              } else {
+                // Odd doesn't exist: insert with opening price
+                const oddData = {
+                  event_id: event.id,
+                  sport_slug: FOOTBALL,
+                  league_slug: leagueSlug,
+                  bookmaker: 'Pinnacle',
+                  market_name: marketName,
+                  selection: outcome.selection,
+                  line: hdp,
+                  opening_price_observed: price,
+                  opening_time_observed: updatedAt,
+                  closing_price_observed: null,
+                  closing_time_observed: null,
+                  is_winner: null,
+                  created_at: nowISO,
+                  updated_at: nowISO,
+                };
+
+                const { error: oddError } = await supabaseAdmin
+                  .from('opening_closing_observed')
+                  .insert([oddData]);
+
+                if (!oddError) {
+                  oddsCount++;
+                } else if (!oddError.message.includes('duplicate key')) {
+                  console.log(`     ⚠️  Error inserting odd: ${oddError.message}`);
+                }
               }
             }
           }

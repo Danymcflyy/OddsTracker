@@ -20,7 +20,7 @@ export function ApiUsage({ used, limit, resetDate, planName }: ApiUsageProps) {
       <CardHeader className="flex flex-col gap-1">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Signal className="h-5 w-5" />
-          Utilisation API OddsPapi
+          Utilisation API Odds-API.io
         </CardTitle>
         <CardDescription>Surveillez le quota mensuel et la prochaine réinitialisation.</CardDescription>
       </CardHeader>

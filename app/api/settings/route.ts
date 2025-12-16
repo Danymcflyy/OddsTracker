@@ -44,7 +44,9 @@ export async function GET() {
   const followedTournaments = normalizeFollowedTournaments(rawSettings.followed_tournaments);
 
   const closingStrategy = normalizeClosingStrategy(rawSettings.odds_closing_strategy);
-  const oddsApiKeyPreview = maskOddsApiKey(rawSettings.oddspapi_api_key);
+  const envOddsApiKey = process.env.ODDS_API_IO_KEY?.trim();
+  const oddsApiKeyPreview = maskOddsApiKey(envOddsApiKey ?? rawSettings.oddspapi_api_key);
+  const oddsApiKeyManagedByEnv = Boolean(envOddsApiKey);
 
   const { data: logs } = await supabaseAdmin
     .from("sync_logs")
@@ -67,13 +69,22 @@ export async function GET() {
       records_inserted: number | null;
     }>;
 
-  const syncLogs = logRows.map((log) => ({
-    id: log.id,
-    date: log.started_at,
-    sport: sportsMap.get(log.sport_id ?? 0) ?? "Sport inconnu",
-    status: log.status,
-    details: `${log.records_fetched ?? 0} fixtures • ${log.records_inserted ?? 0} cotes`,
-  }));
+  const syncLogs = logRows.map((log) => {
+    const sportKey =
+      typeof log.sport_id === "string"
+        ? log.sport_id
+        : log.sport_id !== null && log.sport_id !== undefined
+          ? String(log.sport_id)
+          : null;
+
+    return {
+      id: log.id,
+      date: log.started_at,
+      sport: sportKey ? sportsMap.get(sportKey) ?? "Sport inconnu" : "Sport inconnu",
+      status: log.status,
+      details: `${log.records_fetched ?? 0} fixtures • ${log.records_inserted ?? 0} cotes`,
+    };
+  });
 
   return NextResponse.json({
     lastSync: rawSettings.last_sync,
@@ -94,6 +105,7 @@ export async function GET() {
     },
     followedTournaments,
     oddsApiKeyPreview,
+    oddsApiKeyManagedByEnv,
   });
 }
 

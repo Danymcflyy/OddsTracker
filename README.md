@@ -1,6 +1,6 @@
 # OddsTracker
 
-Application Next.js 14 pour suivre et analyser les cotes sportives (Football, Hockey, Tennis, Volleyball) via Supabase et l’API OddsPapi.
+Application Next.js 14 pour suivre et analyser les cotes sportives (Football, Hockey, Tennis, Volleyball) via Supabase et l’API Odds-API.io.
 
 ## 🚀 Installation rapide
 
@@ -11,7 +11,7 @@ npm install
 cp .env.example .env.local
 ```
 
-Remplir `.env.local` avec les clés Supabase, OddsPapi et les secrets d’app (cf. PROJECT_SPEC.md). Lancer :
+Remplir `.env.local` avec les clés Supabase, Odds-API.io et les secrets d’app (cf. PROJECT_SPEC.md). Lancer :
 
 ```bash
 npm run dev
@@ -23,7 +23,7 @@ npm run dev
 - Tailwind CSS + shadcn/ui
 - TanStack Table v8
 - Supabase (PostgreSQL) pour les données
-- OddsPapi pour les cotes historiques
+- Odds-API.io pour les cotes historiques
 - Vercel (hébergement + cron quotidien)
 
 ## 📁 Structure
@@ -31,7 +31,7 @@ npm run dev
 ```
 app/ (routes, API, pages dashboard)
 components/ (auth, layout, tables, settings…)
-lib/ (db queries, client OddsPapi, sync, export)
+lib/ (db queries, client Odds-API.io, sync, export)
 hooks/, types/, middleware.ts
 ```
 
@@ -43,7 +43,7 @@ hooks/, types/, middleware.ts
 
 ## 🔄 Synchronisation
 
-- API OddsPapi (Pinnacle) via client `lib/api/oddspapi.ts`
+- API Odds-API.io (Pinnacle) via client `lib/api/oddspapi.ts`
 - Import historique + sync quotidienne
 - Cron Vercel (06:00) protégé par `CRON_SECRET`
 - Logs enregistrés dans la table `sync_logs`

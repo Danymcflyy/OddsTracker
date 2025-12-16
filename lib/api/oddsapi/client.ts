@@ -127,19 +127,24 @@ export class OddsApiClient {
 
   /**
    * Récupère les cotes pour plusieurs événements
+   * Note: L'endpoint /v3/odds/multi semble avoir des problèmes avec plusieurs IDs,
+   * donc on fait des appels individuels à /v3/odds pour chaque événement
    */
   async getOddsMulti(eventIds: number[], params?: { markets?: string[] }): Promise<OddsApiOddsMultiResponse> {
-    const searchParams = new URLSearchParams();
-    searchParams.set('eventIds', eventIds.join(','));
-    searchParams.set('bookmakers', this.defaultBookmakers.join(','));
+    const results: OddsApiOddsResponse[] = [];
 
-    const markets = params?.markets || this.defaultMarkets;
-    searchParams.set('markets', markets.join(','));
+    // Appeler /v3/odds pour chaque événement individuellement
+    for (const eventId of eventIds) {
+      try {
+        const odds = await this.getOdds(eventId, params);
+        results.push(odds);
+      } catch (error) {
+        console.error(`⚠️  Erreur récupération cotes pour event ${eventId}:`, error);
+        // Continuer avec les autres événements même si un échoue
+      }
+    }
 
-    return this.request<OddsApiOddsMultiResponse>(
-      `/v3/odds/multi?${searchParams.toString()}`,
-      { endpoint: '/v3/odds/multi' }
-    );
+    return results as OddsApiOddsMultiResponse;
   }
 
   /**
@@ -173,7 +178,9 @@ export class OddsApiClient {
     endpoint: string,
     options?: { endpoint?: string }
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}&apiKey=${encodeURIComponent(this.apiKey)}`;
+    // Ajouter apiKey à l'URL (utiliser & ou ? selon si des params existent déjà)
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const url = `${this.baseUrl}${endpoint}${separator}apiKey=${encodeURIComponent(this.apiKey)}`;
     const key = options?.endpoint || endpoint;
 
     const task = async () => {

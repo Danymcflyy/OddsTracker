@@ -54,7 +54,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
 
 ✅ Votre base de données est prête !
 
-### 3. Configurer OddsPapi (optionnel pour l'instant)
+### 3. Configurer Odds-API.io (optionnel pour l'instant)
 
 Pour l'instant, vous pouvez laisser une valeur par défaut.
 Vous configurerez la vraie clé API plus tard lors du développement de la Phase 3.
@@ -72,7 +72,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://votre-projet.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=votre_cle_anon
 SUPABASE_SERVICE_ROLE_KEY=votre_cle_service_role
 
-# OddsPapi (optionnel pour l'instant)
+# Odds-API.io (optionnel pour l'instant)
 ODDSPAPI_API_KEY=cle_temporaire
 ```
 
