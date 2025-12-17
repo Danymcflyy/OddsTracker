@@ -128,27 +128,56 @@ export class OddsApiClient {
 
   /**
    * Récupère les cotes pour plusieurs événements
-   * Note: L'endpoint /v3/odds/multi semble avoir des problèmes avec plusieurs IDs,
-   * donc on fait des appels individuels à /v3/odds pour chaque événement
+   * Utilise l'endpoint /v3/odds/multi avec batches de max 10 events
    */
   async getOddsMulti(eventIds: number[], params?: { markets?: string[] }): Promise<OddsApiOddsMultiResponse> {
-    const results: OddsApiOddsResponse[] = [];
-    const total = eventIds.length;
+    if (eventIds.length === 0) {
+      return [];
+    }
 
-    // Appeler /v3/odds pour chaque événement individuellement
-    for (let i = 0; i < eventIds.length; i++) {
-      const eventId = eventIds[i];
-      console.log(`  📥 [${i + 1}/${total}] Récupération cotes event ${eventId}...`);
+    const BATCH_SIZE = 10;
+    const batches: number[][] = [];
+
+    // Grouper les events en batches de 10
+    for (let i = 0; i < eventIds.length; i += BATCH_SIZE) {
+      batches.push(eventIds.slice(i, i + BATCH_SIZE));
+    }
+
+    console.log(`📦 Traitement de ${eventIds.length} events en ${batches.length} batch(es) de max ${BATCH_SIZE}`);
+
+    const results: OddsApiOddsResponse[] = [];
+
+    // Traiter chaque batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const batchNum = i + 1;
+
+      console.log(`  📥 [Batch ${batchNum}/${batches.length}] Récupération cotes pour ${batch.length} events...`);
 
       try {
-        const odds = await this.getOdds(eventId, params);
-        results.push(odds);
-        console.log(`  ✅ [${i + 1}/${total}] Cotes récupérées`);
+        const searchParams = new URLSearchParams();
+        searchParams.set('eventIds', batch.join(','));
+        searchParams.set('bookmakers', this.defaultBookmakers.join(','));
+
+        const markets = params?.markets || this.defaultMarkets;
+        searchParams.set('markets', markets.join(','));
+
+        const batchResults = await this.request<OddsApiOddsResponse[]>(
+          `/v3/odds/multi?${searchParams.toString()}`,
+          { endpoint: '/v3/odds/multi' }
+        );
+
+        if (Array.isArray(batchResults)) {
+          results.push(...batchResults);
+          console.log(`  ✅ [Batch ${batchNum}/${batches.length}] ${batchResults.length} cotes récupérées`);
+        }
       } catch (error) {
-        console.error(`  ⚠️  [${i + 1}/${total}] Erreur récupération cotes pour event ${eventId}:`, error);
-        // Continuer avec les autres événements même si un échoue
+        console.error(`  ⚠️  [Batch ${batchNum}/${batches.length}] Erreur récupération cotes:`, error);
+        // Continuer avec les autres batches même si un échoue
       }
     }
+
+    console.log(`✅ Total: ${results.length}/${eventIds.length} cotes récupérées`);
 
     return results as OddsApiOddsMultiResponse;
   }

@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 
     // Étape 2: Capture de cotes
     console.log('\n🎯 ÉTAPE 2: Capture de cotes...');
-    const oddsResult = await captureOdds('football', 50);
+    const oddsResult = await captureOdds('football', null);
 
     console.log(`  ✅ ${oddsResult.matches_updated} matchs traités`);
     console.log(`  📊 ${oddsResult.odds_captured} cotes capturées`);

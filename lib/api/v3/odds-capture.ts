@@ -22,7 +22,7 @@ interface OddsCaptureResult {
  */
 export async function captureOdds(
   sportSlug: string = 'football',
-  limitMatches: number = 50
+  limitMatches: number | null = null
 ): Promise<OddsCaptureResult> {
   const errors: string[] = [];
   let matchesUpdated = 0;
@@ -30,18 +30,25 @@ export async function captureOdds(
 
   try {
     // Récupérer les matchs à traiter (status 'scheduled' = matchs à venir)
-    const { data: matches, error: matchesError } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('matches')
       .select(`
         id,
         oddsapi_id,
         sport:sports!inner(oddsapi_key),
-        league:leagues!inner(oddsapi_key)
+        league:leagues!inner(oddsapi_key, tracked)
       `)
       .eq('status', 'scheduled')
+      .eq('league.tracked', true)
       .gte('match_date', new Date().toISOString())
-      .order('match_date', { ascending: true })
-      .limit(limitMatches);
+      .order('match_date', { ascending: true });
+
+    // Appliquer la limite seulement si spécifiée
+    if (limitMatches !== null) {
+      query = query.limit(limitMatches);
+    }
+
+    const { data: matches, error: matchesError } = await query;
 
     if (matchesError) {
       throw new Error(`Erreur récupération matchs: ${matchesError.message}`);
