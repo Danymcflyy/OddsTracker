@@ -2,8 +2,9 @@ name: Sync Odds V2 Parallel (5-min)
 
 on:
   schedule:
-    # Exécute toutes les 5 minutes
-    - cron: '*/5 * * * *'
+    # Exécute toutes les 5 minutes (décalé pour éviter :00 = haute charge GitHub)
+    # Runs: :03, :08, :13, :18, :23, :28, :33, :38, :43, :48, :53, :58
+    - cron: '3-59/5 * * * *'
 
   # Permet l'exécution manuelle
   workflow_dispatch:
