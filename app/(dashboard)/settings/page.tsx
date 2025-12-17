@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Loader2, Shield, Signal, Database, Check, KeyRound } from "lucide-react";
+import { Loader2, Shield, Database, KeyRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,7 +68,6 @@ async function fetchSettingsData(): Promise<SettingsResponse> {
 
 export default function SettingsPage() {
   const [loading, setLoading] = React.useState(true);
-  const [saving, setSaving] = React.useState(false);
   const [data, setData] = React.useState<SettingsResponse | null>(null);
   const [form, setForm] = React.useState<FormState | null>(null);
 
@@ -98,47 +97,6 @@ export default function SettingsPage() {
 
   const updateForm = (patch: Partial<FormState>) => {
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));
-  };
-
-  const handleSave = async () => {
-    if (!form) return;
-    setSaving(true);
-    try {
-      const payload: Record<string, unknown> = {
-        autoSyncEnabled: form.autoSyncEnabled,
-        autoSyncTime: form.autoSyncTime,
-        extraSyncEnabled: form.extraSyncEnabled,
-        extraSyncTime: form.extraSyncTime,
-        followedTournaments: form.followedTournaments,
-        closingStrategy: form.closingStrategy,
-      };
-
-      if (!data?.oddsApiKeyManagedByEnv) {
-        payload.oddsApiKey = form.oddsApiKeyShouldClear
-          ? ""
-          : form.oddsApiKeyInput.trim() !== ""
-            ? form.oddsApiKeyInput.trim()
-            : undefined;
-      }
-
-      const response = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error || "Impossible d'enregistrer les paramètres");
-      }
-
-      alert("✅ Paramètres enregistrés");
-      await loadSettings();
-    } catch (error) {
-      alert(`❌ Enregistrement impossible : ${error instanceof Error ? error.message : "Erreur inconnue"}`);
-    } finally {
-      setSaving(false);
-    }
   };
 
   if (loading || !data || !form) {
@@ -184,49 +142,7 @@ export default function SettingsPage() {
             Gérez la synchronisation des données, le quota API et les réglages de sécurité.
           </p>
         </div>
-        <Button className="gap-2" onClick={handleSave} disabled={saving}>
-          {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Enregistrement...
-            </>
-          ) : (
-            <>
-              <Check className="h-4 w-4" />
-              Enregistrer
-            </>
-          )}
-        </Button>
       </header>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-col gap-1">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Signal className="h-5 w-5" />
-              Utilisation API Odds-API.io
-            </CardTitle>
-            <CardDescription>Surveillez le quota mensuel et la prochaine réinitialisation.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-3xl font-semibold text-slate-900">
-              {data.apiUsage.used.toLocaleString("fr-FR")} / {data.apiUsage.limit.toLocaleString("fr-FR")}
-            </div>
-            <p className="text-sm text-muted-foreground mb-2">
-              Réinitialisation le {data.apiUsage.resetDate ?? "—"}
-            </p>
-            <div className="w-full rounded-full bg-slate-100">
-              <div
-                className="h-3 rounded-full bg-primary transition-all"
-                style={{ width: `${apiUsagePercent}%` }}
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {apiUsagePercent}% du quota consommé
-            </p>
-          </CardContent>
-        </Card>
-      </div>
 
       <Card>
         <CardHeader className="flex flex-col gap-1">
