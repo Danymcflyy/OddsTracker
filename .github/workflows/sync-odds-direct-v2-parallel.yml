@@ -1,9 +1,9 @@
-name: Sync Odds V2 Parallel (5-min)
+name: Sync Odds V2 Parallel (2-min)
 
 on:
   schedule:
-    # Exécute toutes les 5 minutes
-    - cron: '*/5 * * * *'
+    # Exécute toutes les 2 minutes
+    - cron: '*/2 * * * *'
 
   # Permet l'exécution manuelle
   workflow_dispatch:
