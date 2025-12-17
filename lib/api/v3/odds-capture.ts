@@ -113,13 +113,12 @@ export async function captureOdds(
 
 /**
  * Traite les cotes pour un match donné
+ * OPTIMISÉ: Utilise des batch inserts/updates au lieu de requêtes individuelles
  */
 async function processOddsForMatch(
   matchId: string,
   oddsResponse: OddsApiOddsResponse
 ): Promise<{ odds_count: number }> {
-  let oddsCount = 0;
-
   console.log(`    🔍 Vérification bookmakers...`);
   // Vérifier si Pinnacle a des cotes
   const pinnacleMarkets = oddsResponse.bookmakers['Pinnacle'] || oddsResponse.bookmakers['pinnacle'];
@@ -131,15 +130,12 @@ async function processOddsForMatch(
 
   console.log(`    📊 ${pinnacleMarkets.length} marchés Pinnacle trouvés`);
 
-  // Traiter chaque marché Pinnacle
-  for (let i = 0; i < pinnacleMarkets.length; i++) {
-    const market = pinnacleMarkets[i];
-    console.log(`    📋 [${i + 1}/${pinnacleMarkets.length}] Marché: ${market.name} (${market.odds?.length || 0} cotes)`);
+  // ÉTAPE 1: Collecter toutes les cotes dans un array
+  const allOddsToInsert: any[] = [];
+  const timestamp = new Date().toISOString();
 
-    // Mapper le nom du marché ("ML" → "h2h", "Spreads" → "spreads", etc.)
+  for (const market of pinnacleMarkets) {
     const oddsapiKey = mapMarketNameToOddsApiKey(market.name);
-    console.log(`    🔄 Mapping: ${market.name} → ${oddsapiKey}`);
-
     const marketRecord = await getOrCreateMarket(oddsapiKey);
 
     if (!marketRecord) {
@@ -147,28 +143,105 @@ async function processOddsForMatch(
       continue;
     }
 
-    console.log(`    ✅ Marché trouvé/créé: ${marketRecord.id}`);
-
-    // Traiter chaque objet de cotes dans le marché
-    for (let j = 0; j < market.odds.length; j++) {
-      const oddsData = market.odds[j];
-      console.log(`    💾 [${j + 1}/${market.odds.length}] Stockage cote...`);
-      const count = await upsertOddsFromData(matchId, marketRecord.id, oddsapiKey, oddsData);
-      oddsCount += count;
-      console.log(`    ✅ [${j + 1}/${market.odds.length}] ${count} cote(s) stockée(s)`);
+    // Pour chaque objet de cotes dans le marché
+    for (const oddsData of market.odds) {
+      const odds = extractOddsFromData(matchId, marketRecord.id, oddsData);
+      allOddsToInsert.push(...odds);
     }
   }
 
-  console.log(`    🔄 Mise à jour timestamp match...`);
-  // Mettre à jour le timestamp de dernière mise à jour du match
+  if (allOddsToInsert.length === 0) {
+    return { odds_count: 0 };
+  }
+
+  // Dédupliquer les cotes (au cas où l'API retourne des duplicatas)
+  const uniqueOddsMap = new Map<string, any>();
+  for (const odd of allOddsToInsert) {
+    const key = `${odd.match_id}:${odd.market_id}:${odd.outcome_type}:${odd.line || 0}`;
+    if (!uniqueOddsMap.has(key)) {
+      uniqueOddsMap.set(key, odd);
+    }
+  }
+  const uniqueOdds = Array.from(uniqueOddsMap.values());
+
+  console.log(`    💾 Stockage batch de ${uniqueOdds.length} cotes...`);
+
+  // ÉTAPE 2: Récupérer toutes les cotes existantes pour ce match EN UN SEUL APPEL
+  const { data: existingOdds } = await supabaseAdmin
+    .from('odds')
+    .select('id, match_id, market_id, outcome_type, line')
+    .eq('match_id', matchId);
+
+  // Créer une clé unique pour identifier les cotes
+  const existingKeys = new Set(
+    (existingOdds || []).map(odd =>
+      `${odd.market_id}:${odd.outcome_type}:${odd.line || 0}`
+    )
+  );
+
+  // ÉTAPE 3: Séparer nouvelles cotes vs cotes à mettre à jour
+  const newOdds = uniqueOdds.filter(odd =>
+    !existingKeys.has(`${odd.market_id}:${odd.outcome_type}:${odd.line || 0}`)
+  );
+
+  const oddsToUpdate = uniqueOdds.filter(odd =>
+    existingKeys.has(`${odd.market_id}:${odd.outcome_type}:${odd.line || 0}`)
+  );
+
+  let insertedCount = 0;
+  let updatedCount = 0;
+
+  // ÉTAPE 4: Bulk INSERT des nouvelles cotes
+  if (newOdds.length > 0) {
+    const { error: insertError } = await supabaseAdmin
+      .from('odds')
+      .insert(newOdds.map(odd => ({
+        match_id: odd.match_id,
+        market_id: odd.market_id,
+        outcome_type: odd.outcome_type,
+        line: odd.line || 0,
+        opening_odds: odd.price,
+        opening_timestamp: timestamp,
+        current_odds: odd.price,
+        current_updated_at: timestamp,
+        bookmaker: 'Pinnacle',
+      })));
+
+    if (!insertError) {
+      insertedCount = newOdds.length;
+    } else {
+      console.error(`    ❌ Erreur bulk insert:`, insertError.message);
+    }
+  }
+
+  // ÉTAPE 5: Bulk UPDATE des cotes existantes (seulement current_odds)
+  if (oddsToUpdate.length > 0) {
+    // Supabase ne supporte pas vraiment les bulk updates, donc on fait un update par cote existante
+    // MAIS c'est quand même beaucoup plus rapide que l'ancien système car on évite les SELECTs
+    for (const odd of oddsToUpdate) {
+      await supabaseAdmin
+        .from('odds')
+        .update({
+          current_odds: odd.price,
+          current_updated_at: timestamp,
+        })
+        .eq('match_id', odd.match_id)
+        .eq('market_id', odd.market_id)
+        .eq('outcome_type', odd.outcome_type)
+        .eq('line', odd.line || 0);
+    }
+    updatedCount = oddsToUpdate.length;
+  }
+
+  console.log(`    ✅ ${insertedCount} nouvelles cotes, ${updatedCount} mises à jour`);
+
+  // Mettre à jour le timestamp du match
   await supabaseAdmin
     .from('matches')
-    .update({ last_updated_at: new Date().toISOString() })
+    .update({ last_updated_at: timestamp })
     .eq('id', matchId);
 
-  console.log(`    ✅ Timestamp mis à jour`);
-
-  return { odds_count: oddsCount };
+  return { odds_count: insertedCount + updatedCount };
 }
 
 /**
@@ -250,61 +323,52 @@ async function getOrCreateMarket(oddsapiKey: string): Promise<{ id: string } | n
 }
 
 /**
- * Traite les cotes depuis un objet OddsApiOddsData
- * Extrait toutes les cotes disponibles et les upsert
+ * Extrait les cotes depuis un objet OddsApiOddsData
+ * OPTIMISÉ: Retourne un array au lieu de faire des DB calls
  */
-async function upsertOddsFromData(
+function extractOddsFromData(
   matchId: string,
   marketId: string,
-  marketKey: string,
   oddsData: any
-): Promise<number> {
-  let count = 0;
+): Array<{ match_id: string; market_id: string; outcome_type: string; price: number; line: number | null }> {
+  const odds: Array<{ match_id: string; market_id: string; outcome_type: string; price: number; line: number | null }> = [];
 
   // Pour les marchés h2h/ML (1X2)
   if (oddsData.home) {
-    const success = await upsertSingleOdd(matchId, marketId, 'home', parseFloat(oddsData.home), null);
-    if (success) count++;
+    odds.push({ match_id: matchId, market_id: marketId, outcome_type: 'home', price: parseFloat(oddsData.home), line: null });
   }
   if (oddsData.away) {
-    const success = await upsertSingleOdd(matchId, marketId, 'away', parseFloat(oddsData.away), null);
-    if (success) count++;
+    odds.push({ match_id: matchId, market_id: marketId, outcome_type: 'away', price: parseFloat(oddsData.away), line: null });
   }
   if (oddsData.draw) {
-    const success = await upsertSingleOdd(matchId, marketId, 'draw', parseFloat(oddsData.draw), null);
-    if (success) count++;
+    odds.push({ match_id: matchId, market_id: marketId, outcome_type: 'draw', price: parseFloat(oddsData.draw), line: null });
   }
 
   // Pour les marchés totals et team_totals
   if (oddsData.over || oddsData.under) {
-    // Extraire la ligne depuis hdp (e.g., 2.5, 1.5)
     const line = oddsData.hdp !== undefined ? parseFloat(oddsData.hdp) : null;
 
     if (oddsData.over) {
-      const success = await upsertSingleOdd(matchId, marketId, 'over', parseFloat(oddsData.over), line);
-      if (success) count++;
+      odds.push({ match_id: matchId, market_id: marketId, outcome_type: 'over', price: parseFloat(oddsData.over), line });
     }
     if (oddsData.under) {
-      const success = await upsertSingleOdd(matchId, marketId, 'under', parseFloat(oddsData.under), line);
-      if (success) count++;
+      odds.push({ match_id: matchId, market_id: marketId, outcome_type: 'under', price: parseFloat(oddsData.under), line });
     }
   }
 
   // Pour les marchés spreads (handicaps)
-  if (oddsData.hdp !== undefined) {
-    const handicap = oddsData.hdp;
+  if (oddsData.hdp !== undefined && (oddsData.home || oddsData.away)) {
+    const handicap = parseFloat(oddsData.hdp);
 
     if (oddsData.home) {
-      const success = await upsertSingleOdd(matchId, marketId, 'home', parseFloat(oddsData.home), handicap);
-      if (success) count++;
+      odds.push({ match_id: matchId, market_id: marketId, outcome_type: 'home', price: parseFloat(oddsData.home), line: handicap });
     }
     if (oddsData.away) {
-      const success = await upsertSingleOdd(matchId, marketId, 'away', parseFloat(oddsData.away), -handicap);
-      if (success) count++;
+      odds.push({ match_id: matchId, market_id: marketId, outcome_type: 'away', price: parseFloat(oddsData.away), line: -handicap });
     }
   }
 
-  return count;
+  return odds;
 }
 
 /**
