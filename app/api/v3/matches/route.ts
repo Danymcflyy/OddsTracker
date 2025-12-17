@@ -15,6 +15,10 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') || '50', 10);
 
+    // Tri
+    const sortField = searchParams.get('sortField') || 'match_date';
+    const sortDirection = (searchParams.get('sortDirection') || 'asc') as 'asc' | 'desc';
+
     // Filtres
     const filters: TableFilters = {};
 
@@ -35,17 +39,30 @@ export async function GET(request: Request) {
     if (teamIds) filters.teamIds = teamIds.split(',');
     if (marketIds) filters.marketIds = marketIds.split(',');
 
-    // Odds range
-    const oddsMin = searchParams.get('oddsMin');
-    const oddsMax = searchParams.get('oddsMax');
-    const oddsType = searchParams.get('oddsType') as 'opening' | 'current' | undefined;
+    // Recherche textuelle d'équipe
+    const teamSearch = searchParams.get('teamSearch');
+    if (teamSearch) filters.teamSearch = teamSearch;
 
-    if (oddsMin) filters.oddsMin = parseFloat(oddsMin);
-    if (oddsMax) filters.oddsMax = parseFloat(oddsMax);
-    if (oddsType) filters.oddsType = oddsType;
+    // Odds range (opening et current séparés)
+    const oddsOpeningMin = searchParams.get('oddsOpeningMin');
+    const oddsOpeningMax = searchParams.get('oddsOpeningMax');
+    const oddsCurrentMin = searchParams.get('oddsCurrentMin');
+    const oddsCurrentMax = searchParams.get('oddsCurrentMax');
+    const oddsMarketId = searchParams.get('oddsMarketId');
+
+    if (oddsOpeningMin) filters.oddsOpeningMin = parseFloat(oddsOpeningMin);
+    if (oddsOpeningMax) filters.oddsOpeningMax = parseFloat(oddsOpeningMax);
+    if (oddsCurrentMin) filters.oddsCurrentMin = parseFloat(oddsCurrentMin);
+    if (oddsCurrentMax) filters.oddsCurrentMax = parseFloat(oddsCurrentMax);
+    if (oddsMarketId) filters.oddsMarketId = oddsMarketId;
 
     // Fetch data
-    const result = await fetchMatchesForTable(sportSlug, filters, { page, pageSize });
+    const result = await fetchMatchesForTable(
+      sportSlug,
+      filters,
+      { page, pageSize },
+      { field: sortField, direction: sortDirection }
+    );
 
     return NextResponse.json({
       success: true,

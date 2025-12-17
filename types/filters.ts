@@ -1,27 +1,34 @@
-import { Database } from "./supabase";
-
 export interface DateRangeFilter {
   from: Date | null;
   to: Date | null;
 }
 
 export interface OddsRangeFilter {
-  min: number | null;
-  max: number | null;
-  type: "opening" | "closing";
+  openingMin: number | null;
+  openingMax: number | null;
+  currentMin: number | null;
+  currentMax: number | null;
+  marketId: string | null;  // UUID du marché à filtrer (optionnel)
 }
 
+/**
+ * Filtres pour la table de matchs V3
+ * Utilise des UUID (string) pour country/league IDs
+ */
 export interface Filters {
   dateRange: DateRangeFilter;
-  countryId: Database['public']['Tables']['countries_v2']['Row']['id'] | null;
-  leagueId: Database['public']['Tables']['leagues_v2']['Row']['id'] | null;
+  countryId: string | null;  // UUID
+  leagueId: string | null;   // UUID
   teamSearch: string;
-  marketType: string | null;
+  marketType: string | null; // UUID du marché
   oddsRange: OddsRangeFilter;
 }
 
+/**
+ * Options disponibles pour chaque filtre
+ */
 export interface FilterOptions {
-  countries: { id: Database['public']['Tables']['countries_v2']['Row']['id']; name: string }[];
-  leagues: { id: Database['public']['Tables']['leagues_v2']['Row']['id']; name: string }[];
-  marketTypes: { id: string; name: string }[];
+  countries: { id: string; name: string }[];
+  leagues: { id: string; name: string; countryName?: string }[];
+  markets: { id: string; name: string }[];
 }

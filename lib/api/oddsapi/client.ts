@@ -25,6 +25,7 @@ const DEFAULT_MARKETS = [
   'totals',
   'team_totals_home',
   'team_totals_away',
+  'btts',
 ];
 
 // Rate limiting configuration (in ms between requests)
@@ -132,14 +133,19 @@ export class OddsApiClient {
    */
   async getOddsMulti(eventIds: number[], params?: { markets?: string[] }): Promise<OddsApiOddsMultiResponse> {
     const results: OddsApiOddsResponse[] = [];
+    const total = eventIds.length;
 
     // Appeler /v3/odds pour chaque événement individuellement
-    for (const eventId of eventIds) {
+    for (let i = 0; i < eventIds.length; i++) {
+      const eventId = eventIds[i];
+      console.log(`  📥 [${i + 1}/${total}] Récupération cotes event ${eventId}...`);
+
       try {
         const odds = await this.getOdds(eventId, params);
         results.push(odds);
+        console.log(`  ✅ [${i + 1}/${total}] Cotes récupérées`);
       } catch (error) {
-        console.error(`⚠️  Erreur récupération cotes pour event ${eventId}:`, error);
+        console.error(`  ⚠️  [${i + 1}/${total}] Erreur récupération cotes pour event ${eventId}:`, error);
         // Continuer avec les autres événements même si un échoue
       }
     }

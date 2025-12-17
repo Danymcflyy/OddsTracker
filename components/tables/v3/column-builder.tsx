@@ -49,6 +49,7 @@ export function buildFootballColumns(
     header: 'Pays',
     cell: ({ row }) => row.original.league?.country?.name || '-',
     size: 100,
+    enableSorting: false,
   });
 
   columns.push({
@@ -57,6 +58,7 @@ export function buildFootballColumns(
     header: 'Championnat',
     cell: ({ row }) => row.original.league?.display_name || row.original.league?.name || '-',
     size: 150,
+    enableSorting: false,
   });
 
   columns.push({
@@ -65,6 +67,7 @@ export function buildFootballColumns(
     header: 'Domicile',
     cell: ({ row }) => row.original.home_team?.display_name || '-',
     size: 150,
+    enableSorting: false,
   });
 
   columns.push({
@@ -73,6 +76,7 @@ export function buildFootballColumns(
     header: 'Extérieur',
     cell: ({ row }) => row.original.away_team?.display_name || '-',
     size: 150,
+    enableSorting: false,
   });
 
   columns.push({
@@ -84,6 +88,7 @@ export function buildFootballColumns(
       return score !== null ? score.toString() : '-';
     },
     size: 70,
+    enableSorting: false,
   });
 
   columns.push({
@@ -95,6 +100,7 @@ export function buildFootballColumns(
       return score !== null ? score.toString() : '-';
     },
     size: 70,
+    enableSorting: false,
   });
 
   // ============================================================================
@@ -210,6 +216,7 @@ function buildOddsColumn(
       );
     },
     size: 80,
+    enableSorting: false,
   };
 }
 
@@ -234,14 +241,19 @@ function findOdd(
 
 /**
  * Récupère toutes les lignes uniques pour un marché donné
- * en analysant les odds existantes
+ * Utilise les lignes pré-calculées du marché si disponibles
  */
 function getUniqueLinesForMarket(market: MarketWithOutcomes): number[] {
+  // Si le marché a déjà des lignes pré-calculées, les utiliser
+  if (market.lines && market.lines.length > 0) {
+    return market.lines;
+  }
+
   // Les marchés qui utilisent des lignes
   const marketsWithLines = [
     'totals', 'totals_ht',
-    'spreads', 'spread', 'spread_ht',
-    'team_totals', 'team_totals_home', 'team_totals_away', 'team_total_home', 'team_total_away',
+    'spreads',
+    'team_totals', 'team_totals_home', 'team_totals_away',
     'corners_totals', 'corners_totals_ht',
     'corners_spread', 'corners_spread_ht'
   ];
@@ -250,23 +262,18 @@ function getUniqueLinesForMarket(market: MarketWithOutcomes): number[] {
     return [];
   }
 
-  // Pour l'instant, retourner des lignes communes
-  // En production, on devrait fetch depuis la DB via fetchLinesForMarket()
+  // Fallback: TOUTES les lignes communes possibles
   const commonLines: Record<string, number[]> = {
-    totals: [2.5, 3.5],
-    totals_ht: [0.5, 1.5],
-    spreads: [-1.5, -0.5, 0.5, 1.5],
-    spread: [-1.5, -0.5, 0.5, 1.5],
-    spread_ht: [-0.5, 0.5],
-    team_totals: [1.5, 2.5],
-    team_totals_home: [1.5, 2.5],
-    team_totals_away: [1.5, 2.5],
-    team_total_home: [1.5, 2.5],
-    team_total_away: [1.5, 2.5],
-    corners_totals: [9.5, 10.5, 11.5],
-    corners_totals_ht: [4.5, 5.5],
-    corners_spread: [-2.5, -1.5, 1.5, 2.5],
-    corners_spread_ht: [-1.5, 1.5],
+    totals: [0.5, 1.5, 2.5, 3.5, 4.5, 5.5],
+    totals_ht: [0.5, 1.5, 2.5],
+    spreads: [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5],
+    team_totals: [0.5, 1.5, 2.5, 3.5],
+    team_totals_home: [0.5, 1.5, 2.5, 3.5],
+    team_totals_away: [0.5, 1.5, 2.5, 3.5],
+    corners_totals: [8.5, 9.5, 10.5, 11.5, 12.5],
+    corners_totals_ht: [4.5, 5.5, 6.5],
+    corners_spread: [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5],
+    corners_spread_ht: [-1.5, -0.5, 0.5, 1.5],
   };
 
   return commonLines[market.market_type] || [];

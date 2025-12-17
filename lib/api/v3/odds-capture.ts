@@ -63,22 +63,31 @@ export async function captureOdds(
     const eventIds = matches.map((m: any) => m.oddsapi_id);
 
     // Appel API pour récupérer les cotes de plusieurs matchs à la fois
+    // Note: On exclut les corners (corners_totals, corners_spread, etc.)
     const oddsData = await client.getOddsMulti(eventIds, {
-      markets: ['h2h', 'totals', 'spreads', 'team_totals_home', 'team_totals_away'],
+      markets: ['h2h', 'totals', 'spreads', 'team_totals_home', 'team_totals_away', 'btts'],
     });
 
     // Traiter chaque réponse
-    for (const oddsResponse of oddsData) {
+    console.log(`\n💾 Traitement et stockage des cotes...`);
+    for (let i = 0; i < oddsData.length; i++) {
+      const oddsResponse = oddsData[i];
+      console.log(`  💾 [${i + 1}/${oddsData.length}] Traitement match ${oddsResponse.id}...`);
+
       const match = matches.find((m: any) => m.oddsapi_id === oddsResponse.id);
-      if (!match) continue;
+      if (!match) {
+        console.log(`  ⚠️  [${i + 1}/${oddsData.length}] Match non trouvé, skip`);
+        continue;
+      }
 
       try {
         const result = await processOddsForMatch(match.id, oddsResponse);
         matchesUpdated++;
         oddsCaptured += result.odds_count;
+        console.log(`  ✅ [${i + 1}/${oddsData.length}] ${result.odds_count} cotes stockées`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`❌ Erreur match ${oddsResponse.id}:`, errorMessage);
+        console.error(`  ❌ [${i + 1}/${oddsData.length}] Erreur match ${oddsResponse.id}:`, errorMessage);
         errors.push(`Match ${oddsResponse.id}: ${errorMessage}`);
       }
     }
@@ -104,37 +113,53 @@ async function processOddsForMatch(
 ): Promise<{ odds_count: number }> {
   let oddsCount = 0;
 
+  console.log(`    🔍 Vérification bookmakers...`);
   // Vérifier si Pinnacle a des cotes
   const pinnacleMarkets = oddsResponse.bookmakers['Pinnacle'] || oddsResponse.bookmakers['pinnacle'];
 
   if (!pinnacleMarkets || pinnacleMarkets.length === 0) {
+    console.log(`    ⚠️  Aucune cote Pinnacle trouvée`);
     return { odds_count: 0 };
   }
 
+  console.log(`    📊 ${pinnacleMarkets.length} marchés Pinnacle trouvés`);
+
   // Traiter chaque marché Pinnacle
-  for (const market of pinnacleMarkets) {
+  for (let i = 0; i < pinnacleMarkets.length; i++) {
+    const market = pinnacleMarkets[i];
+    console.log(`    📋 [${i + 1}/${pinnacleMarkets.length}] Marché: ${market.name} (${market.odds?.length || 0} cotes)`);
+
     // Mapper le nom du marché ("ML" → "h2h", "Spreads" → "spreads", etc.)
     const oddsapiKey = mapMarketNameToOddsApiKey(market.name);
+    console.log(`    🔄 Mapping: ${market.name} → ${oddsapiKey}`);
 
     const marketRecord = await getOrCreateMarket(oddsapiKey);
 
     if (!marketRecord) {
-      console.error(`❌ Impossible de créer marché ${oddsapiKey}`);
+      console.error(`    ❌ Impossible de créer marché ${oddsapiKey}`);
       continue;
     }
 
+    console.log(`    ✅ Marché trouvé/créé: ${marketRecord.id}`);
+
     // Traiter chaque objet de cotes dans le marché
-    for (const oddsData of market.odds) {
+    for (let j = 0; j < market.odds.length; j++) {
+      const oddsData = market.odds[j];
+      console.log(`    💾 [${j + 1}/${market.odds.length}] Stockage cote...`);
       const count = await upsertOddsFromData(matchId, marketRecord.id, oddsapiKey, oddsData);
       oddsCount += count;
+      console.log(`    ✅ [${j + 1}/${market.odds.length}] ${count} cote(s) stockée(s)`);
     }
   }
 
+  console.log(`    🔄 Mise à jour timestamp match...`);
   // Mettre à jour le timestamp de dernière mise à jour du match
   await supabaseAdmin
     .from('matches')
     .update({ last_updated_at: new Date().toISOString() })
     .eq('id', matchId);
+
+  console.log(`    ✅ Timestamp mis à jour`);
 
   return { odds_count: oddsCount };
 }
@@ -144,11 +169,14 @@ async function processOddsForMatch(
  */
 function mapMarketNameToOddsApiKey(marketName: string): string {
   const mapping: Record<string, string> = {
-    'ML': 'h2h',           // Money Line = 1X2
-    'Spreads': 'spreads',
-    'Totals': 'totals',
-    'Team Totals - Home': 'team_totals_home',
-    'Team Totals - Away': 'team_totals_away',
+    'ML': 'h2h',                      // Money Line = 1X2
+    'Spread': 'spread',               // Asian Handicap (singulier, pas spreads!)
+    'Spread HT': 'spread_ht',         // Asian Handicap HT
+    'Totals': 'totals',               // Total Goals
+    'Totals HT': 'totals_ht',         // Total Goals HT
+    'Team Total Home': 'team_total_home',   // Team Totals Home (singulier!)
+    'Team Total Away': 'team_total_away',   // Team Totals Away (singulier!)
+    'BTTS': 'btts',                   // Both Teams To Score
   };
 
   return mapping[marketName] || marketName.toLowerCase().replace(/\s+/g, '_');
@@ -240,10 +268,10 @@ async function upsertOddsFromData(
     if (success) count++;
   }
 
-  // Pour les marchés totals
+  // Pour les marchés totals et team_totals
   if (oddsData.over || oddsData.under) {
-    // Extraire la ligne depuis le label (e.g., "2.5")
-    const line = oddsData.label ? parseFloat(oddsData.label) : null;
+    // Extraire la ligne depuis hdp (e.g., 2.5, 1.5)
+    const line = oddsData.hdp !== undefined ? parseFloat(oddsData.hdp) : null;
 
     if (oddsData.over) {
       const success = await upsertSingleOdd(matchId, marketId, 'over', parseFloat(oddsData.over), line);

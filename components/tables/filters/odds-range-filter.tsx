@@ -1,13 +1,19 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { OddsRangeFilter } from "@/types/filters";
+
+interface MarketOption {
+  id: string;
+  name: string;
+}
 
 interface OddsRangeFilterProps {
   value: OddsRangeFilter;
   onChange: (value: OddsRangeFilter) => void;
+  markets: MarketOption[];
   label?: string;
   className?: string;
 }
@@ -15,67 +21,117 @@ interface OddsRangeFilterProps {
 export function OddsRangeFilter({
   value,
   onChange,
-  label = "Fourchette de cotes",
+  markets,
+  label = "Filtrage par cotes",
   className,
 }: OddsRangeFilterProps) {
-  const handleTypeChange = (type: "opening" | "closing") => {
-    if (value.type === type) return;
-    onChange({ ...value, type });
-  };
-
   return (
     <div className={className}>
-      <Label className="mb-1 block text-xs text-muted-foreground">
-        {label} ({value.type === "opening" ? "Opening" : "Closing"})
+      <Label className="mb-2 block text-xs text-muted-foreground font-semibold">
+        {label}
       </Label>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="flex flex-1 items-center gap-2">
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="Min"
-            value={value.min ?? ""}
-            onChange={(event) =>
-              onChange({
-                ...value,
-                min: event.target.value ? Number(event.target.value) : null,
-              })
+
+      <div className="space-y-3">
+        {/* Sélection du marché (optionnel) */}
+        <div>
+          <Label className="mb-1 block text-xs text-muted-foreground">
+            Type de pari (optionnel)
+          </Label>
+          <Select
+            value={value.marketId ?? "all"}
+            onValueChange={(selected) =>
+              onChange({ ...value, marketId: selected === "all" ? null : selected })
             }
-          />
-          <span className="text-muted-foreground text-sm">—</span>
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="Max"
-            value={value.max ?? ""}
-            onChange={(event) =>
-              onChange({
-                ...value,
-                max: event.target.value ? Number(event.target.value) : null,
-              })
-            }
-          />
-        </div>
-        <div className="inline-flex rounded-md border p-1">
-          <Button
-            type="button"
-            size="sm"
-            variant={value.type === "opening" ? "default" : "ghost"}
-            className="rounded-sm"
-            onClick={() => handleTypeChange("opening")}
           >
-            Opening
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={value.type === "closing" ? "default" : "ghost"}
-            className="rounded-sm"
-            onClick={() => handleTypeChange("closing")}
-          >
-            Closing
-          </Button>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Tous les marchés" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les marchés</SelectItem>
+              {markets.map((market) => (
+                <SelectItem key={market.id} value={market.id}>
+                  {market.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+
+        {/* Fourchette Opening */}
+        <div>
+          <Label className="mb-1 block text-xs text-muted-foreground">
+            Cotes Opening (optionnel)
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Min"
+              value={value.openingMin ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  openingMin: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              className="h-9"
+            />
+            <span className="text-muted-foreground text-sm">—</span>
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Max"
+              value={value.openingMax ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  openingMax: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              className="h-9"
+            />
+          </div>
+        </div>
+
+        {/* Fourchette Current */}
+        <div>
+          <Label className="mb-1 block text-xs text-muted-foreground">
+            Cotes Current (optionnel)
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Min"
+              value={value.currentMin ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  currentMin: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              className="h-9"
+            />
+            <span className="text-muted-foreground text-sm">—</span>
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Max"
+              value={value.currentMax ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  currentMax: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              className="h-9"
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground italic">
+          Laissez vide pour ne pas filtrer. Les filtres s'appliquent en ET.
+        </p>
       </div>
     </div>
   );

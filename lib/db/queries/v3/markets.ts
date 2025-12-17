@@ -53,14 +53,58 @@ export async function fetchActiveMarkets(
       return [];
     }
 
-    // Enrichir chaque marché avec ses outcomes possibles
-    const enrichedMarkets: MarketWithOutcomes[] = markets.map((market) => {
-      const outcomes = getOutcomesForMarket(market.market_type);
+    // Filtrer les doublons (ex: spread vs spreads, team_total vs team_totals)
+    const uniqueMarkets = markets.filter((market) => {
+      // Exclure les doublons (on garde les noms singuliers qui ont les cotes)
+      const excludedKeys = [
+        'spreads',          // Doublon de 'spread' (vide)
+        'team_totals_home', // Doublon de 'team_total_home' (vide)
+        'team_totals_away', // Doublon de 'team_total_away' (vide)
+      ];
+      return !excludedKeys.includes(market.oddsapi_key);
+    });
 
-      return {
-        ...market,
-        outcomes,
-      };
+    // Enrichir chaque marché avec ses outcomes possibles ET ses lignes réelles
+    const enrichedMarkets: MarketWithOutcomes[] = await Promise.all(
+      uniqueMarkets.map(async (market) => {
+        const outcomes = getOutcomesForMarket(market.market_type);
+
+        // Charger les lignes uniques pour ce marché depuis la DB
+        const lines = await fetchLinesForMarket(market.id);
+
+        return {
+          ...market,
+          outcomes,
+          lines,
+        };
+      })
+    );
+
+    // Trier dans un ordre logique (1X2 en premier, puis populaires)
+    const orderPriority: Record<string, number> = {
+      'h2h': 1,                    // 1X2 (Match Result)
+      'totals': 2,                 // Total Goals
+      'spreads': 3,                // Asian Handicap
+      'btts': 4,                   // Both Teams To Score
+      'team_totals_home': 5,       // Team Totals Home
+      'team_totals_away': 6,       // Team Totals Away
+      'corners_totals': 7,         // Corners Totals
+      'corners_spread': 8,         // Corners Spread
+      'corners_totals_ht': 9,      // Corners HT
+      'corners_spread_ht': 10,     // Corners Spread HT
+    };
+
+    enrichedMarkets.sort((a, b) => {
+      const priorityA = orderPriority[a.oddsapi_key] || 99;
+      const priorityB = orderPriority[b.oddsapi_key] || 99;
+
+      // Sous-tri par period (fulltime avant halftime)
+      if (priorityA === priorityB) {
+        if (a.period === 'fulltime' && b.period === 'halftime') return -1;
+        if (a.period === 'halftime' && b.period === 'fulltime') return 1;
+      }
+
+      return priorityA - priorityB;
     });
 
     return enrichedMarkets;
@@ -99,8 +143,9 @@ function getOutcomesForMarket(marketType: string): string[] {
 }
 
 /**
- * Récupère les lignes (lines) disponibles pour un marché donné
- * Exemple: Pour "totals", peut retourner [2.5, 3.5, 4.5]
+ * Récupère TOUTES les lignes disponibles pour un marché donné
+ * Retourne toutes les lignes uniques trouvées dans la DB, triées par valeur
+ * Exemple: Pour "totals", peut retourner [0.5, 1.5, 2.5, 3.5, 4.5] si toutes existent
  */
 export async function fetchLinesForMarket(
   marketId: string
@@ -110,20 +155,21 @@ export async function fetchLinesForMarket(
       .from('odds')
       .select('line')
       .eq('market_id', marketId)
-      .not('line', 'is', null)
-      .order('line', { ascending: true });
+      .neq('line', 0);
 
     if (error) {
       console.error('Erreur fetchLinesForMarket:', error);
       return [];
     }
 
-    if (!odds) {
+    if (!odds || odds.length === 0) {
       return [];
     }
 
-    // Dédupliquer les lignes
-    const uniqueLines = Array.from(new Set(odds.map((o) => o.line as number)));
+    // Extraire toutes les lignes uniques et trier par valeur
+    const uniqueLines = Array.from(new Set(odds.map((o) => o.line as number)))
+      .sort((a, b) => a - b);
+
     return uniqueLines;
   } catch (error) {
     console.error('Erreur dans fetchLinesForMarket:', error);

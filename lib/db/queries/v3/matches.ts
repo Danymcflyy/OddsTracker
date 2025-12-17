@@ -11,10 +11,13 @@ export interface TableFilters {
   countryIds?: string[];
   leagueIds?: string[];
   teamIds?: string[];
+  teamSearch?: string;
   marketIds?: string[];
-  oddsMin?: number;
-  oddsMax?: number;
-  oddsType?: 'opening' | 'current';
+  oddsOpeningMin?: number;
+  oddsOpeningMax?: number;
+  oddsCurrentMin?: number;
+  oddsCurrentMax?: number;
+  oddsMarketId?: string;
 }
 
 export interface MatchWithDetails {
@@ -69,7 +72,8 @@ export interface MatchWithDetails {
 export async function fetchMatchesForTable(
   sportSlug: string = 'football',
   filters: TableFilters = {},
-  pagination: { page: number; pageSize: number } = { page: 1, pageSize: 50 }
+  pagination: { page: number; pageSize: number } = { page: 1, pageSize: 50 },
+  sorting: { field: string; direction: 'asc' | 'desc' } = { field: 'match_date', direction: 'asc' }
 ): Promise<{ data: MatchWithDetails[]; total: number }> {
   try {
     // Construction de la requête de base
@@ -145,14 +149,15 @@ export async function fetchMatchesForTable(
     // Note: Les filtres par pays, équipe, marché, cotes nécessitent un post-traitement
     // car ils touchent des tables liées (via JOIN)
 
+    // Tri
+    const ascending = sorting.direction === 'asc';
+    query = query.order(sorting.field, { ascending });
+
     // Pagination
     const { page, pageSize } = pagination;
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     query = query.range(from, to);
-
-    // Tri par date
-    query = query.order('match_date', { ascending: true });
 
     const { data: matches, error, count } = await query;
 
@@ -175,12 +180,22 @@ export async function fetchMatchesForTable(
       );
     }
 
-    // Filtre par équipe (home OU away)
+    // Filtre par équipe (home OU away par ID)
     if (filters.teamIds && filters.teamIds.length > 0) {
       filteredMatches = filteredMatches.filter((m) =>
         filters.teamIds!.includes(m.home_team?.id) ||
         filters.teamIds!.includes(m.away_team?.id)
       );
+    }
+
+    // Filtre par recherche textuelle d'équipe
+    if (filters.teamSearch && filters.teamSearch.trim() !== '') {
+      const searchLower = filters.teamSearch.toLowerCase().trim();
+      filteredMatches = filteredMatches.filter((m) => {
+        const homeName = m.home_team?.display_name?.toLowerCase() || '';
+        const awayName = m.away_team?.display_name?.toLowerCase() || '';
+        return homeName.includes(searchLower) || awayName.includes(searchLower);
+      });
     }
 
     // Filtre par marché
@@ -190,19 +205,45 @@ export async function fetchMatchesForTable(
       );
     }
 
-    // Filtre par cotes (min/max)
-    if (filters.oddsMin !== undefined || filters.oddsMax !== undefined) {
-      const oddsType = filters.oddsType || 'current';
-      const oddsField = oddsType === 'opening' ? 'opening_odds' : 'current_odds';
+    // Filtre par cotes (opening et/ou current)
+    const hasOpeningFilter = filters.oddsOpeningMin !== undefined || filters.oddsOpeningMax !== undefined;
+    const hasCurrentFilter = filters.oddsCurrentMin !== undefined || filters.oddsCurrentMax !== undefined;
+    const hasMarketFilter = filters.oddsMarketId !== undefined;
 
-      filteredMatches = filteredMatches.filter((m) =>
-        m.odds?.some((o: any) => {
-          const odds = o[oddsField];
-          if (filters.oddsMin !== undefined && odds < filters.oddsMin) return false;
-          if (filters.oddsMax !== undefined && odds > filters.oddsMax) return false;
+    if (hasOpeningFilter || hasCurrentFilter || hasMarketFilter) {
+      filteredMatches = filteredMatches.filter((m) => {
+        // Au moins une cote doit satisfaire TOUS les critères définis
+        return m.odds?.some((o: any) => {
+          // Filtre par marché si spécifié
+          if (hasMarketFilter && o.market?.id !== filters.oddsMarketId) {
+            return false;
+          }
+
+          // Filtre par opening odds si spécifié
+          if (hasOpeningFilter) {
+            const openingOdds = o.opening_odds;
+            if (filters.oddsOpeningMin !== undefined && openingOdds < filters.oddsOpeningMin) {
+              return false;
+            }
+            if (filters.oddsOpeningMax !== undefined && openingOdds > filters.oddsOpeningMax) {
+              return false;
+            }
+          }
+
+          // Filtre par current odds si spécifié
+          if (hasCurrentFilter) {
+            const currentOdds = o.current_odds;
+            if (filters.oddsCurrentMin !== undefined && currentOdds < filters.oddsCurrentMin) {
+              return false;
+            }
+            if (filters.oddsCurrentMax !== undefined && currentOdds > filters.oddsCurrentMax) {
+              return false;
+            }
+          }
+
           return true;
-        })
-      );
+        });
+      });
     }
 
     return {

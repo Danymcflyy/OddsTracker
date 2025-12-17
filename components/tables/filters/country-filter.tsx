@@ -9,9 +9,9 @@ interface Option {
 }
 
 interface CountryFilterProps {
-  value: number | null;
+  value: string | null;
   options: Option[];
-  onChange: (value: number | null) => void;
+  onChange: (value: string | null) => void;
   label?: string;
   placeholder?: string;
   className?: string;
@@ -29,8 +29,8 @@ export function CountryFilter({
     <div className={className}>
       <Label className="mb-1 block text-xs text-muted-foreground">{label}</Label>
       <Select
-        value={value !== null ? value.toString() : "all"}
-        onValueChange={(selected) => onChange(selected === "all" ? null : Number(selected))}
+        value={value ?? "all"}
+        onValueChange={(selected) => onChange(selected === "all" ? null : selected)}
       >
         <SelectTrigger>
           <SelectValue placeholder={placeholder} />
@@ -38,7 +38,7 @@ export function CountryFilter({
         <SelectContent>
           <SelectItem value="all">Tous</SelectItem>
           {options.map((option) => (
-            <SelectItem key={option.id} value={option.id.toString()}>
+            <SelectItem key={option.id} value={option.id}>
               {option.name}
             </SelectItem>
           ))}

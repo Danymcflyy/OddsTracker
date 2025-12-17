@@ -17,7 +17,6 @@ const SPORTS_META = [
     sportId: 10,
     name: "Football",
     slug: "football",
-    href: "/football-v3",
     accent: "bg-emerald-50 text-emerald-600",
     emoji: "⚽",
     description: "Toutes les ligues Pinnacle depuis 2019",
@@ -55,7 +54,6 @@ const SPORTS_META = [
 type SportCardData = {
   name: string;
   slug: string;
-  href?: string;
   accent: string;
   emoji: string;
   description: string;
@@ -111,7 +109,6 @@ async function fetchSportCards(): Promise<SportCardData[]> {
       ...sport,
       matches,
       lastSync,
-      href: 'href' in sport && sport.href ? sport.href : `/${sport.slug}`,
     });
   }
 
@@ -257,7 +254,7 @@ export default async function DashboardHomePage() {
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
             {sportCards.map(
-              ({ emoji, slug, name, matches, accent, description, lastSync, comingSoon, href }) => {
+              ({ emoji, slug, name, matches, accent, description, lastSync, comingSoon }) => {
                 const cardContent = (
                   <>
                     <div className="flex items-center gap-4">
@@ -317,7 +314,7 @@ export default async function DashboardHomePage() {
                 return (
                   <Link
                     key={slug}
-                    href={href ?? `/${slug}`}
+                    href={`/${slug}`}
                     className="group flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
                   >
                     {cardContent}

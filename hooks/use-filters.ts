@@ -12,7 +12,13 @@ const DEFAULT_FILTERS: Filters = {
   leagueId: null,
   teamSearch: "",
   marketType: null,
-  oddsRange: { min: null, max: null, type: "opening" },
+  oddsRange: {
+    openingMin: null,
+    openingMax: null,
+    currentMin: null,
+    currentMax: null,
+    marketId: null
+  },
 };
 
 interface UseFiltersOptions {
@@ -80,11 +86,11 @@ export function useFilters(options: UseFiltersOptions = {}) {
     }
 
     if (filters.countryId) {
-      params.set("countryId", filters.countryId.toString());
+      params.set("countryId", filters.countryId); // UUID est déjà string
     }
 
     if (filters.leagueId) {
-      params.set("leagueId", filters.leagueId.toString());
+      params.set("leagueId", filters.leagueId); // UUID est déjà string
     }
 
     if (filters.teamSearch) {
@@ -95,14 +101,20 @@ export function useFilters(options: UseFiltersOptions = {}) {
       params.set("marketType", filters.marketType);
     }
 
-    if (filters.oddsRange.min !== null) {
-      params.set("oddsMin", filters.oddsRange.min.toString());
+    if (filters.oddsRange.openingMin !== null) {
+      params.set("oddsOpeningMin", filters.oddsRange.openingMin.toString());
     }
-    if (filters.oddsRange.max !== null) {
-      params.set("oddsMax", filters.oddsRange.max.toString());
+    if (filters.oddsRange.openingMax !== null) {
+      params.set("oddsOpeningMax", filters.oddsRange.openingMax.toString());
     }
-    if (filters.oddsRange.type) {
-      params.set("oddsType", filters.oddsRange.type);
+    if (filters.oddsRange.currentMin !== null) {
+      params.set("oddsCurrentMin", filters.oddsRange.currentMin.toString());
+    }
+    if (filters.oddsRange.currentMax !== null) {
+      params.set("oddsCurrentMax", filters.oddsRange.currentMax.toString());
+    }
+    if (filters.oddsRange.marketId) {
+      params.set("oddsMarketId", filters.oddsRange.marketId);
     }
 
     return params;
