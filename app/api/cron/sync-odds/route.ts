@@ -13,8 +13,8 @@ import { discoverMatches } from '@/lib/api/v3/match-discovery';
 import { captureOdds } from '@/lib/api/v3/odds-capture';
 import { supabaseAdmin } from '@/lib/db';
 
-export const runtime = 'edge';
-export const maxDuration = 300; // 5 minutes max
+export const runtime = 'nodejs';
+export const maxDuration = 60; // 60 secondes max sur Hobby (300s = 5min sur Pro)
 
 /**
  * Endpoint appelé par Vercel Cron
