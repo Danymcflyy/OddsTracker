@@ -1,9 +1,11 @@
-name: Sync Odds Direct (GitHub Actions)
+name: Sync Odds Direct (GitHub Actions) - DISABLED
 
 on:
-  schedule:
-    # Exécute toutes les 10 minutes
-    - cron: '*/10 * * * *'
+  # DÉSACTIVÉ: V2 Parallel actif (toutes les 2 min)
+  # Gardé pour backup manuel si besoin
+  # schedule:
+  #   # Exécute toutes les 10 minutes
+  #   - cron: '*/10 * * * *'
 
   # Permet l'exécution manuelle
   workflow_dispatch:
