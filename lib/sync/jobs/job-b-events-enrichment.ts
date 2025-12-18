@@ -77,6 +77,10 @@ export class JobBEventsEnrichment {
     const from = subDays(new Date(), 7);  // Derniers 7 jours
     const to = addDays(new Date(), 30);   // Prochains 30 jours
 
+    if (!oddsApiClient) {
+      throw new Error('Odds API client not initialized');
+    }
+
     let events: OddsApiEvent[] = [];
 
     try {
@@ -139,9 +143,11 @@ export class JobBEventsEnrichment {
     const normalized = normalizeOddsApiEvent(event);
 
     // Mettre à jour les teams/players si présents
-    if (sport === FOOTBALL && event.home_team && event.away_team) {
-      const homeTeamId = await this.ensureTeam(event.home_team, sport);
-      const awayTeamId = await this.ensureTeam(event.away_team, sport);
+    const eventAny = event as any;
+
+    if (sport === FOOTBALL && eventAny.home_team && eventAny.away_team) {
+      const homeTeamId = await this.ensureTeam(eventAny.home_team, sport);
+      const awayTeamId = await this.ensureTeam(eventAny.away_team, sport);
 
       const { error } = await supabaseAdmin
         .from('events_to_track')
@@ -155,9 +161,9 @@ export class JobBEventsEnrichment {
       enriched = !error;
     }
 
-    if (sport === TENNIS && event.player1 && event.player2) {
-      const player1Id = await this.ensurePlayer(event.player1);
-      const player2Id = await this.ensurePlayer(event.player2);
+    if (sport === TENNIS && eventAny.player1 && eventAny.player2) {
+      const player1Id = await this.ensurePlayer(eventAny.player1);
+      const player2Id = await this.ensurePlayer(eventAny.player2);
 
       const { error } = await supabaseAdmin
         .from('events_to_track')
@@ -172,9 +178,9 @@ export class JobBEventsEnrichment {
     }
 
     // Vérifier si l'événement est settled
-    if (event.status === 'settled' && event.scores) {
-      const homeScore = event.scores.home ?? 0;
-      const awayScore = event.scores.away ?? 0;
+    if (eventAny.status === 'settled' && eventAny.scores) {
+      const homeScore = eventAny.scores.home ?? 0;
+      const awayScore = eventAny.scores.away ?? 0;
 
       // Transitionner vers FINISHED
       await stateMachineService.finalizeMatch(eventId, {

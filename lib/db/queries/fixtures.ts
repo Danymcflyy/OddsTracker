@@ -1,7 +1,6 @@
 "use server";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
 import type { FixtureWithEnrichedOdds } from "@/types/fixture";
 
 import { supabase, supabaseAdmin, isAdminAvailable } from "../index";
@@ -138,7 +137,7 @@ export async function fetchFixturesWithRelations(filters: FixtureFilters): Promi
   }
 
   return {
-    data: (data ?? []) as FixtureWithEnrichedOdds[],
+    data: (data ?? []) as unknown as FixtureWithEnrichedOdds[],
     total: count ?? 0,
   };
 }
@@ -175,7 +174,7 @@ export async function getFixtureById(id: number) {
   return data;
 }
 
-function getServerClient(): SupabaseClient<Database> {
+function getServerClient(): SupabaseClient<any> {
   return isAdminAvailable() ? supabaseAdmin : supabase;
 }
 

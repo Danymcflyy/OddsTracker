@@ -5,7 +5,7 @@ export async function getLeaguesBySport(sportId: number) {
   const { data, error } = await supabase
     .from("leagues")
     .select("*")
-    .eq("sport_id", sportId);
+    .eq("sport_id", String(sportId));
 
   if (error) throw error;
   return data;

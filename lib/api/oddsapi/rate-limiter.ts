@@ -223,7 +223,7 @@ function getHoursUntilReset(resetTime: Date): number {
  * Middleware pour vérifier rate limit avant requête API
  */
 export function createRateLimitMiddleware() {
-  return async (req: Request, res: Response, next: () => void) => {
+  return async (req: any, res: any, next: () => void) => {
     try {
       await checkRateLimit();
       next();

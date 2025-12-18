@@ -37,6 +37,10 @@ export class StateMachineService {
     }
 
     // Calculer next_scan_at: juste avant le match
+    if (!event.event_date) {
+      console.warn(`⚠️  Event ${eventId} has no event_date, skipping opening capture`);
+      return;
+    }
     const eventDate = new Date(event.event_date);
     const nextScanTime = new Date(eventDate.getTime() - MINUTES_BEFORE_KO * 60 * 1000);
 
@@ -152,7 +156,7 @@ export class StateMachineService {
       return [];
     }
 
-    return (data || []) as EventToTrack[];
+    return (data || []) as unknown as EventToTrack[];
   }
 
   /**
@@ -172,7 +176,7 @@ export class StateMachineService {
       return [];
     }
 
-    return (data || []) as EventToTrack[];
+    return (data || []) as unknown as EventToTrack[];
   }
 
   /**

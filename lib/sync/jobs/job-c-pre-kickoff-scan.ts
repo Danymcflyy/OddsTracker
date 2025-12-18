@@ -75,6 +75,10 @@ export class JobCPreKickoffScan {
    * Met à jour les closing odds pour un événement
    */
   private async updateEventClosingOdds(eventId: number): Promise<number> {
+    if (!oddsApiClient) {
+      throw new Error('Odds API client not initialized');
+    }
+
     try {
       const odds = await oddsApiClient.getOdds(eventId);
 
@@ -89,25 +93,25 @@ export class JobCPreKickoffScan {
       let updated = 0;
 
       // Parcourir les cotes Pinnacle
-      const pinnacle = odds.bookmakers.find(b => b.key === 'Pinnacle');
-      if (!pinnacle) {
+      const pinnacleMarkets = (odds.bookmakers as any)['Pinnacle'] || (odds.bookmakers as any).Pinnacle;
+      if (!pinnacleMarkets || !Array.isArray(pinnacleMarkets) || pinnacleMarkets.length === 0) {
         console.warn(`     ⚠️  No Pinnacle odds for event ${eventId}`);
         return 0;
       }
 
-      for (const market of pinnacle.markets) {
-        for (const outcome of market.outcomes) {
+      for (const market of pinnacleMarkets) {
+        for (const outcome of (market as any).odds || []) {
           // Mettre à jour closing_price et closing_time
           const { error } = await supabaseAdmin
             .from('opening_closing_observed')
             .update({
-              closing_price_observed: parseFloat(outcome.price),
+              closing_price_observed: parseFloat(outcome.price || outcome.odd),
               closing_time_observed: lastUpdated.toISOString(),
               updated_at: new Date().toISOString(),
             })
             .eq('event_id', eventId)
             .eq('bookmaker', 'Pinnacle')
-            .eq('market_name', market.key)
+            .eq('market_name', (market as any).name || (market as any).key)
             .eq('selection', outcome.name.toLowerCase());
 
           if (!error) {

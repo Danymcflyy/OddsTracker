@@ -1,7 +1,6 @@
 "use server";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
 import type { OddWithDetails } from "@/types/fixture";
 
 import { supabase, supabaseAdmin, isAdminAvailable } from "../index";
@@ -47,7 +46,7 @@ export async function getOddsByFixture(fixtureId: number) {
     throw error;
   }
 
-  return (data ?? []) as OddWithDetails[];
+  return (data ?? []) as unknown as OddWithDetails[];
 }
 
 export async function getOddsWithFilters(filters: OddsFilters) {
@@ -92,6 +91,6 @@ export async function getOddsWithFilters(filters: OddsFilters) {
   return data ?? [];
 }
 
-function getServerClient(): SupabaseClient<Database> {
+function getServerClient(): SupabaseClient<any> {
   return isAdminAvailable() ? supabaseAdmin : supabase;
 }

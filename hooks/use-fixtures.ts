@@ -31,37 +31,35 @@ function createOdd({
   const timestamp = new Date(now.getTime() - id * 3600 * 1000).toISOString();
 
   return {
-    id,
+    id: String(id),
     fixture_id: fixtureId,
-    market_id: marketId,
-    outcome_id: outcomeId,
+    match_id: String(fixtureId),
+    market_id: String(marketId),
+    outcome_id: String(outcomeId),
+    outcome_type: outcomeName,
     opening_price: opening,
     closing_price: closing,
     opening_timestamp: timestamp,
     closing_timestamp: timestamp,
     is_winner: isWinner,
-    created_at: timestamp,
     market: {
-      id: marketId,
-      oddspapi_id: marketId,
+      id: String(marketId),
       name: marketName,
       description: marketDescription ?? null,
     },
     outcome: {
-      id: outcomeId,
-      oddspapi_id: outcomeId,
-      market_id: marketId,
+      id: String(outcomeId),
       name: outcomeName,
       description: null,
     },
-  };
+  } as unknown as OddWithDetails;
 }
 
 /**
  * Données fictives utilisées en environnement de développement
  * ⚠️ À supprimer lors du branchement sur les vraies données OddsPapi/Supabase
  */
-const DEMO_FIXTURES: Record<string, FixtureWithEnrichedOdds[]> = {
+const DEMO_FIXTURES: any = {
   football: [
     {
       id: 1001,

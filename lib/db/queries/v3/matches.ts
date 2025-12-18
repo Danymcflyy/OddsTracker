@@ -77,7 +77,7 @@ export async function fetchMatchesForTable(
 ): Promise<{ data: MatchWithDetails[]; total: number }> {
   try {
     // Construction de la requête de base
-    let query = supabaseAdmin
+    let query = (supabaseAdmin as any)
       .from('matches')
       .select(`
         id,
@@ -126,11 +126,13 @@ export async function fetchMatchesForTable(
       `, { count: 'exact' });
 
     // Filtrer par sport
-    const { data: sport } = await supabaseAdmin
+    const { data: sportData } = await supabaseAdmin
       .from('sports')
       .select('id')
       .eq('slug', sportSlug)
       .single();
+
+    const sport = sportData as any;
 
     if (sport) {
       query = query.eq('sport_id', sport.id);
@@ -261,7 +263,7 @@ export async function fetchMatchesForTable(
  */
 export async function fetchMatchById(matchId: string): Promise<MatchWithDetails | null> {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('matches')
       .select(`
         id,

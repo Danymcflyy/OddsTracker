@@ -37,7 +37,7 @@ export async function captureOddsForLeague(
 
   try {
     // Récupérer les matchs à traiter pour cette ligue uniquement
-    let query = supabaseAdmin
+    let query = (supabaseAdmin as any)
       .from('matches')
       .select(`
         id,
@@ -179,14 +179,16 @@ async function processOddsForMatch(
   const uniqueOdds = Array.from(uniqueOddsMap.values());
 
   // ÉTAPE 2: Récupérer toutes les cotes existantes pour ce match
-  const { data: existingOdds } = await supabaseAdmin
+  const { data: existingOddsData } = await supabaseAdmin
     .from('odds')
     .select('id, match_id, market_id, outcome_type, line')
     .eq('match_id', matchId);
 
+  const existingOdds = (existingOddsData || []) as any[];
+
   // Créer une clé unique pour identifier les cotes
   const existingKeys = new Set(
-    (existingOdds || []).map(odd =>
+    existingOdds.map(odd =>
       `${odd.market_id}:${odd.outcome_type}:${odd.line || 0}`
     )
   );
@@ -217,7 +219,7 @@ async function processOddsForMatch(
         current_odds: odd.price,
         current_updated_at: timestamp,
         bookmaker: 'Pinnacle',
-      })));
+      })) as any);
 
     if (!insertError) {
       insertedCount = newOdds.length;
@@ -227,7 +229,7 @@ async function processOddsForMatch(
   // ÉTAPE 5: UPDATE des cotes existantes (seulement current_odds)
   if (oddsToUpdate.length > 0) {
     for (const odd of oddsToUpdate) {
-      await supabaseAdmin
+      await (supabaseAdmin as any)
         .from('odds')
         .update({
           current_odds: odd.price,
@@ -242,7 +244,7 @@ async function processOddsForMatch(
   }
 
   // Mettre à jour le timestamp du match
-  await supabaseAdmin
+  await (supabaseAdmin as any)
     .from('matches')
     .update({ last_updated_at: timestamp })
     .eq('id', matchId);
@@ -284,7 +286,7 @@ async function getOrCreateMarket(oddsapiKey: string): Promise<{ id: string } | n
       .maybeSingle();
 
     if (existing) {
-      return existing;
+      return existing as { id: string };
     }
 
     // Créer dynamiquement le marché
@@ -309,7 +311,7 @@ async function getOrCreateMarket(oddsapiKey: string): Promise<{ id: string } | n
         name: formatMarketName(oddsapiKey),
         period: 'fulltime',
         active: true,
-      })
+      } as any)
       .select('id')
       .single();
 
@@ -317,7 +319,7 @@ async function getOrCreateMarket(oddsapiKey: string): Promise<{ id: string } | n
       return null;
     }
 
-    return created;
+    return created as { id: string };
   } catch (error) {
     return null;
   }

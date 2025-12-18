@@ -1,4 +1,48 @@
-import type { Odd, Market, Outcome } from "./database";
+/**
+ * Type de base pour une cote
+ */
+export interface Odd {
+  id: string;
+  fixture_id?: number;
+  match_id?: string;
+  market_id: string;
+  outcome_id?: string;
+  outcome_type?: string;
+  line?: number;
+  opening_price?: number | null;
+  closing_price?: number | null;
+  opening_odds?: number;
+  current_odds?: number;
+  opening_timestamp?: string | null;
+  closing_timestamp?: string | null;
+  opening_updated_at?: string;
+  current_updated_at?: string;
+  is_winner?: boolean | null;
+  bookmaker?: string;
+}
+
+/**
+ * Type de base pour un marché
+ */
+export interface Market {
+  id: string;
+  oddsapi_key?: string;
+  market_type?: string;
+  name: string;
+  custom_name?: string | null;
+  description?: string | null;
+  period?: string;
+  active?: boolean;
+}
+
+/**
+ * Type de base pour un résultat
+ */
+export interface Outcome {
+  id: string;
+  name: string;
+  description?: string | null;
+}
 
 /**
  * Cote avec les détails du marché et du résultat

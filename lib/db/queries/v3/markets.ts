@@ -27,17 +27,19 @@ export async function fetchActiveMarkets(
   sportSlug: string = 'football'
 ): Promise<MarketWithOutcomes[]> {
   try {
-    const { data: sport } = await supabaseAdmin
+    const { data: sportData } = await supabaseAdmin
       .from('sports')
       .select('id')
       .eq('slug', sportSlug)
       .single();
 
-    if (!sport) {
+    if (!sportData) {
       return [];
     }
 
-    const { data: markets, error } = await supabaseAdmin
+    const sport = sportData as any;
+
+    const { data: marketsData, error } = await supabaseAdmin
       .from('markets')
       .select('*')
       .eq('sport_id', sport.id)
@@ -49,9 +51,11 @@ export async function fetchActiveMarkets(
       return [];
     }
 
-    if (!markets) {
+    if (!marketsData) {
       return [];
     }
+
+    const markets = marketsData as any[];
 
     // Filtrer les doublons (ex: spread vs spreads, team_total vs team_totals)
     const uniqueMarkets = markets.filter((market) => {
@@ -151,7 +155,7 @@ export async function fetchLinesForMarket(
   marketId: string
 ): Promise<number[]> {
   try {
-    const { data: odds, error } = await supabaseAdmin
+    const { data: oddsData, error } = await supabaseAdmin
       .from('odds')
       .select('line')
       .eq('market_id', marketId)
@@ -162,9 +166,11 @@ export async function fetchLinesForMarket(
       return [];
     }
 
-    if (!odds || odds.length === 0) {
+    if (!oddsData || oddsData.length === 0) {
       return [];
     }
+
+    const odds = oddsData as any[];
 
     // Extraire toutes les lignes uniques et trier par valeur
     const uniqueLines = Array.from(new Set(odds.map((o) => o.line as number)))
@@ -187,7 +193,7 @@ export async function updateMarketCustomName(
   try {
     const { error } = await supabaseAdmin
       .from('markets')
-      .update({ custom_name: customName })
+      .update({ custom_name: customName } as any)
       .eq('id', marketId);
 
     if (error) {
@@ -210,17 +216,19 @@ export async function fetchMarketByKey(
   sportSlug: string = 'football'
 ): Promise<MarketWithOutcomes | null> {
   try {
-    const { data: sport } = await supabaseAdmin
+    const { data: sportData } = await supabaseAdmin
       .from('sports')
       .select('id')
       .eq('slug', sportSlug)
       .single();
 
-    if (!sport) {
+    if (!sportData) {
       return null;
     }
 
-    const { data: market, error } = await supabaseAdmin
+    const sport = sportData as any;
+
+    const { data: marketData, error } = await supabaseAdmin
       .from('markets')
       .select('*')
       .eq('sport_id', sport.id)
@@ -228,9 +236,11 @@ export async function fetchMarketByKey(
       .eq('period', 'fulltime')
       .single();
 
-    if (error || !market) {
+    if (error || !marketData) {
       return null;
     }
+
+    const market = marketData as any;
 
     const outcomes = getOutcomesForMarket(market.market_type);
 

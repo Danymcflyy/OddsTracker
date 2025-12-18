@@ -25,18 +25,20 @@ export async function discoverMatches(
 
   try {
     // Récupérer le sport
-    const { data: sport, error: sportError } = await supabaseAdmin
+    const { data: sportData, error: sportError } = await supabaseAdmin
       .from('sports')
       .select('id, oddsapi_key')
       .eq('slug', sportSlug)
       .single();
 
-    if (sportError || !sport) {
+    if (sportError || !sportData) {
       throw new Error(`Sport ${sportSlug} introuvable`);
     }
 
+    const sport = sportData as any;
+
     // Récupérer les ligues trackées
-    const { data: trackedLeagues, error: leaguesError } = await supabaseAdmin
+    const { data: trackedLeaguesData, error: leaguesError } = await supabaseAdmin
       .from('leagues')
       .select('id, oddsapi_key, name')
       .eq('sport_id', sport.id)
@@ -47,10 +49,12 @@ export async function discoverMatches(
       throw new Error(`Erreur récupération ligues: ${leaguesError.message}`);
     }
 
-    if (!trackedLeagues || trackedLeagues.length === 0) {
+    if (!trackedLeaguesData || trackedLeaguesData.length === 0) {
       console.log(`⚠️  Aucune ligue trackée pour ${sportSlug}`);
       return { discovered: 0, updated: 0, errors };
     }
+
+    const trackedLeagues = trackedLeaguesData as any[];
 
     console.log(`🔍 Découverte de matchs pour ${trackedLeagues.length} ligues...`);
 
@@ -122,7 +126,7 @@ async function upsertMatch(
     }
 
     // Vérifier si le match existe déjà
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await (supabaseAdmin as any)
       .from('matches')
       .select('id')
       .eq('oddsapi_id', event.id)
@@ -147,7 +151,7 @@ async function upsertMatch(
 
     if (existing) {
       // Mettre à jour
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await (supabaseAdmin as any)
         .from('matches')
         .update(matchData)
         .eq('id', existing.id);
@@ -160,7 +164,7 @@ async function upsertMatch(
       return 'updated';
     } else {
       // Créer
-      const { error: insertError } = await supabaseAdmin
+      const { error: insertError } = await (supabaseAdmin as any)
         .from('matches')
         .insert(matchData);
 
@@ -211,7 +215,7 @@ async function getOrCreateTeam(
         oddsapi_name: teamName,
         normalized_name: normalized,
         display_name: teamName,
-      })
+      } as any)
       .select('id')
       .single();
 

@@ -27,7 +27,7 @@ export interface OddsApiEvent {
     home: number;
     away: number;
   };
-  bookmakers?: OddsApiBookmakerResponse[];
+  bookmakers?: any[];
 }
 
 export interface OddsApiEventsResponse {

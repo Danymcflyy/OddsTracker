@@ -134,7 +134,7 @@ export async function syncLeaguesToDatabase(
               name: league.name,
               display_name: league.name,
               active: true,
-            },
+            } as any,
             {
               onConflict: 'oddsapi_key',
               ignoreDuplicates: false,

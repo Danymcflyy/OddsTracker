@@ -1,4 +1,43 @@
-import type { Sport, League, Country } from "./database";
+/**
+ * Type de base pour un sport
+ */
+export interface Sport {
+  id: number;
+  name: string;
+  slug: string;
+  oddspapi_id?: number;
+  active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Type de base pour une ligue
+ */
+export interface League {
+  id: number;
+  name: string;
+  slug?: string;
+  sport_id: number;
+  country_id: number;
+  oddspapi_id?: string;
+  active?: boolean;
+  tracked?: boolean;
+  display_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Type de base pour un pays
+ */
+export interface Country {
+  id: number;
+  name: string;
+  iso_code?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 /**
  * Slugs des sports disponibles

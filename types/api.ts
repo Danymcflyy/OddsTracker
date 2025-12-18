@@ -1,4 +1,17 @@
-import type { SyncLog } from "./database";
+/**
+ * Type de base pour les logs de synchronisation
+ */
+export interface SyncLog {
+  id: number;
+  sport_id: number;
+  success: boolean;
+  records_fetched: number;
+  records_inserted: number;
+  records_updated: number;
+  duration_ms: number;
+  error_message?: string;
+  created_at: string;
+}
 
 /**
  * Réponse API standard

@@ -32,7 +32,7 @@ export interface FixtureWithDetails extends Fixture {
  * Utilisé pour les analyses de cotes et l'export
  */
 export interface FixtureWithOdds extends FixtureWithDetails {
-  odds: Odd[];
+  odds: any[];
 }
 
 /**

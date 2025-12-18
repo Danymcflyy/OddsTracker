@@ -87,6 +87,10 @@ export class JobAIncrementalOdds {
    */
   private async discoverLeagueEvents(sport: string, leagueSlug: string): Promise<number> {
     // 1. Récupérer tous les événements de la ligue
+    if (!oddsApiClient) {
+      throw new Error('Odds API client not initialized');
+    }
+
     const events = await oddsApiClient.getEvents({
       sport,
       league: leagueSlug,
@@ -117,7 +121,7 @@ export class JobAIncrementalOdds {
     }
 
     // Filter out cancelled events (no odds available)
-    const activeEvents = newEvents.filter(e => e.status !== 'cancelled');
+    const activeEvents = newEvents.filter(e => (e as any).status !== 'cancelled');
     if (activeEvents.length === 0) {
       console.log(`     ⚠️  ${newEvents.length} new events but all cancelled`);
       return 0;
@@ -146,6 +150,10 @@ export class JobAIncrementalOdds {
    */
   private async processNewEvent(sport: string, leagueSlug: string, event: OddsApiEvent): Promise<boolean> {
     // 1. Récupérer les cotes pour cet événement
+    if (!oddsApiClient) {
+      throw new Error('Odds API client not initialized');
+    }
+
     let odds;
     try {
       odds = await oddsApiClient.getOdds(event.id);
@@ -164,7 +172,7 @@ export class JobAIncrementalOdds {
     }
 
     // 2. Normaliser les données
-    const normalizedEvent = normalizeOddsApiEvent(odds);
+    const normalizedEvent = normalizeOddsApiEvent(odds as any);
     const normalizedOdds = normalizeOddsApiOdds(odds);
 
     // 3. Préparer les données pour events_to_track

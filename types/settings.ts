@@ -1,4 +1,13 @@
-import type { Setting } from "./database";
+/**
+ * Type de base pour un paramètre
+ */
+export interface Setting {
+  id?: number;
+  key: string;
+  value: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
 
 /**
  * Clés de paramètres disponibles

@@ -112,7 +112,7 @@ async function upsertMatch(
     }
 
     // Vérifier si le match existe déjà
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await (supabaseAdmin as any)
       .from('matches')
       .select('id')
       .eq('oddsapi_id', event.id)
@@ -137,7 +137,7 @@ async function upsertMatch(
 
     if (existing) {
       // Mettre à jour
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await (supabaseAdmin as any)
         .from('matches')
         .update(matchData)
         .eq('id', existing.id);
@@ -150,7 +150,7 @@ async function upsertMatch(
       return 'updated';
     } else {
       // Créer
-      const { error: insertError } = await supabaseAdmin
+      const { error: insertError } = await (supabaseAdmin as any)
         .from('matches')
         .insert(matchData);
 
@@ -202,7 +202,7 @@ async function getOrCreateTeam(
         oddsapi_name: teamName,
         normalized_name: normalized,
         display_name: teamName,
-      })
+      } as any)
       .select('id')
       .single();
 

@@ -28,7 +28,7 @@ export async function PATCH(
     // Mettre à jour le statut tracked
     const { data, error } = await supabaseAdmin
       .from('leagues')
-      .update({ tracked })
+      .update({ tracked } as any)
       .eq('id', leagueId)
       .select('id, name, tracked')
       .single();

@@ -10,7 +10,6 @@ import type {
   NormalizedOddsApiOdds,
   NormalizedOutcome,
   OddsApiEvent,
-  OddsApiMarketResponse,
   OddsApiOddsResponse,
 } from './types';
 
@@ -46,7 +45,6 @@ const MARKET_MAPPING: Record<string, string> = {
   'ML': 'h2h',
   'ml': 'h2h',
   'Moneyline': 'h2h',
-  'moneyline': 'h2h',
 
   // Spreads / Handicaps
   'Spread': 'spreads',
@@ -56,7 +54,6 @@ const MARKET_MAPPING: Record<string, string> = {
 
   // Totals / Over-Under
   'Totals': 'totals',
-  'totals': 'totals',
   'Totals HT': 'totals_h1',
   'totals ht': 'totals_h1',
 
@@ -159,19 +156,20 @@ const TEAM_ALIASES: Record<string, string> = {
  * Normalise un événement OddsApi en format interne
  */
 export function normalizeOddsApiEvent(event: OddsApiEvent): NormalizedOddsApiEvent {
+  const e = event as any;
   return {
-    eventId: event.id,
-    sportSlug: normalizeSportSlug(event.sport_key),
-    leagueSlug: normalizeLeagueSlug(event.league_key),
-    homeTeam: event.home_team,
-    awayTeam: event.away_team,
-    player1: event.player1,
-    player2: event.player2,
-    eventDate: new Date(event.commence_time),
-    status: (event.status as any) || 'pending',
-    scores: event.scores ? {
-      home: event.scores.home,
-      away: event.scores.away,
+    eventId: e.id,
+    sportSlug: normalizeSportSlug(e.sport_key),
+    leagueSlug: normalizeLeagueSlug(e.league_key),
+    homeTeam: e.home_team,
+    awayTeam: e.away_team,
+    player1: e.player1,
+    player2: e.player2,
+    eventDate: new Date(e.commence_time),
+    status: e.status || 'pending',
+    scores: e.scores ? {
+      home: e.scores.home,
+      away: e.scores.away,
     } : undefined,
   };
 }
@@ -265,10 +263,10 @@ export function normalizeOddsApiOdds(odds: any): NormalizedOddsApiOdds {
 /**
  * Normalise un marché pour stockage
  */
-export function normalizeMarket(market: OddsApiMarketResponse): NormalizedMarket {
+export function normalizeMarket(market: any): NormalizedMarket {
   return {
     marketName: normalizeMarketKey(market.key),
-    outcomes: (market.outcomes || []).map((outcome) => ({
+    outcomes: (market.outcomes || []).map((outcome: any) => ({
       name: normalizeOutcomeName(outcome.name),
       price: outcome.price,
       ...(outcome.point !== undefined && { line: outcome.point }),
@@ -429,8 +427,8 @@ export function isValidMarket(market: NormalizedMarket): boolean {
  * Valide qu'un événement a les champs requis
  */
 export function isValidEvent(event: NormalizedOddsApiEvent, sport: string): boolean {
-  const hasTeams = event.homeTeam && event.awayTeam;
-  const hasPlayers = event.player1 && event.player2;
+  const hasTeams = !!(event.homeTeam && event.awayTeam);
+  const hasPlayers = !!(event.player1 && event.player2);
 
   if (sport === 'Football') {
     return hasTeams && event.eventDate != null;

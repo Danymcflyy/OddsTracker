@@ -30,7 +30,7 @@ export async function captureOdds(
 
   try {
     // Récupérer les matchs à traiter (status 'scheduled' = matchs à venir)
-    let query = supabaseAdmin
+    let query = (supabaseAdmin as any)
       .from('matches')
       .select(`
         id,
@@ -167,14 +167,16 @@ async function processOddsForMatch(
   console.log(`    💾 Stockage batch de ${uniqueOdds.length} cotes...`);
 
   // ÉTAPE 2: Récupérer toutes les cotes existantes pour ce match EN UN SEUL APPEL
-  const { data: existingOdds } = await supabaseAdmin
+  const { data: existingOddsData } = await supabaseAdmin
     .from('odds')
     .select('id, match_id, market_id, outcome_type, line')
     .eq('match_id', matchId);
 
+  const existingOdds = (existingOddsData || []) as any[];
+
   // Créer une clé unique pour identifier les cotes
   const existingKeys = new Set(
-    (existingOdds || []).map(odd =>
+    existingOdds.map(odd =>
       `${odd.market_id}:${odd.outcome_type}:${odd.line || 0}`
     )
   );
@@ -205,7 +207,7 @@ async function processOddsForMatch(
         current_odds: odd.price,
         current_updated_at: timestamp,
         bookmaker: 'Pinnacle',
-      })));
+      })) as any);
 
     if (!insertError) {
       insertedCount = newOdds.length;
@@ -219,7 +221,7 @@ async function processOddsForMatch(
     // Supabase ne supporte pas vraiment les bulk updates, donc on fait un update par cote existante
     // MAIS c'est quand même beaucoup plus rapide que l'ancien système car on évite les SELECTs
     for (const odd of oddsToUpdate) {
-      await supabaseAdmin
+      await (supabaseAdmin as any)
         .from('odds')
         .update({
           current_odds: odd.price,
@@ -236,7 +238,7 @@ async function processOddsForMatch(
   console.log(`    ✅ ${insertedCount} nouvelles cotes, ${updatedCount} mises à jour`);
 
   // Mettre à jour le timestamp du match
-  await supabaseAdmin
+  await (supabaseAdmin as any)
     .from('matches')
     .update({ last_updated_at: timestamp })
     .eq('id', matchId);
@@ -276,7 +278,7 @@ async function getOrCreateMarket(oddsapiKey: string): Promise<{ id: string } | n
       .maybeSingle();
 
     if (existing) {
-      return existing;
+      return existing as { id: string };
     }
 
     // Si erreur de recherche (autre que "pas de résultat"), log
@@ -306,7 +308,7 @@ async function getOrCreateMarket(oddsapiKey: string): Promise<{ id: string } | n
         name: formatMarketName(oddsapiKey),
         period: 'fulltime',
         active: true,
-      })
+      } as any)
       .select('id')
       .single();
 
@@ -315,7 +317,7 @@ async function getOrCreateMarket(oddsapiKey: string): Promise<{ id: string } | n
       return null;
     }
 
-    return created;
+    return created as { id: string };
   } catch (error) {
     console.error(`  ❌ Erreur getOrCreateMarket ${oddsapiKey}:`, error);
     return null;
@@ -389,7 +391,7 @@ async function upsertSingleOdd(
     const timestamp = new Date().toISOString();
 
     // Chercher si la cote existe déjà (maybeSingle ne lance pas d'erreur si 0 résultat)
-    const { data: existing, error: searchError } = await supabaseAdmin
+    const { data: existingData, error: searchError } = await supabaseAdmin
       .from('odds')
       .select('id, opening_odds, opening_timestamp')
       .eq('match_id', matchId)
@@ -398,9 +400,11 @@ async function upsertSingleOdd(
       .eq('line', line || 0)
       .maybeSingle();
 
+    const existing = existingData as any;
+
     if (existing) {
       // ✅ MISE À JOUR: On update SEULEMENT current_odds
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await (supabaseAdmin as any)
         .from('odds')
         .update({
           current_odds: price,
@@ -428,7 +432,7 @@ async function upsertSingleOdd(
           current_odds: price,
           current_updated_at: timestamp,
           bookmaker: 'Pinnacle',
-        });
+        } as any);
 
       if (insertError) {
         console.error(`    ❌ Erreur insert odd:`, insertError.message);

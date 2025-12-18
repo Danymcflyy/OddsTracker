@@ -3,9 +3,6 @@
  * Pour importer facilement : import { Fixture, ApiResponse } from "@/types"
  */
 
-// Types de base de données (générés depuis le schéma SQL)
-export * from "./database";
-
 // Types spécifiques aux entités
 export * from "./fixture";
 export * from "./odds";

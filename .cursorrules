@@ -1,30 +1,29 @@
 # OddsTracker - Règles de Développement
 
-## 🎯 Contexte du Projet
-
-Application web d'analyse de cotes sportives historiques depuis janvier 2019.
-Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
-
 ## 📚 Stack Technique
 
 ### Framework & Langage
+
 - **Next.js 14** (App Router obligatoire)
 - **TypeScript 5+** (mode strict activé)
 - **React 18.3** (Server Components par défaut)
 
 ### UI & Styling
+
 - **Tailwind CSS 3.4** (utility-first)
 - **shadcn/ui** (16 composants installés)
 - **Lucide React** (icônes)
 - **Palette sobre et professionnelle** (bleu foncé #1e40af)
 
 ### Data & Backend
+
 - **Supabase** (PostgreSQL, Free Tier)
 - **TanStack Table v8** (tableaux interactifs)
 - **OddsPapi API** (données de cotes)
 - **Bookmaker Pinnacle uniquement**
 
 ### Auth & Export
+
 - **jose** (JWT sessions, 7 jours)
 - **bcryptjs** (hachage mot de passe)
 - **ExcelJS** (export XLSX, pas xlsx)
@@ -33,6 +32,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ## 🎨 Conventions de Code
 
 ### Nommage
+
 - **Fichiers** : kebab-case (`user-profile.tsx`, `api-client.ts`)
 - **Composants** : PascalCase (`UserProfile`, `DataTable`)
 - **Fonctions/Variables** : camelCase (`getUserData`, `isLoading`)
@@ -40,6 +40,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 - **Constantes** : UPPER_SNAKE_CASE (`API_BASE_URL`)
 
 ### Structure de Fichiers
+
 - **Types** → `/types`
 - **Composants UI** → `/components/ui`
 - **Composants métier** → `/components/{domain}`
@@ -48,12 +49,14 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 - **Services** → `/lib/{service}`
 
 ### TypeScript
+
 - **Mode strict activé** (pas de `any` sans justification)
 - **Types explicites** pour les paramètres de fonction
 - **Interfaces** pour les objets complexes
 - **Pas de `as` casting** sauf absolument nécessaire
 
 ### React & Next.js
+
 - **Server Components par défaut** (sauf interactivité)
 - **'use client'** uniquement si hooks/events nécessaires
 - **Composants purs** quand possible
@@ -62,6 +65,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ## 🎨 UI & Design
 
 ### Couleurs
+
 ```css
 /* Principales */
 --primary: #1e40af (Bleu foncé)
@@ -80,12 +84,14 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ```
 
 ### Principes
+
 - **Desktop-first, mobile-friendly**
 - **Pas d'emojis** sauf demande explicite
 - **Sobre et professionnel**
 - **Pas de traces IA** dans le code
 
 ### Composants
+
 - **Utiliser shadcn/ui** en priorité
 - **Import depuis** `@/components/ui`
 - **Variantes winner/loser** pour badges
@@ -94,12 +100,14 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ## 🔒 Sécurité
 
 ### Vulnérabilités
+
 - ✅ **exceljs** (pas xlsx - vulnérable)
 - ✅ **Vérifier npm audit** avant commit
 - ✅ **Pas de secrets** dans le code
 - ✅ **Variables d'env** pour tout
 
 ### Auth
+
 - **Mot de passe unique** (pas de multi-users)
 - **Session JWT** (7 jours, HTTP-only cookie)
 - **Middleware** protège toutes les routes sauf /login
@@ -108,6 +116,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ## 📊 Base de Données
 
 ### Tables Principales
+
 - `sports` (4 sports : Football, Hockey, Tennis, Volleyball)
 - `fixtures` (matchs)
 - `odds` (cotes opening/closing)
@@ -116,6 +125,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 - `settings`, `sync_logs`
 
 ### Requêtes
+
 - **Supabase client** via `lib/db/index.ts`
 - **Queries organisées** dans `lib/db/queries/`
 - **Index optimisés** déjà en place
@@ -124,6 +134,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ## 🔌 API OddsPapi
 
 ### Règles Strictes
+
 - **Bookmaker Pinnacle uniquement** (paramètre `bookmakers=pinnacle`)
 - **Rate limits** :
   - `/v4/historical-odds` : 5000ms entre requêtes
@@ -132,6 +143,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 - **Logger toutes erreurs** dans `sync_logs`
 
 ### Endpoints
+
 - `GET /v4/sports` - Sports disponibles
 - `GET /v4/tournaments` - Compétitions
 - `GET /v4/fixtures` - Matchs
@@ -142,6 +154,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ## 📝 Bonnes Pratiques
 
 ### Code Quality
+
 - ❌ **Pas de console.log** en production
 - ❌ **Pas de commentaires évidents** ("// Boucle sur les items")
 - ✅ **Code concis et lisible**
@@ -149,12 +162,14 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 - ✅ **KISS** (Keep It Simple, Stupid)
 
 ### Performance
+
 - **Pagination** obligatoire pour les listes
 - **Lazy loading** pour composants lourds
 - **Mémoïsation** quand pertinent
 - **Index DB** déjà optimisés
 
 ### Git
+
 - **Commits clairs** et concis
 - **Pas de credentials** dans le code
 - **package-lock.json** committé
@@ -163,6 +178,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ## 🎯 Fonctionnalités Clés
 
 ### Tableaux (TanStack Table)
+
 - **Tri** sur toutes colonnes
 - **Pagination** (25/50/100 par page)
 - **Filtres** multiples (pays, ligue, équipe, date, cotes)
@@ -170,18 +186,21 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 - **Visibilité** personnalisable (localStorage)
 
 ### Export
+
 - **CSV** avec UTF-8 BOM
 - **XLSX** avec ExcelJS (styles, formats)
 - **Respecte filtres** et colonnes visibles
 - **Nom de fichier** avec date/sport
 
 ### Coloration
+
 - **Vert** : Pari gagnant (cote + résultat)
 - **Rouge** : Pari perdant
 - **Neutre** : Match non terminé
 - **Logique** dans `lib/utils/winner-detection.ts`
 
 ### Synchronisation
+
 - **Cron quotidien** 6h (Vercel Cron)
 - **Sync manuelle** depuis réglages
 - **Import historique** depuis 01/2019 (une fois)
@@ -190,6 +209,7 @@ Client : Codeur Ben | Prix : 950€ TTC | Délai : ~5 jours
 ## 📂 Référence Rapide
 
 ### Imports Fréquents
+
 ```typescript
 // UI Components
 import { Button, Input, Select } from "@/components/ui";
@@ -207,6 +227,7 @@ import { useToast } from "@/hooks/use-toast";
 ```
 
 ### Routes API
+
 - `/api/auth/login` - POST
 - `/api/auth/logout` - POST
 - `/api/fixtures/[sport]` - GET
@@ -218,6 +239,7 @@ import { useToast } from "@/hooks/use-toast";
 ## 🚫 À Éviter
 
 ### Code
+
 - ❌ `any` sans justification
 - ❌ Inline styles (utiliser Tailwind)
 - ❌ console.log en production
@@ -226,12 +248,14 @@ import { useToast } from "@/hooks/use-toast";
 - ❌ Composants monolithiques (>300 lignes)
 
 ### UI
+
 - ❌ Emojis (sauf demande explicite)
 - ❌ Couleurs flashy
 - ❌ Animations excessives
 - ❌ Traces IA dans les messages
 
 ### Data
+
 - ❌ Bookmaker autre que Pinnacle
 - ❌ Requêtes API sans rate limit
 - ❌ Données en dur (utiliser DB)
@@ -240,11 +264,13 @@ import { useToast } from "@/hooks/use-toast";
 ## 📖 Documentation
 
 ### Priorité de Lecture
+
 1. **PROJECT_SPEC.md** - Spécifications complètes (37 KB)
 2. **NEXT_STEPS.md** - Plan de développement
 3. **components/ui/README.md** - Guide composants
 
 ### Commandes Utiles
+
 ```bash
 npm run dev        # Dev server
 npm run build      # Build production

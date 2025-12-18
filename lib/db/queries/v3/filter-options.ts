@@ -45,7 +45,7 @@ export async function getCountries(): Promise<CountryOption[]> {
       return [];
     }
 
-    return countries || [];
+    return (countries || []) as any[];
   } catch (error) {
     console.error('Erreur dans getCountries:', error);
     return [];
@@ -61,15 +61,17 @@ export async function getLeagues(
   countryId?: string
 ): Promise<LeagueOption[]> {
   try {
-    const { data: sport } = await supabaseAdmin
+    const { data: sportData } = await supabaseAdmin
       .from('sports')
       .select('id')
       .eq('slug', sportSlug)
       .single();
 
-    if (!sport) {
+    if (!sportData) {
       return [];
     }
+
+    const sport = sportData as any;
 
     let query = supabaseAdmin
       .from('leagues')
@@ -139,15 +141,17 @@ export async function getTeams(
   leagueIds?: string[]
 ): Promise<TeamOption[]> {
   try {
-    const { data: sport } = await supabaseAdmin
+    const { data: sportData } = await supabaseAdmin
       .from('sports')
       .select('id')
       .eq('slug', sportSlug)
       .single();
 
-    if (!sport) {
+    if (!sportData) {
       return [];
     }
+
+    const sport = sportData as any;
 
     let query = supabaseAdmin
       .from('teams')
@@ -155,21 +159,23 @@ export async function getTeams(
       .eq('sport_id', sport.id)
       .order('display_name', { ascending: true });
 
-    const { data: teams, error } = await query;
+    const { data: teamsData, error } = await query;
 
     if (error) {
       console.error('Erreur getTeams:', error);
       return [];
     }
 
-    if (!teams) {
+    if (!teamsData) {
       return [];
     }
+
+    const teams = teamsData as any[];
 
     // Si des ligues sont spécifiées, filtrer les équipes qui jouent dans ces ligues
     if (leagueIds && leagueIds.length > 0) {
       // Récupérer les IDs des équipes qui ont des matchs dans ces ligues
-      const { data: matchTeams } = await supabaseAdmin
+      const { data: matchTeams } = await (supabaseAdmin as any)
         .from('matches')
         .select('home_team_id, away_team_id')
         .in('league_id', leagueIds);
@@ -200,17 +206,19 @@ export async function getMarketOptions(
   sportSlug: string = 'football'
 ): Promise<Array<{ id: string; label: string; oddsapi_key: string }>> {
   try {
-    const { data: sport } = await supabaseAdmin
+    const { data: sportData } = await supabaseAdmin
       .from('sports')
       .select('id')
       .eq('slug', sportSlug)
       .single();
 
-    if (!sport) {
+    if (!sportData) {
       return [];
     }
 
-    const { data: markets, error } = await supabaseAdmin
+    const sport = sportData as any;
+
+    const { data: marketsData, error } = await supabaseAdmin
       .from('markets')
       .select('id, name, custom_name, oddsapi_key')
       .eq('sport_id', sport.id)
@@ -222,9 +230,11 @@ export async function getMarketOptions(
       return [];
     }
 
-    if (!markets) {
+    if (!marketsData) {
       return [];
     }
+
+    const markets = marketsData as any[];
 
     return markets.map((market) => ({
       id: market.id,
@@ -249,13 +259,13 @@ export async function getStats(
   totalOdds: number;
 }> {
   try {
-    const { data: sport } = await supabaseAdmin
+    const { data: sportData } = await supabaseAdmin
       .from('sports')
       .select('id')
       .eq('slug', sportSlug)
       .single();
 
-    if (!sport) {
+    if (!sportData) {
       return {
         totalMatches: 0,
         upcomingMatches: 0,
@@ -264,14 +274,16 @@ export async function getStats(
       };
     }
 
+    const sport = sportData as any;
+
     // Nombre total de matchs
-    const { count: totalMatches } = await supabaseAdmin
+    const { count: totalMatches } = await (supabaseAdmin as any)
       .from('matches')
       .select('id', { count: 'exact', head: true })
       .eq('sport_id', sport.id);
 
     // Matchs à venir
-    const { count: upcomingMatches } = await supabaseAdmin
+    const { count: upcomingMatches } = await (supabaseAdmin as any)
       .from('matches')
       .select('id', { count: 'exact', head: true })
       .eq('sport_id', sport.id)

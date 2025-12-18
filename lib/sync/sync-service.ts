@@ -7,7 +7,6 @@ import { oddsPapiClient } from "@/lib/api/oddspapi";
 import { supabaseAdmin, isAdminAvailable, supabase } from "@/lib/db";
 const adminDb = supabaseAdmin as any;
 import { loadOddsApiKey } from "@/lib/settings/odds-api-key";
-import type { Database } from "@/types/database";
 
 interface SyncResult {
   success: boolean;
