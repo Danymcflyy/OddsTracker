@@ -2,8 +2,8 @@ name: Capture Closing Odds (Multi-Snapshot)
 
 on:
   schedule:
-    # Toutes les 5 minutes, 24h/24, 7j/7
-    - cron: '*/5 * * * *'
+    # Toutes les 5 minutes, décalé à :01 pour éviter la charge à :00
+    - cron: '1-56/5 * * * *'
 
   # Permet déclenchement manuel pour tests
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
 
       - name: Upload Logs on Failure
         if: failure()

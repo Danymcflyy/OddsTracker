@@ -1,0 +1,62 @@
+name: Sync Scores & Closing Odds
+
+# Runs twice daily to capture scores and closing odds
+# Cost: ~2 credits for scores + ~6 credits per completed event
+
+on:
+  schedule:
+    - cron: '27 2 * * *'   # 2:27 AM UTC (morning run, avoid :00)
+    - cron: '27 14 * * *'  # 2:27 PM UTC (afternoon run, avoid :00)
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  sync-scores-closing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Scores and Closing Odds
+        run: |
+          node -e "
+          const { syncScoresAndClosingOdds } = require('./lib/services/theoddsapi/closing-odds');
+          (async () => {
+            console.log('🏃 Syncing scores and closing odds...');
+            const result = await syncScoresAndClosingOdds();
+
+            console.log('📊 Sync Results:');
+            console.log('  - Events processed:', result.eventsProcessed);
+            console.log('  - Closing captured:', result.closingCaptured);
+            console.log('  - Closing failed:', result.closingFailed);
+            console.log('  - Credits used:', result.creditsUsed);
+            console.log('  - Errors:', result.errors.length);
+
+            if (result.errors.length > 0) {
+              console.log('⚠️  Errors occurred:');
+              result.errors.forEach(err => console.log('  -', err));
+            }
+
+            if (!result.success) {
+              console.error('❌ Sync completed with errors');
+              process.exit(1);
+            }
+
+            console.log('✅ Sync complete');
+          })();
+          "
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}

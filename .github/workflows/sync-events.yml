@@ -1,0 +1,72 @@
+name: Sync Events (The Odds API)
+
+# Runs every 6 hours to discover new events
+# Cost: 0 credits (FREE endpoint)
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'  # Every 6 hours at :17 (avoid high load at :00)
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  sync-events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Sports (one-time)
+        run: |
+          node -e "
+          const { syncSports } = require('./lib/services/theoddsapi/discovery');
+          (async () => {
+            console.log('🏃 Syncing sports...');
+            const result = await syncSports();
+            if (result.success) {
+              console.log('✅ Synced', result.sportsCount, 'sports');
+            } else {
+              console.error('❌ Failed to sync sports');
+              process.exit(1);
+            }
+          })();
+          "
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+
+      - name: Sync Events for Tracked Sports
+        run: |
+          node -e "
+          const { syncAllTrackedEvents } = require('./lib/services/theoddsapi/discovery');
+          (async () => {
+            console.log('🏃 Syncing events for tracked sports...');
+            const result = await syncAllTrackedEvents();
+            if (result.success) {
+              const totalEvents = result.results.reduce((sum, r) => sum + r.eventsCount, 0);
+              const totalNew = result.results.reduce((sum, r) => sum + r.newEventsCount, 0);
+              console.log('✅ Synced', totalEvents, 'events (', totalNew, 'new)');
+              console.log('Results:', JSON.stringify(result.results, null, 2));
+            } else {
+              console.error('❌ Failed to sync events');
+              process.exit(1);
+            }
+          })();
+          "
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
