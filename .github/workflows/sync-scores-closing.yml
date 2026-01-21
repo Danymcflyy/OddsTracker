@@ -1,12 +1,11 @@
 name: Sync Scores & Closing Odds
 
-# Runs twice daily to capture scores and closing odds
+# Runs once daily to capture scores and closing odds
 # Cost: ~2 credits for scores + ~6 credits per completed event
 
 on:
   schedule:
-    - cron: '27 2 * * *'   # 2:27 AM UTC (morning run, avoid :00)
-    - cron: '27 14 * * *'  # 2:27 PM UTC (afternoon run, avoid :00)
+    - cron: '27 2 * * *'   # 2:27 AM UTC daily (avoid :00)
   workflow_dispatch:  # Manual trigger
 
 jobs:

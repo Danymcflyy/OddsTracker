@@ -7,9 +7,9 @@ Ce document décrit les 4 workflows automatisés qui gèrent la collecte de donn
 | Workflow | Fréquence | Heures | Coût | Fonction |
 |----------|-----------|--------|------|----------|
 | **Sync Events** | Toutes les 6h | :17 (1:17, 7:17, 13:17, 19:17) | **0 crédits** (FREE) | Découverte de nouveaux événements |
-| **Scan Opening Odds** | Toutes les 10 min | :02, :12, :22, :32, :42, :52 | ~6 crédits/événement | Capture des cotes d'ouverture |
+| **Scan Opening Odds** | Toutes les 10 min | :02, :12, :22, :32, :42, :52 | **0 crédits** si déjà capturé | Capture des cotes d'ouverture |
 | **Capture Closing Odds** | Toutes les 5 min | :01, :06, :11, :16, :21... :56 | ~8 crédits/événement | Multi-capture closing odds (M-10 à M+10) |
-| **Sync Scores & Closing** | 2 fois par jour | 2:27 AM, 2:27 PM | 2 crédits + ~6/événement | Scores + Closing odds historiques |
+| **Sync Scores & Closing** | 1 fois par jour | 2:27 AM | 2 crédits + ~6/événement | Scores + Closing odds historiques |
 
 ## ⏰ Timing Optimisé
 
@@ -72,7 +72,10 @@ Capture les **cotes d'ouverture** pour tous les marchés trackés des événemen
 - Peut être configuré via settings UI (scan_frequency_minutes)
 
 ### Coût
-~6 crédits par événement avec marchés pending
+**0 crédits** si les opening odds sont déjà capturées pour tous les événements.
+~6 crédits par événement avec marchés pending (seulement la première capture).
+
+**Optimisation intelligente:** Le système vérifie d'abord quels événements ont des marchés "pending". Si tous les opening odds sont déjà capturés (status = "captured"), **aucun appel API n'est fait** → 0 crédit consommé.
 
 ### Étapes
 1. **Check Frequency Setting**: Vérifie la fréquence configurée dans settings
@@ -167,12 +170,13 @@ Après M+10, le système:
 Synchronise les **scores finaux** et capture les **closing odds via Historical API** pour les matchs terminés.
 
 ### Fréquence
-- 2 fois par jour: 2:27 AM et 2:27 PM UTC
+- 1 fois par jour: 2:27 AM UTC
 - Processus complémentaire au multi-snapshot
 
 ### Coût
 - 2 crédits pour scores
 - ~6 crédits par événement complété (Historical API)
+- **Note:** Les événements déjà capturés par multi-snapshot ne consomment pas de crédits supplémentaires
 
 ### Utilité
 Fallback pour les événements qui n'ont pas été capturés par le multi-snapshot:
@@ -241,10 +245,14 @@ Chaque workflow peut être déclenché manuellement:
 | Workflow | Exécutions | Coût/exécution | Total |
 |----------|------------|----------------|-------|
 | Sync Events | 4 | 0 crédits | **0** |
-| Scan Opening | ~144 | ~6 crédits/événement | **~1,080** |
+| Scan Opening | ~144 | 0 crédits (après 1ère capture) | **~108** (première fois seulement) |
 | Capture Closing | ~288 | ~8 crédits/événement | **~150** |
-| Scores & Closing | 2 | 2 + (6 × 18) | **~220** |
-| **TOTAL** | | | **~1,450 crédits/jour** |
+| Scores & Closing | 1 | 2 + (6 × événements manqués) | **~2-110** |
+| **TOTAL** | | | **~260-370 crédits/jour** |
+
+**Note importante:**
+- **Scan Opening**: Coûte ~6 crédits/événement UNIQUEMENT la première fois. Les 143 scans suivants = **0 crédit** car opening odds déjà capturées
+- **Scores & Closing**: Coûte uniquement pour événements non capturés par multi-snapshot (fallback rare)
 
 ### Économies vs Approche Naïve
 - Sans cache: ~2,500 crédits/jour
