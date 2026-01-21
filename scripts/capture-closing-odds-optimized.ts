@@ -15,7 +15,7 @@ const apiCache = new Map<string, CacheEntry>();
 
 async function run() {
   const { createClient } = await import('@supabase/supabase-js');
-  const { getTheOddsApiClient } = await import('../lib/api/theoddsapi/client.js');
+  const { getTheOddsApiClient } = await import('../lib/api/theoddsapi/client');
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

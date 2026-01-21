@@ -26,61 +26,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check Scan Frequency Setting
-        id: check-frequency
-        run: |
-          node -e "
-          const { getSetting } = require('./lib/db/helpers');
-          (async () => {
-            const frequency = await getSetting('scan_frequency_minutes') || 10;
-            const currentMinute = new Date().getMinutes();
-            const shouldRun = currentMinute % frequency === 0;
-
-            console.log('Scan frequency:', frequency, 'minutes');
-            console.log('Current minute:', currentMinute);
-            console.log('Should run:', shouldRun);
-
-            if (!shouldRun) {
-              console.log('⏭️  Skipping this run (not aligned with frequency setting)');
-              process.exit(78); // Neutral exit code for skip
-            }
-          })();
-          "
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        continue-on-error: true
-
       - name: Scan Opening Odds
-        if: steps.check-frequency.outcome == 'success'
-        run: |
-          node -e "
-          const { scanAllOpeningOdds } = require('./lib/services/theoddsapi/opening-odds');
-          (async () => {
-            console.log('🏃 Scanning opening odds...');
-            const result = await scanAllOpeningOdds();
-
-            console.log('📊 Scan Results:');
-            console.log('  - Events scanned:', result.eventsScanned);
-            console.log('  - Markets checked:', result.marketsChecked);
-            console.log('  - Markets captured:', result.marketsCaptured);
-            console.log('  - Credits used:', result.creditsUsed);
-            console.log('  - Errors:', result.errors.length);
-
-            if (result.errors.length > 0) {
-              console.log('⚠️  Errors occurred:');
-              result.errors.forEach(err => console.log('  -', err));
-            }
-
-            if (!result.success && result.errors.length > 0) {
-              console.error('❌ Scan completed with errors');
-              process.exit(1);
-            }
-
-            console.log('✅ Scan complete');
-          })();
-          "
+        run: npx tsx scripts/run-opening-odds.ts
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
