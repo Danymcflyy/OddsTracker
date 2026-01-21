@@ -1,0 +1,44 @@
+name: Capture Closing Odds (Multi-Snapshot)
+
+on:
+  schedule:
+    # Toutes les 5 minutes, 24h/24, 7j/7
+    - cron: '*/5 * * * *'
+
+  # Permet déclenchement manuel pour tests
+  workflow_dispatch:
+
+jobs:
+  capture-closing-odds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Capture Closing Odds
+        run: npx tsx scripts/capture-closing-odds-optimized.ts
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capture-closing-odds-logs-${{ github.run_id }}
+          path: |
+            *.log
+            logs/
+          retention-days: 7
