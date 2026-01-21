@@ -1,4 +1,4 @@
-import { syncSports, syncAllTrackedEvents } from '../lib/services/theoddsapi/discovery.js';
+import { syncSports, syncAllTrackedEvents } from '../lib/services/theoddsapi/discovery';
 
 async function main() {
   try {

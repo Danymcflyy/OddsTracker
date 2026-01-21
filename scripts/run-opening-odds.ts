@@ -1,4 +1,4 @@
-import { scanAllOpeningOdds } from '../lib/services/theoddsapi/opening-odds.js';
+import { scanAllOpeningOdds } from '../lib/services/theoddsapi/opening-odds';
 
 async function main() {
   try {

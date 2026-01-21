@@ -8,8 +8,8 @@ async function main() {
     console.log('');
     console.log('📊 Résultats de la Sync:');
     console.log('  - Événements traités:', result.eventsProcessed);
-    console.log('  - Closing capturés:', result.closingCaptured);
-    console.log('  - Closing échoués:', result.closingFailed);
+    console.log('  - Cotes de clôture capturées:', result.closingCaptured);
+    console.log('  - Échecs cotes de clôture:', result.closingFailed);
     console.log('  - Crédits utilisés:', result.creditsUsed);
     console.log('  - Erreurs:', result.errors.length);
 
