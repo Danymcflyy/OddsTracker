@@ -1,4 +1,4 @@
-import { syncScoresAndClosingOdds } from '../lib/services/theoddsapi/closing-odds';
+import { syncScoresAndClosingOdds } from '../lib/services/theoddsapi/closing-odds.js';
 
 async function main() {
   try {
