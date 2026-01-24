@@ -31,15 +31,9 @@ async function run() {
   // Matchs à tester (terminés)
   const testMatches = [
     {
-      id: '0062626005577a4671024034604718e1',
-      home: 'Bodø/Glimt',
-      away: 'Manchester City',
-      sport: 'soccer_uefa_champs_league',
-    },
-    {
-      id: '45f2d80fc05d2c7ecc02a8967ce4742d',
-      home: 'FC Kairat',
-      away: 'Club Brugge',
+      id: '63fc0f1052c8c467e9905219f4a32c18',
+      home: 'Galatasaray',
+      away: 'Atlético Madrid',
       sport: 'soccer_uefa_champs_league',
     },
   ];

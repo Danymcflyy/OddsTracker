@@ -71,6 +71,7 @@ export async function fetchEventsForTable(params: {
           market_key,
           status,
           opening_odds,
+          opening_odds_variations,
           opening_captured_at
         ),
         closing_odds!left(
@@ -137,7 +138,10 @@ export async function fetchEventsForTable(params: {
     // Transform data for frontend
     const data: EventWithOdds[] = (rawData || []).map((event: any) => {
       const marketStates = event.market_states || [];
-      const closingOdds = event.closing_odds?.[0] || null;
+      // closing_odds peut être un objet direct ou un tableau (selon la relation Supabase)
+      const closingOdds = Array.isArray(event.closing_odds)
+        ? event.closing_odds[0] || null
+        : event.closing_odds || null;
 
       // Unfold opening odds variations to create separate entries for each point value
       const openingOddsList: any[] = [];

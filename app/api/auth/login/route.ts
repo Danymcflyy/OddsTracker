@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { createSession } from "@/lib/auth/session";
-import { supabaseAdmin } from "@/lib/db";
 import type { LoginCredentials, LoginResponse } from "@/types/auth";
 
 /**
  * POST /api/auth/login
- * Authentifie l'utilisateur avec un mot de passe unique
+ * Authentifie l'utilisateur avec le mot de passe défini dans .env.local
  *
  * Body: { password: string }
  * Returns: { success: boolean, message?: string, error?: string }
@@ -28,74 +26,22 @@ export async function POST(request: Request) {
       );
     }
 
-    if (password.length < 8) {
+    // Récupérer le mot de passe depuis .env.local
+    const expectedPassword = process.env.APP_PASSWORD;
+
+    if (!expectedPassword) {
+      console.error("APP_PASSWORD non défini dans .env.local");
       return NextResponse.json<LoginResponse>(
         {
           success: false,
-          error: "Le mot de passe doit contenir au moins 8 caractères",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Récupérer le hash du mot de passe depuis la base de données
-    const { data: settings, error: dbError } = await supabaseAdmin
-      .from("settings")
-      .select("value")
-      .eq("key", "password_hash")
-      .single();
-
-    if (dbError || !settings) {
-      console.error("Erreur lors de la récupération du mot de passe:", dbError);
-      return NextResponse.json<LoginResponse>(
-        {
-          success: false,
-          error: "Erreur de configuration - mot de passe non défini",
+          error: "Erreur de configuration - mot de passe non défini dans .env.local",
         },
         { status: 500 }
       );
     }
 
-    const passwordHash = (settings as { value?: string | null } | null)?.value ?? "";
-
-    // Si le hash est vide, c'est la première connexion
-    // On doit créer le hash avec le mot de passe fourni
-    if (!passwordHash || passwordHash === "") {
-      // Premier login - définir le mot de passe
-      const newHash = await bcrypt.hash(password, 10);
-
-      const { error: updateError } = await (supabaseAdmin as any)
-        .from("settings")
-        .update({ value: newHash, updated_at: new Date().toISOString() })
-        .eq("key", "password_hash");
-
-      if (updateError) {
-        console.error("Erreur lors de la définition du mot de passe:", updateError);
-        return NextResponse.json<LoginResponse>(
-          {
-            success: false,
-            error: "Erreur lors de la définition du mot de passe",
-          },
-          { status: 500 }
-        );
-      }
-
-      // Créer la session
-      await createSession();
-
-      return NextResponse.json<LoginResponse>(
-        {
-          success: true,
-          message: "Mot de passe défini et connexion réussie",
-        },
-        { status: 200 }
-      );
-    }
-
-    // Vérifier le mot de passe
-    const isValid = await bcrypt.compare(password, passwordHash);
-
-    if (!isValid) {
+    // Vérifier le mot de passe (comparaison directe)
+    if (password !== expectedPassword) {
       // Attendre un peu pour éviter les attaques par force brute
       await new Promise((resolve) => setTimeout(resolve, 1000));
 

@@ -12,6 +12,48 @@ echo ║   Application de suivi de cotes      ║
 echo ╚═══════════════════════════════════════╝
 echo.
 
+REM Vérifier si Node.js est installé
+where node >nul 2>&1
+if errorlevel 1 (
+    echo 📦 Node.js n'est pas installé sur votre système
+    echo 🔄 Installation automatique de Node.js...
+    echo.
+
+    REM Télécharger l'installateur Node.js LTS pour Windows
+    echo ⬇️  Téléchargement de Node.js (version LTS)...
+    powershell -Command "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi' -OutFile '%TEMP%\node-installer.msi'"
+
+    if errorlevel 1 (
+        echo ❌ Erreur lors du téléchargement de Node.js
+        echo Veuillez installer Node.js manuellement depuis https://nodejs.org
+        echo Appuyez sur une touche pour fermer...
+        pause >nul
+        exit /b 1
+    )
+
+    echo 📦 Installation de Node.js...
+    msiexec /i "%TEMP%\node-installer.msi" /passive /norestart
+
+    if errorlevel 1 (
+        echo ❌ Erreur lors de l'installation de Node.js
+        echo Veuillez installer Node.js manuellement depuis https://nodejs.org
+        echo Appuyez sur une touche pour fermer...
+        pause >nul
+        exit /b 1
+    )
+
+    echo ✅ Node.js installé avec succès!
+    echo ⚠️  Veuillez redémarrer ce lanceur pour terminer l'installation
+    echo Appuyez sur une touche pour fermer...
+    pause >nul
+    exit /b 0
+)
+
+REM Afficher la version de Node.js installée
+for /f "delims=" %%i in ('node --version') do set NODE_VERSION=%%i
+echo ✅ Node.js %NODE_VERSION% détecté
+echo.
+
 REM Vérifier que .env.local existe
 if not exist .env.local (
     echo ❌ Erreur: Fichier .env.local manquant!
@@ -54,11 +96,25 @@ echo.
 echo ═══════════════════════════════════════════════════════════
 echo.
 
-REM Lancer le serveur
-call npm run dev
+REM Lancer le serveur en arrière-plan
+echo ⏳ Démarrage en cours...
+start /B npm run dev
 
-REM Si le serveur s'arrête
+REM Attendre que le serveur démarre (8 secondes)
+timeout /t 8 /nobreak >nul
+
+REM Ouvrir automatiquement le navigateur
+echo 🌐 Ouverture du navigateur...
+start http://localhost:3000
+
+REM Attendre indéfiniment (le serveur tourne en arrière-plan)
 echo.
-echo 🛑 Serveur arrêté
+echo ✅ Serveur démarré ! Le navigateur devrait s'ouvrir automatiquement.
+echo.
+pause
+
+REM Si on arrive ici, l'utilisateur a appuyé sur une touche
+echo.
+echo 🛑 Fermeture...
 echo Appuyez sur une touche pour fermer cette fenêtre...
 pause >nul

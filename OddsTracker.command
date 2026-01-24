@@ -16,6 +16,45 @@ echo "║   Application de suivi de cotes      ║"
 echo "╚═══════════════════════════════════════╝"
 echo ""
 
+# Vérifier si Node.js est installé
+if ! command -v node &> /dev/null; then
+    echo "📦 Node.js n'est pas installé sur votre système"
+    echo "🔄 Installation automatique de Node.js..."
+    echo ""
+
+    # Télécharger l'installateur Node.js LTS pour macOS
+    echo "⬇️  Téléchargement de Node.js (version LTS)..."
+    curl -o /tmp/node-installer.pkg https://nodejs.org/dist/v20.11.0/node-v20.11.0.pkg
+
+    if [ $? -eq 0 ]; then
+        echo "📦 Installation de Node.js (mot de passe administrateur requis)..."
+        sudo installer -pkg /tmp/node-installer.pkg -target /
+
+        if [ $? -eq 0 ]; then
+            echo "✅ Node.js installé avec succès!"
+            rm /tmp/node-installer.pkg
+        else
+            echo "❌ Erreur lors de l'installation de Node.js"
+            echo "Veuillez installer Node.js manuellement depuis https://nodejs.org"
+            echo "Appuyez sur une touche pour fermer..."
+            read -n 1
+            exit 1
+        fi
+    else
+        echo "❌ Erreur lors du téléchargement de Node.js"
+        echo "Veuillez installer Node.js manuellement depuis https://nodejs.org"
+        echo "Appuyez sur une touche pour fermer..."
+        read -n 1
+        exit 1
+    fi
+    echo ""
+fi
+
+# Afficher la version de Node.js installée
+NODE_VERSION=$(node --version)
+echo "✅ Node.js $NODE_VERSION détecté"
+echo ""
+
 # Vérifier que .env.local existe
 if [ ! -f .env.local ]; then
     echo "❌ Erreur: Fichier .env.local manquant!"
@@ -58,8 +97,20 @@ echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 
-# Lancer le serveur
-npm run dev
+# Lancer le serveur en arrière-plan
+npm run dev &
+SERVER_PID=$!
+
+# Attendre que le serveur démarre (8 secondes)
+echo "⏳ Démarrage en cours..."
+sleep 8
+
+# Ouvrir automatiquement le navigateur
+echo "🌐 Ouverture du navigateur..."
+open http://localhost:3000
+
+# Attendre que le serveur se termine
+wait $SERVER_PID
 
 # Si le serveur s'arrête
 echo ""

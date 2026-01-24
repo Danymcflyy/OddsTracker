@@ -3,34 +3,46 @@
 import * as React from "react";
 import { Loader2 } from "lucide-react";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
-import { buildFootballColumns } from "@/components/tables/v3/column-builder";
+import { buildFootballColumns, type ColumnConfig, type OutcomeType } from "@/components/tables/v4/column-builder";
 import { DataTable } from "@/components/tables/data-table";
-import type { MatchWithDetails } from "@/lib/db/queries/v3/matches";
-import type { MarketWithOutcomes } from "@/lib/db/queries/v3/markets";
-import type { FilterOptions } from "@/types/filters";
-import { useFilters } from "@/hooks/use-filters";
+import type { EventWithOdds, FilterOptions } from "@/lib/db/queries-frontend";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
-import { CountryFilter } from "@/components/tables/filters/country-filter";
-import { LeagueFilter } from "@/components/tables/filters/league-filter";
 import { TeamFilter } from "@/components/tables/filters/team-filter";
-import { MarketFilter } from "@/components/tables/filters/market-filter";
-import { OddsRangeFilter } from "@/components/tables/filters/odds-range-filter";
+import { AdvancedSearchFilter, type AdvancedSearchParams } from "@/components/tables/filters/advanced-search-filter";
 import { ColumnVisibilitySelector } from "@/components/tables/column-visibility-selector";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 const STORAGE_KEY_VISIBLE_MARKETS = "oddstracker_visible_markets";
 
 export default function FootballPage() {
   const [loading, setLoading] = React.useState(true);
-  const [markets, setMarkets] = React.useState<MarketWithOutcomes[]>([]);
-  const [matches, setMatches] = React.useState<MatchWithDetails[]>([]);
+  const [events, setEvents] = React.useState<EventWithOdds[]>([]);
   const [total, setTotal] = React.useState(0);
   const [filterOptions, setFilterOptions] = React.useState<FilterOptions>({
-    countries: [],
-    leagues: [],
+    sports: [],
     markets: [],
   });
   const [visibleMarkets, setVisibleMarkets] = React.useState<Set<string>>(new Set());
+  const [columnConfig, setColumnConfig] = React.useState<ColumnConfig>({});
+  const [customMarketOrder, setCustomMarketOrder] = React.useState<string[]>([]);
+
+  // Filtres simples
+  const [dateRange, setDateRange] = React.useState<{ from: Date | null; to: Date | null }>({
+    from: null,
+    to: null,
+  });
+  const [teamSearch, setTeamSearch] = React.useState<string>('');
+  const [selectedSport, setSelectedSport] = React.useState<string | null>(null);
+  const [advancedSearch, setAdvancedSearch] = React.useState<AdvancedSearchParams>({
+    oddsType: 'both',
+    outcome: 'all',
+    marketType: 'all',
+  });
+
+  // Outcomes toujours tous affichés
+  const selectedOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under'];
 
   // TanStack Table states
   const [pagination, setPagination] = React.useState<PaginationState>({
@@ -39,30 +51,34 @@ export default function FootballPage() {
   });
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
-  // Filters hook
-  const { filters, updateFilter, resetFilters } = useFilters({
-    sportSlug: 'football',
-    persist: true,
-  });
-
-  // Charger les marchés actifs (pour générer les colonnes)
-  const loadMarkets = React.useCallback(async () => {
+  // Charger la configuration des colonnes
+  const loadColumnConfig = React.useCallback(async () => {
     try {
-      const response = await fetch('/api/v3/markets?sport=football');
+      const response = await fetch('/api/v4/settings?key=column_config');
       const result = await response.json();
 
-      if (result.success) {
-        setMarkets(result.data);
+      if (result.success && result.data) {
+        const config: ColumnConfig = {
+          marketLabels: result.data.marketLabels,
+          outcomeLabels: result.data.outcomeLabels,
+          variationTemplate: result.data.variationTemplate,
+        };
+        setColumnConfig(config);
+
+        // Charger aussi l'ordre des marchés si disponible
+        if (result.data.marketOrder && Array.isArray(result.data.marketOrder)) {
+          setCustomMarketOrder(result.data.marketOrder);
+        }
       }
     } catch (error) {
-      console.error('Erreur chargement marchés:', error);
+      console.error('Erreur chargement configuration colonnes:', error);
     }
   }, []);
 
-  // Charger les options de filtres
+  // Charger les options de filtres (sports et marchés disponibles)
   const loadFilterOptions = React.useCallback(async () => {
     try {
-      const response = await fetch('/api/v3/filter-options?sport=football');
+      const response = await fetch('/api/v4/filter-options');
       const result = await response.json();
 
       if (result.success) {
@@ -73,13 +89,12 @@ export default function FootballPage() {
     }
   }, []);
 
-  // Charger les matchs avec filtres
-  const loadMatches = React.useCallback(async () => {
+  // Charger les événements avec filtres
+  const loadEvents = React.useCallback(async () => {
     setLoading(true);
     try {
       const page = pagination.pageIndex + 1;
       const params = new URLSearchParams({
-        sport: 'football',
         page: page.toString(),
         pageSize: pagination.pageSize.toString(),
       });
@@ -92,59 +107,95 @@ export default function FootballPage() {
       }
 
       // Ajouter les filtres de date
-      if (filters.dateRange.from) {
-        params.set('dateFrom', filters.dateRange.from.toISOString());
+      if (dateRange.from) {
+        params.set('dateFrom', dateRange.from.toISOString());
       }
-      if (filters.dateRange.to) {
-        params.set('dateTo', filters.dateRange.to.toISOString());
-      }
-
-      // Ajouter les filtres par ID
-      if (filters.countryId) {
-        params.set('countryIds', filters.countryId);
-      }
-      if (filters.leagueId) {
-        params.set('leagueIds', filters.leagueId);
-      }
-      if (filters.marketType) {
-        params.set('marketIds', filters.marketType);
+      if (dateRange.to) {
+        params.set('dateTo', dateRange.to.toISOString());
       }
 
       // Recherche d'équipe
-      if (filters.teamSearch) {
-        params.set('teamSearch', filters.teamSearch);
+      if (teamSearch) {
+        params.set('search', teamSearch);
       }
 
-      // Fourchette de cotes (opening + current + marché)
-      if (filters.oddsRange.openingMin !== null) {
-        params.set('oddsOpeningMin', filters.oddsRange.openingMin.toString());
-      }
-      if (filters.oddsRange.openingMax !== null) {
-        params.set('oddsOpeningMax', filters.oddsRange.openingMax.toString());
-      }
-      if (filters.oddsRange.currentMin !== null) {
-        params.set('oddsCurrentMin', filters.oddsRange.currentMin.toString());
-      }
-      if (filters.oddsRange.currentMax !== null) {
-        params.set('oddsCurrentMax', filters.oddsRange.currentMax.toString());
-      }
-      if (filters.oddsRange.marketId) {
-        params.set('oddsMarketId', filters.oddsRange.marketId);
+      // Filtre par championnat
+      if (selectedSport) {
+        params.set('sportKey', selectedSport);
       }
 
-      const response = await fetch(`/api/v3/matches?${params.toString()}`);
+      const response = await fetch(`/api/v4/events?${params.toString()}`);
       const result = await response.json();
 
       if (result.success) {
-        setMatches(result.data);
+        setEvents(result.data);
         setTotal(result.total);
       }
     } catch (error) {
-      console.error('Erreur chargement matchs:', error);
+      console.error('Erreur chargement événements:', error);
     } finally {
       setLoading(false);
     }
-  }, [pagination.pageIndex, pagination.pageSize, filters, sorting]);
+  }, [pagination.pageIndex, pagination.pageSize, dateRange, teamSearch, selectedSport, sorting]);
+
+  // Découvrir toutes les combinaisons uniques (market, point) depuis les events
+  const marketPointCombinations = React.useMemo(() => {
+    const combinations = new Map<string, { key: string; name: string; point?: number }>();
+
+    for (const event of events) {
+      for (const market of event.opening_odds) {
+        const point = market.odds?.point;
+        const combinationKey = point !== undefined ? `${market.market_key}:${point}` : market.market_key;
+
+        if (!combinations.has(combinationKey)) {
+          const displayName = point !== undefined
+            ? `${market.market_name} (${point > 0 ? '+' : ''}${point})`
+            : market.market_name;
+
+          combinations.set(combinationKey, {
+            key: combinationKey,
+            name: displayName,
+            point,
+          });
+        }
+      }
+    }
+
+    // Ordre d'affichage des marchés (utiliser l'ordre personnalisé si disponible)
+    const marketOrder = customMarketOrder.length > 0 ? customMarketOrder : [
+      'h2h',        // 1X2 en premier
+      'spreads',    // Handicap
+      'totals',     // Over/Under
+      'h2h_h1',     // 1X2 H1
+      'spreads_h1', // Handicap H1
+      'totals_h1',  // Over/Under H1
+      'team_totals', // Team Totals
+    ];
+
+    return Array.from(combinations.values()).sort((a, b) => {
+      // Extraire le market_key de base (avant le ":")
+      const getBaseKey = (key: string) => key.includes(':') ? key.split(':')[0] : key;
+      const aBaseKey = getBaseKey(a.key);
+      const bBaseKey = getBaseKey(b.key);
+
+      // Trouver leur position dans marketOrder
+      const aOrder = marketOrder.indexOf(aBaseKey);
+      const bOrder = marketOrder.indexOf(bBaseKey);
+
+      // Si différents marchés, trier par ordre défini
+      if (aOrder !== bOrder) {
+        // Si un marché n'est pas dans la liste, le mettre à la fin
+        if (aOrder === -1) return 1;
+        if (bOrder === -1) return -1;
+        return aOrder - bOrder;
+      }
+
+      // Même marché, trier par point
+      const aPoint = a.point ?? 0;
+      const bPoint = b.point ?? 0;
+      return aPoint - bPoint;
+    });
+  }, [events, customMarketOrder]);
 
   // Charger visibleMarkets depuis localStorage au montage
   React.useEffect(() => {
@@ -159,13 +210,13 @@ export default function FootballPage() {
     }
   }, []);
 
-  // Initialiser visibleMarkets avec tous les marchés au chargement
+  // Initialiser visibleMarkets avec toutes les combinaisons au chargement
   React.useEffect(() => {
-    if (markets.length > 0 && visibleMarkets.size === 0) {
-      const allMarketIds = new Set(markets.map((m) => m.id));
-      setVisibleMarkets(allMarketIds);
+    if (marketPointCombinations.length > 0 && visibleMarkets.size === 0) {
+      const allCombinationKeys = new Set(marketPointCombinations.map((m) => m.key));
+      setVisibleMarkets(allCombinationKeys);
     }
-  }, [markets, visibleMarkets.size]);
+  }, [marketPointCombinations, visibleMarkets.size]);
 
   // Persister visibleMarkets dans localStorage
   React.useEffect(() => {
@@ -178,51 +229,62 @@ export default function FootballPage() {
   }, [visibleMarkets]);
 
   React.useEffect(() => {
-    loadMarkets();
+    loadColumnConfig();
     loadFilterOptions();
-  }, [loadMarkets, loadFilterOptions]);
+  }, [loadColumnConfig, loadFilterOptions]);
 
   React.useEffect(() => {
-    if (markets.length > 0) {
-      loadMatches();
+    if (filterOptions.markets.length > 0) {
+      loadEvents();
     }
-  }, [markets.length, loadMatches]);
+  }, [filterOptions.markets.length, loadEvents]);
+
+  // Les événements sont directement utilisés (filtrage côté serveur)
+  const filteredEvents = events;
 
   // Générer les colonnes dynamiquement et filtrer par visibleMarkets
   const columns = React.useMemo(() => {
-    if (markets.length === 0) return [];
+    if (marketPointCombinations.length === 0) return [];
 
-    // Filtrer les marchés visibles
-    const visibleMarketsList = markets.filter((m) => visibleMarkets.has(m.id));
-    return buildFootballColumns(visibleMarketsList);
-  }, [markets, visibleMarkets]);
+    // Filtrer les combinaisons visibles
+    const visibleCombinations = marketPointCombinations.filter((m) => visibleMarkets.has(m.key));
+    return buildFootballColumns(visibleCombinations, selectedOutcomes, columnConfig);
+  }, [marketPointCombinations, visibleMarkets, selectedOutcomes, columnConfig]);
 
   // Handlers pour la visibilité des colonnes
-  const handleToggleMarket = React.useCallback((marketId: string) => {
+  const handleToggleMarket = React.useCallback((marketKey: string) => {
     setVisibleMarkets((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(marketId)) {
-        newSet.delete(marketId);
+      if (newSet.has(marketKey)) {
+        newSet.delete(marketKey);
       } else {
-        newSet.add(marketId);
+        newSet.add(marketKey);
       }
       return newSet;
     });
   }, []);
 
   const handleShowAllMarkets = React.useCallback(() => {
-    const allMarketIds = new Set(markets.map((m) => m.id));
-    setVisibleMarkets(allMarketIds);
-  }, [markets]);
+    const allCombinationKeys = new Set(marketPointCombinations.map((m) => m.key));
+    setVisibleMarkets(allCombinationKeys);
+  }, [marketPointCombinations]);
 
   const handleHideAllMarkets = React.useCallback(() => {
     setVisibleMarkets(new Set());
   }, []);
 
+  // Reset filters handler
+  const handleResetFilters = React.useCallback(() => {
+    setDateRange({ from: null, to: null });
+    setTeamSearch('');
+    setSelectedSport(null);
+    setAdvancedSearch({ oddsType: 'both', outcome: 'all', marketType: 'all' });
+  }, []);
+
   // Calculer le nombre de pages
   const pageCount = Math.ceil(total / pagination.pageSize);
 
-  if (markets.length === 0) {
+  if (filterOptions.markets.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -235,9 +297,9 @@ export default function FootballPage() {
     <div className="space-y-6">
       <header>
         <p className="text-sm uppercase tracking-[0.3em] text-primary/70">Football</p>
-        <h1 className="text-3xl font-semibold text-slate-900">⚽ Matchs & Cotes</h1>
+        <h1 className="text-3xl font-semibold text-slate-900">Matchs & Cotes</h1>
         <p className="text-sm text-muted-foreground mt-2">
-          {total} matchs • {markets.length} marchés actifs • Colonnes dynamiques
+          {filteredEvents.length} matchs affichés ({total} total) • {filterOptions.markets.length} marchés actifs • The Odds API v4
         </p>
       </header>
 
@@ -247,7 +309,7 @@ export default function FootballPage() {
           <h2 className="text-sm font-semibold text-slate-900">Filtres & Réglages</h2>
           <div className="flex gap-2">
             <ColumnVisibilitySelector
-              markets={markets}
+              markets={marketPointCombinations}
               visibleMarkets={visibleMarkets}
               onToggleMarket={handleToggleMarket}
               onShowAll={handleShowAllMarkets}
@@ -256,7 +318,7 @@ export default function FootballPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={resetFilters}
+              onClick={handleResetFilters}
               className="text-xs"
             >
               Réinitialiser filtres
@@ -264,54 +326,56 @@ export default function FootballPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Filtre Championnat */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Championnat</Label>
+            <Select
+              value={selectedSport ?? "all"}
+              onValueChange={(value) => setSelectedSport(value === "all" ? null : value)}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Tous les championnats" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les championnats</SelectItem>
+                {filterOptions.sports.map((sport) => (
+                  <SelectItem key={sport.api_key} value={sport.api_key}>
+                    {sport.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Filtre Équipe */}
+          <TeamFilter
+            value={teamSearch}
+            onChange={setTeamSearch}
+            label="Équipe"
+            placeholder="Rechercher une équipe..."
+          />
+
+          {/* Filtre Date */}
           <DateRangeFilter
-            value={filters.dateRange}
-            onChange={(value) => updateFilter('dateRange', value)}
+            value={dateRange}
+            onChange={setDateRange}
             label="Période"
           />
+        </div>
 
-          <CountryFilter
-            value={filters.countryId}
-            options={filterOptions.countries}
-            onChange={(value) => updateFilter('countryId', value)}
-            label="Pays"
-          />
-
-          <LeagueFilter
-            value={filters.leagueId}
-            options={filterOptions.leagues}
-            onChange={(value) => updateFilter('leagueId', value)}
-            label="Ligue"
-          />
-
-          <MarketFilter
-            value={filters.marketType}
-            options={filterOptions.markets}
-            onChange={(value) => updateFilter('marketType', value)}
-            label="Marché"
-          />
-
-          <TeamFilter
-            value={filters.teamSearch}
-            onChange={(value) => updateFilter('teamSearch', value)}
-            label="Équipe"
-            placeholder="Rechercher..."
-          />
-
-          <OddsRangeFilter
-            value={filters.oddsRange}
-            onChange={(value) => updateFilter('oddsRange', value)}
-            markets={filterOptions.markets}
-            label="Filtrage par cotes"
-            className="md:col-span-3"
+        {/* Recherche Avancée */}
+        <div className="mt-4 pt-4 border-t">
+          <AdvancedSearchFilter
+            value={advancedSearch}
+            onChange={setAdvancedSearch}
           />
         </div>
       </div>
 
       <DataTable
         columns={columns}
-        data={matches}
+        data={filteredEvents}
         pageCount={pageCount}
         pagination={pagination}
         sorting={sorting}

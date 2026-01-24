@@ -4,7 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 
 interface MarketOption {
-  id: string;
+  key?: string;  // v4 uses 'key'
+  id?: string;   // v3 uses 'id' (keep for backward compatibility)
   name: string;
 }
 
@@ -37,11 +38,14 @@ export function MarketFilter({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Tous</SelectItem>
-          {options.map((option) => (
-            <SelectItem key={option.id} value={option.id}>
-              {option.name}
-            </SelectItem>
-          ))}
+          {options.map((option) => {
+            const value = option.key || option.id || '';
+            return (
+              <SelectItem key={value} value={value}>
+                {option.name}
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
     </div>

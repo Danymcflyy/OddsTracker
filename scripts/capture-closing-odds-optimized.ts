@@ -174,21 +174,20 @@ function calculateMinutesBeforeKickoff(commenceTime: string, now: Date): number 
   return Math.floor(diffMs / (60 * 1000));
 }
 
-async function getMarketsForCapture(supabase: any, sportEvents: any[]): Promise<string> {
-  // Compter les snapshots existants pour le premier événement
-  if (sportEvents.length === 0) return 'h2h';
+async function getMarketsForCapture(supabase: any, _sportEvents: any[]): Promise<string> {
+  // Récupérer tous les marchés trackés depuis les settings
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('value')
+    .eq('key', 'tracked_markets')
+    .single();
 
-  const { data: snapshots } = await supabase
-    .from('closing_odds_snapshots')
-    .select('id')
-    .eq('event_id', sportEvents[0].id);
+  if (settings?.value && Array.isArray(settings.value) && settings.value.length > 0) {
+    return settings.value.join(',');
+  }
 
-  const snapshotCount = snapshots?.length || 0;
-
-  // Marchés progressifs
-  if (snapshotCount === 0) return 'h2h'; // M-10: Minimal
-  if (snapshotCount === 1) return 'h2h,spreads'; // M-5: Plus de détails
-  return 'h2h,spreads,totals'; // M-0, M+5: Complet
+  // Fallback: marchés par défaut
+  return 'h2h,spreads,totals';
 }
 
 async function getOddsWithCache(
@@ -332,6 +331,23 @@ async function finalizeClosingOdds(supabase: any, eventId: string) {
       capture_status: 'success',
       used_historical_api: false,
     });
+
+  // IMPORTANT: Mettre à jour market_states avec les closing odds
+  const markets = bestSnapshot.markets || {};
+  for (const [marketKey, odds] of Object.entries(markets)) {
+    const { error } = await supabase
+      .from('market_states')
+      .update({
+        closing_odds: odds,
+        status: 'closed',
+      })
+      .eq('event_id', eventId)
+      .eq('market_key', marketKey);
+
+    if (error) {
+      console.log(`      ⚠️ Erreur update market_states ${marketKey}: ${error.message}`);
+    }
+  }
 
   console.log('      ✅ Closing odds finalisées');
 }

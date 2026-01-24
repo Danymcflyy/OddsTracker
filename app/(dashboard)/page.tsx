@@ -10,44 +10,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { isAdminAvailable, supabase, supabaseAdmin } from "@/lib/db";
+import { getDashboardStats } from "@/lib/db/queries-frontend";
 
 const SPORTS_META = [
   {
-    sportId: 10,
     name: "Football",
     slug: "football",
     accent: "bg-emerald-50 text-emerald-600",
     emoji: "⚽",
-    description: "Toutes les ligues Pinnacle depuis 2019",
+    description: "Toutes les ligues - The Odds API v4",
     comingSoon: false,
-  },
-  {
-    sportId: 4,
-    name: "Hockey",
-    slug: "hockey",
-    accent: "bg-sky-50 text-sky-600",
-    emoji: "🏒",
-    description: "Lignes Moneyline & puck line",
-    comingSoon: true,
-  },
-  {
-    sportId: 2,
-    name: "Tennis",
-    slug: "tennis",
-    accent: "bg-amber-50 text-amber-600",
-    emoji: "🎾",
-    description: "ATP, WTA et tournois majeurs",
-    comingSoon: true,
-  },
-  {
-    sportId: 34,
-    name: "Volleyball",
-    slug: "volleyball",
-    accent: "bg-purple-50 text-purple-600",
-    emoji: "🏐",
-    description: "Cotes Moneyline & handicaps sets",
-    comingSoon: true,
   },
 ] as const;
 
@@ -62,47 +34,17 @@ type SportCardData = {
   comingSoon: boolean;
 };
 
-type SyncLogRow = {
-  completed_at: string | null;
-  started_at: string | null;
-};
-
 async function fetchSportCards(): Promise<SportCardData[]> {
-  const client = isAdminAvailable() ? supabaseAdmin : supabase;
   const formatter = new Intl.NumberFormat("fr-FR");
-
   const cards: SportCardData[] = [];
+
   for (const sport of SPORTS_META) {
-    const fixturesQuery = client
-      .from("fixtures")
-      .select("id", { count: "exact", head: true })
-      .eq("sport_id", String(sport.sportId));
+    // Get stats for this sport
+    const stats = await getDashboardStats();
 
-    const logQuery = client
-      .from("sync_logs")
-      .select("completed_at, started_at")
-      .eq("sport_id", sport.sportId)
-      .order("started_at", { ascending: false })
-      .limit(1);
-
-    const [{ count, error: fixturesError }, { data: logData, error: logError }] =
-      await Promise.all([fixturesQuery, logQuery]);
-
-    if (fixturesError) {
-      console.error("[dashboard] fixtures count error", fixturesError);
-    }
-    if (logError) {
-      console.error("[dashboard] sync log error", logError);
-    }
-
-    const matches = formatter.format(count ?? 0);
-
-    const logRows = (logData ?? []) as SyncLogRow[];
-    const lastLog = logRows.length > 0 ? logRows[0] : null;
-    const lastTimestamp =
-      lastLog?.completed_at ?? lastLog?.started_at ?? null;
-    const lastSync = lastTimestamp
-      ? formatDateTime(lastTimestamp)
+    const matches = formatter.format(stats.eventsCount);
+    const lastSync = stats.lastSync
+      ? formatDateTime(stats.lastSync)
       : "Aucune sync";
 
     cards.push({
@@ -136,10 +78,11 @@ function formatDateTime(value: string) {
 
 export default async function DashboardHomePage() {
   const sportCards = await fetchSportCards();
+  const stats = await getDashboardStats();
 
   return (
     <div className="space-y-8">
-      {/* Header - même structure que Hockey */}
+      {/* Header */}
       <header className="space-y-2">
         <p className="text-sm uppercase tracking-[0.3em] text-primary/70">
           Tableau de bord
@@ -150,19 +93,38 @@ export default async function DashboardHomePage() {
               📊 Vue d'ensemble
             </h1>
             <p className="text-sm text-muted-foreground">
-              État des synchronisations, quota API et accès rapide aux sports.
+              The Odds API v4 - Synchronisation automatique des cotes
             </p>
           </div>
           <div className="text-sm text-muted-foreground">
             Dernière synchronisation :{" "}
             <span className="font-medium text-slate-900">
-              04/12/2025 • 06:02
+              {stats.lastSync ? formatDateTime(stats.lastSync) : "Aucune sync"}
             </span>
           </div>
         </div>
       </header>
 
-      {/* Sports disponibles - même structure */}
+      {/* API Usage Today */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Consommation API aujourd'hui</CardTitle>
+          <CardDescription>
+            Crédits utilisés sur The Odds API (quota : 5M crédits/mois)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold">{stats.creditsUsedToday.toLocaleString()}</span>
+            <span className="text-sm text-muted-foreground">crédits</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Dernier job : {stats.lastSyncJob || 'Aucun'}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Sports disponibles */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Sports disponibles</CardTitle>
