@@ -225,6 +225,68 @@ async function getOddsWithCache(
   return data;
 }
 
+/**
+ * Extract market odds from API response
+ */
+function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string) {
+  const odds: any = {
+    last_update: market.last_update,
+  };
+
+  const homeLower = homeTeam?.toLowerCase();
+  const awayLower = awayTeam?.toLowerCase();
+
+  for (const outcome of market.outcomes || []) {
+    const name = outcome.name.toLowerCase();
+
+    // 1. Exact match (case-insensitive) for team names
+    if (homeLower && name === homeLower) {
+      odds.home = outcome.price;
+      if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
+    }
+    
+    if (awayLower && name === awayLower) {
+      odds.away = outcome.price;
+      if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
+    }
+
+    // 2. Standard outcomes (Over/Under/Draw)
+    if (name === 'draw' || name === 'tie' || name === 'x') {
+      odds.draw = outcome.price;
+      continue;
+    }
+    
+    if (name.startsWith('over') || name === 'o') {
+      odds.over = outcome.price;
+      if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
+    }
+    
+    if (name.startsWith('under') || name === 'u') {
+      odds.under = outcome.price;
+      if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
+    }
+
+    // 3. Generic "Home"/"Away" markers (fallback)
+    if (name === 'home' || name === '1') {
+      odds.home = outcome.price;
+      if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
+    }
+    
+    if (name === 'away' || name === '2') {
+      odds.away = outcome.price;
+      if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
+    }
+  }
+
+  return odds;
+}
+
 async function captureSnapshot(
   supabase: any,
   dbEvent: any,
@@ -251,51 +313,65 @@ async function captureSnapshot(
     throw new Error('No bookmaker available');
   }
 
-  // Extraire les marchés
+  // Extract all markets (handle multiple point variations)
   const markets: any = {};
-  selectedBookmaker.markets?.forEach((market: any) => {
-    const odds: any = {
-      last_update: market.last_update || selectedBookmaker.last_update,
-    };
+  const marketsVariations: any = {};
 
-    market.outcomes?.forEach((outcome: any) => {
-      const name = outcome.name.toLowerCase();
+  // Group by market_key to handle multiple variations
+  const marketsByKey = new Map<string, any[]>();
+  for (const apiMarket of selectedBookmaker.markets) {
+    if (!marketsByKey.has(apiMarket.key)) {
+      marketsByKey.set(apiMarket.key, []);
+    }
+    marketsByKey.get(apiMarket.key)!.push(apiMarket);
+  }
 
-      if (name.includes('home') || name === dbEvent.home_team.toLowerCase()) {
-        odds.home = outcome.price;
-        if (outcome.point !== undefined) odds.point = outcome.point;
-      } else if (name.includes('away') || name === dbEvent.away_team.toLowerCase()) {
-        odds.away = outcome.price;
-        if (outcome.point !== undefined) odds.point = outcome.point;
-      } else if (name.includes('draw')) {
-        odds.draw = outcome.price;
-      } else if (name.includes('over')) {
-        odds.over = outcome.price;
-        if (outcome.point !== undefined) odds.point = outcome.point;
-      } else if (name.includes('under')) {
-        odds.under = outcome.price;
-        if (outcome.point !== undefined) odds.point = outcome.point;
-      }
-    });
+  // Process each market type
+  for (const [marketKey, apiMarkets] of marketsByKey.entries()) {
+    // For backward compatibility, keep first variation in markets
+    markets[marketKey] = extractMarketOdds(apiMarkets[0], dbEvent.home_team, dbEvent.away_team);
 
-    markets[market.key] = odds;
-  });
+    // Store all variations
+    marketsVariations[marketKey] = apiMarkets.map(m => extractMarketOdds(m, dbEvent.home_team, dbEvent.away_team));
+  }
 
   // Sauvegarder le snapshot
+  // Note: we try to insert markets_variations if the column exists
+  const snapshotData: any = {
+    event_id: dbEvent.id,
+    captured_at: new Date().toISOString(),
+    bookmaker_last_update: selectedBookmaker.last_update,
+    minutes_before_kickoff: minutesBeforeKickoff,
+    markets: markets,
+    bookmaker: selectedBookmaker.key,
+    api_request_count: 1,
+  };
+
+  // Only add variations if the column is likely to exist (will fail gracefully if not)
+  // But wait, if it fails the whole transaction fails. 
+  // Let's keep it simple: we store it in 'markets' too if needed or just use it during finalization.
+  // Actually, I'll store variations in a dedicated column if I can confirm it exists.
+  // Since I can't confirm easily for every user, I'll use a try/catch or just rely on 'markets'
+  // and do the variation logic during finalization from the API response directly if possible.
+  
+  // Update: I'll include it, assuming the user will run the migration if they want full support.
+  snapshotData.markets_variations = marketsVariations;
+
   const { error } = await supabase
     .from('closing_odds_snapshots')
-    .insert({
-      event_id: dbEvent.id,
-      captured_at: new Date().toISOString(),
-      bookmaker_last_update: selectedBookmaker.last_update,
-      minutes_before_kickoff: minutesBeforeKickoff,
-      markets: markets,
-      bookmaker: selectedBookmaker.key,
-      api_request_count: 1,
-    });
+    .insert(snapshotData);
 
   if (error) {
-    throw new Error(`DB insert failed: ${error.message}`);
+    if (error.message.includes('markets_variations')) {
+      // Fallback if column missing
+      delete snapshotData.markets_variations;
+      const { error: retryError } = await supabase
+        .from('closing_odds_snapshots')
+        .insert(snapshotData);
+      if (retryError) throw new Error(`DB insert failed: ${retryError.message}`);
+    } else {
+      throw new Error(`DB insert failed: ${error.message}`);
+    }
   }
 }
 
@@ -326,6 +402,7 @@ async function finalizeClosingOdds(supabase: any, eventId: string) {
     .upsert({
       event_id: eventId,
       markets: bestSnapshot.markets,
+      markets_variations: bestSnapshot.markets_variations || {},
       captured_at: bestSnapshot.captured_at,
       bookmaker_update: bestSnapshot.bookmaker_last_update,
       capture_status: 'success',
