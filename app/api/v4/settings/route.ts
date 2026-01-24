@@ -1,87 +1,62 @@
-/**
- * API Route: Settings Management
- * GET /api/v4/settings - Get all settings
- * PUT /api/v4/settings - Update settings
- */
+import { NextResponse } from 'next/server';
+import { getSetting, updateSetting } from '@/lib/db/helpers';
+import { requireAuth } from '@/lib/auth/middleware';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { ZodError } from 'zod';
-import { getAllSettings, updateSetting } from '@/lib/db/helpers';
-import { requireAuth, UnauthorizedError } from '@/lib/auth/middleware';
-import { UpdateSettingSchema, formatValidationError } from '@/lib/validation/schemas';
-import type { AppSettings } from '@/lib/db/types';
-
-// Disable caching for this route
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const settings = await getAllSettings();
+    // Authentification requise pour lire les settings sensibles
+    await requireAuth(request as any);
 
-    return NextResponse.json({
-      success: true,
-      settings,
-    });
-  } catch (error) {
-    console.error('Failed to get settings:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to get settings',
-      },
-      { status: 500 }
-    );
-  }
-}
+    const { searchParams } = new URL(request.url);
+    const key = searchParams.get('key');
 
-export async function PUT(request: NextRequest) {
-  try {
-    // Require authentication for settings updates
-    await requireAuth(request);
-
-    const body = await request.json();
-
-    // Validate input with Zod
-    const validated = UpdateSettingSchema.parse(body);
-    const { key, value } = validated;
-
-    const success = await updateSetting(key as keyof AppSettings, value);
-
-    if (!success) {
+    if (!key) {
       return NextResponse.json(
-        { success: false, error: 'Failed to update setting' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Setting ${key} updated successfully`,
-    });
-  } catch (error) {
-    // Handle authentication errors
-    if (error instanceof UnauthorizedError) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    // Handle validation errors
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        formatValidationError(error),
+        { success: false, error: 'Missing key parameter' },
         { status: 400 }
       );
     }
 
-    console.error('Failed to update setting:', error);
+    const value = await getSetting(key as any);
+
+    return NextResponse.json({
+      success: true,
+      data: value,
+    });
+  } catch (error) {
+    console.error('Error in settings API:', error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to update setting',
-      },
+      { success: false, error: 'Unauthorized or failed' },
+      { status: 401 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    await requireAuth(request as any);
+
+    const body = await request.json();
+    const { key, value } = body;
+
+    if (!key || value === undefined) {
+      return NextResponse.json(
+        { success: false, error: 'Missing key or value' },
+        { status: 400 }
+      );
+    }
+
+    await updateSetting(key, value);
+
+    return NextResponse.json({
+      success: true,
+    });
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to update setting' },
       { status: 500 }
     );
   }

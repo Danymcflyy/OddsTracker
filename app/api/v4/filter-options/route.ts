@@ -1,26 +1,20 @@
-/**
- * API Route: Filter Options
- * GET /api/v4/filter-options - Get available filter options (with caching)
- */
-
 import { NextResponse } from 'next/server';
-import { getCachedFilterOptions } from '@/lib/cache/filter-options';
+import { getFilterOptions } from '@/lib/db/queries-frontend';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const options = await getCachedFilterOptions();
+    const options = await getFilterOptions();
 
     return NextResponse.json({
       success: true,
       data: options,
     });
   } catch (error) {
-    console.error('Failed to get filter options:', error);
+    console.error('Error in filter-options API:', error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to get filter options',
-      },
+      { success: false, error: 'Failed to fetch filter options' },
       { status: 500 }
     );
   }

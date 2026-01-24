@@ -1,43 +1,47 @@
-/**
- * API Route: Events (for frontend table)
- * GET /api/v4/events - Get events with odds for table display
- */
-
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { fetchEventsForTable } from '@/lib/db/queries-frontend';
 
-export async function GET(request: NextRequest) {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
   try {
-    const searchParams = request.nextUrl.searchParams;
+    const { searchParams } = new URL(request.url);
+    
+    // Extract params
+    const sportKey = searchParams.get('sportKey') || undefined;
+    const dateFrom = searchParams.get('dateFrom') || undefined;
+    const dateTo = searchParams.get('dateTo') || undefined;
+    const search = searchParams.get('search') || undefined;
+    const marketKey = searchParams.get('marketKey') || undefined;
+    const page = parseInt(searchParams.get('page') || '1');
+    const pageSize = parseInt(searchParams.get('pageSize') || '50');
+    const sortField = searchParams.get('sortField') || undefined;
+    const sortDirection = (searchParams.get('sortDirection') as 'asc' | 'desc') || 'asc';
+    const cursor = searchParams.get('cursor') || undefined;
+    const cursorDirection = (searchParams.get('cursorDirection') as 'next' | 'prev') || undefined;
 
-    const params = {
-      sportKey: searchParams.get('sport') || undefined,
-      dateFrom: searchParams.get('dateFrom') || undefined,
-      dateTo: searchParams.get('dateTo') || undefined,
-      search: searchParams.get('search') || undefined,
-      marketKey: searchParams.get('marketKey') || undefined,
-      page: parseInt(searchParams.get('page') || '1'),
-      pageSize: parseInt(searchParams.get('pageSize') || '50'),
-      sortField: searchParams.get('sortField') || 'commence_time',
-      sortDirection: (searchParams.get('sortDirection') || 'asc') as 'asc' | 'desc',
-    };
-
-    const result = await fetchEventsForTable(params);
+    const result = await fetchEventsForTable({
+      sportKey,
+      dateFrom,
+      dateTo,
+      search,
+      marketKey,
+      page,
+      pageSize,
+      sortField,
+      sortDirection,
+      cursor,
+      cursorDirection,
+    });
 
     return NextResponse.json({
       success: true,
-      data: result.data,
-      total: result.total,
-      page: params.page,
-      pageSize: params.pageSize,
+      ...result,
     });
   } catch (error) {
-    console.error('Failed to fetch events:', error);
+    console.error('Error in events API:', error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch events',
-      },
+      { success: false, error: 'Failed to fetch events' },
       { status: 500 }
     );
   }
