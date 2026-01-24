@@ -33,31 +33,57 @@ function extractMarketOdds(market: ApiMarket, homeTeam?: string, awayTeam?: stri
     last_update: market.last_update,
   };
 
+  const homeLower = homeTeam?.toLowerCase();
+  const awayLower = awayTeam?.toLowerCase();
+
   for (const outcome of market.outcomes || []) {
     const name = outcome.name.toLowerCase();
     const nameOriginal = outcome.name;
 
-    // Check for team names first (for h2h, spreads, etc.)
-    if (homeTeam && nameOriginal === homeTeam) {
+    // 1. Exact match (case-insensitive) for team names
+    if (homeLower && name === homeLower) {
       odds.home = outcome.price;
       if (outcome.point !== undefined) odds.point = outcome.point;
-    } else if (awayTeam && nameOriginal === awayTeam) {
+      continue;
+    }
+    
+    if (awayLower && name === awayLower) {
       odds.away = outcome.price;
       if (outcome.point !== undefined) odds.point = outcome.point;
-    } else if (name.includes('home')) {
-      odds.home = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
-    } else if (name.includes('away')) {
-      odds.away = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
-    } else if (name.includes('draw') || name.includes('tie')) {
+      continue;
+    }
+
+    // 2. Standard outcomes (Over/Under/Draw)
+    if (name === 'draw' || name === 'tie' || name === 'x') {
       odds.draw = outcome.price;
-    } else if (name.includes('over')) {
+      continue;
+    }
+    
+    if (name.startsWith('over') || name === 'o') { // "Over 2.5", "Over"
       odds.over = outcome.price;
       if (outcome.point !== undefined) odds.point = outcome.point;
-    } else if (name.includes('under')) {
+      continue;
+    }
+    
+    if (name.startsWith('under') || name === 'u') { // "Under 2.5", "Under"
       odds.under = outcome.price;
       if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
+    }
+
+    // 3. Generic "Home"/"Away" markers (fallback)
+    // Be careful not to match team names containing these words accidentally, 
+    // but usually "Home" / "Away" are distinct outcomes in API.
+    if (name === 'home' || name === '1') {
+      odds.home = outcome.price;
+      if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
+    }
+    
+    if (name === 'away' || name === '2') {
+      odds.away = outcome.price;
+      if (outcome.point !== undefined) odds.point = outcome.point;
+      continue;
     }
   }
 

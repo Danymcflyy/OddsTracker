@@ -261,13 +261,36 @@ export function buildFootballColumns(
         cell: ({ row }) => {
           const closingData = row.original.closing_odds;
 
-          if (!closingData || !closingData.markets || !closingData.markets[baseMarketKey]) {
+          if (!closingData) {
             return <span className="text-muted-foreground text-xs">-</span>;
           }
 
-          const marketData = closingData.markets[baseMarketKey];
+          let marketData = null;
 
-          if (targetPoint !== undefined && marketData.point !== targetPoint) {
+          // 1. Try to find in variations (more precise)
+          if (closingData.markets_variations && closingData.markets_variations[baseMarketKey]) {
+            const variations = closingData.markets_variations[baseMarketKey];
+            if (Array.isArray(variations)) {
+              if (targetPoint !== undefined) {
+                // Find exact point match
+                marketData = variations.find((v: any) => v.point === targetPoint);
+              } else {
+                // Take first one if no point specified
+                marketData = variations[0];
+              }
+            }
+          }
+
+          // 2. Fallback to main markets object
+          if (!marketData && closingData.markets && closingData.markets[baseMarketKey]) {
+            const fallbackData = closingData.markets[baseMarketKey];
+            // Only use fallback if points match or no point required
+            if (targetPoint === undefined || fallbackData.point === targetPoint) {
+              marketData = fallbackData;
+            }
+          }
+
+          if (!marketData) {
             return <span className="text-muted-foreground text-xs">-</span>;
           }
 

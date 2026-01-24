@@ -15,6 +15,7 @@ export interface EventWithOdds extends Event {
   }>;
   closing_odds: {
     markets: any;
+    markets_variations?: any;
     captured_at: string | null;
   } | null;
   markets_captured: number;
@@ -76,6 +77,7 @@ export async function fetchEventsForTable(params: {
         ),
         closing_odds!left(
           markets,
+          markets_variations,
           captured_at
         )
       `, { count: 'exact' });
