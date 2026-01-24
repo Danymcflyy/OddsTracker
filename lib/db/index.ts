@@ -2,15 +2,18 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 
 // Vérification des variables d'environnement
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  throw new Error("Missing env.NEXT_PUBLIC_SUPABASE_URL");
-}
-if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  throw new Error("Missing env.NEXT_PUBLIC_SUPABASE_ANON_KEY");
+const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const envAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!envUrl || !envAnonKey) {
+  console.warn(
+    "⚠️  Supabase environment variables missing. The app will build but may crash at runtime if not configured."
+  );
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Fallbacks for build time
+const supabaseUrl = envUrl || "https://placeholder.supabase.co";
+const supabaseAnonKey = envAnonKey || "placeholder";
 
 // Client Supabase public (côté client et serveur)
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
