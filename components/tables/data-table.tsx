@@ -117,47 +117,51 @@ export function DataTable<TData, TValue>({
                   const canSort = header.column.getCanSort();
                   const sortState = header.column.getIsSorted();
 
+import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, EyeOff } from "lucide-react";
+
+// ... inside the render function, mapping headers ...
+
                   return (
                     <TableHead
                       key={header.id}
                       colSpan={header.colSpan}
                       className={cn(
-                        "bg-white sticky top-0 z-10 border-b border-r last:border-r-0",
-                        header.depth > 1 && "top-10" // Adjust top for nested headers if needed, but sticky handles it usually
+                        "sticky top-0 z-10 border-b border-r last:border-r-0 p-0",
+                        // Hierarchical background colors
+                        header.depth === 0 ? "bg-slate-100 font-bold text-slate-900 h-10" : 
+                        header.depth === 1 ? "bg-slate-50 font-semibold text-slate-700 h-9" : 
+                        "bg-white font-medium text-slate-600 h-8"
                       )}
                       style={{
                         textAlign: header.colSpan > 1 ? "center" : "left",
+                        // Correct sticky offset for nested rows
+                        top: header.depth * 40, // 40px is approx height of each header row
                       }}
                     >
-                      {header.isPlaceholder ? null : (
-                        canSort ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 -ml-3"
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            <span className="mr-2">
+                      <div className="relative group px-2 py-1 h-full flex items-center justify-center">
+                        {header.isPlaceholder ? null : (
+                          <>
+                            <span className="truncate">
                               {flexRender(
                                 header.column.columnDef.header,
                                 header.getContext()
                               )}
                             </span>
-                            {sortState === "asc" ? (
-                              <ArrowUp className="h-4 w-4" />
-                            ) : sortState === "desc" ? (
-                              <ArrowDown className="h-4 w-4" />
-                            ) : (
-                              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </Button>
-                        ) : (
-                          flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )
-                        )
-                      )}
+                            
+                            {/* Hide button - visible on hover */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                header.column.toggleVisibility(false);
+                              }}
+                              className="absolute right-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity p-1"
+                              title="Masquer ce groupe"
+                            >
+                              <EyeOff className="h-3 w-3" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </TableHead>
                   );
                 })}
@@ -176,9 +180,9 @@ export function DataTable<TData, TValue>({
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"} className="hover:bg-slate-50">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-1 px-2 border-r last:border-r-0 border-b">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
