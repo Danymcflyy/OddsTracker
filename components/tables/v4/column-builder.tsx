@@ -207,10 +207,32 @@ export function buildFootballColumns(
         variationLabel = 'Std';
       }
 
-      const outcomeColumns: ColumnDef<EventWithOdds>[] = [];
+      // Determine borders
+      const isLastOutcome = activeOutcomes.indexOf(outcome) === activeOutcomes.length - 1;
+      const isLastPoint = sortedPoints.indexOf(point) === sortedPoints.length - 1;
+      
+      const variationBorder = isLastOutcome ? "border-r-2 border-r-slate-300" : "border-r border-r-slate-100";
+      const marketBorder = (isLastOutcome && isLastPoint) ? "border-r-4 border-r-slate-800" : variationBorder;
 
       activeOutcomes.forEach(outcome => {
         const outcomeLabel = getOutcomeLabel(outcome, config);
+        
+        // Re-calculate borders inside loop as we iterate outcomes
+        const isLastOutcomeInLoop = activeOutcomes.indexOf(outcome) === activeOutcomes.length - 1;
+        
+        // Border style:
+        // - End of Market Group: Thick Dark Border
+        // - End of Variation Group: Medium Border
+        // - End of Outcome (O/C pair): Light Border
+        let borderClass = "border-r border-r-slate-200"; // Default between O and C is handled by standard table, but between Outcome groups?
+        
+        if (isLastOutcomeInLoop) {
+           if (isLastPoint) {
+             borderClass = "!border-r-[3px] !border-r-slate-400"; // End of Market
+           } else {
+             borderClass = "!border-r-2 !border-r-slate-300"; // End of Variation
+           }
+        }
 
         const dataColumns: ColumnDef<EventWithOdds>[] = [
           columnHelper.display({
@@ -221,7 +243,6 @@ export function buildFootballColumns(
               const res = getResult(row.original, baseKey, outcome, point);
               
               let resultClass = "";
-              // Apply color ONLY if odds value is valid
               if (val !== '-') {
                 if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
                 if (res === 'loss') resultClass = "!bg-red-500 !text-white";
@@ -229,7 +250,7 @@ export function buildFootballColumns(
               }
 
               return (
-                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 ${resultClass}`}>
+                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 border-r border-r-slate-100 ${resultClass}`}>
                   <span className="text-xs font-mono">{val}</span>
                 </div>
               );
@@ -244,7 +265,6 @@ export function buildFootballColumns(
               const res = getResult(row.original, baseKey, outcome, point);
               
               let resultClass = "";
-              // Apply color ONLY if odds value is valid
               if (val !== '-') {
                 if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
                 if (res === 'loss') resultClass = "!bg-red-500 !text-white";
@@ -252,7 +272,7 @@ export function buildFootballColumns(
               }
 
               return (
-                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 ${resultClass}`}>
+                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 ${resultClass} ${borderClass} -mr-[1px]`}>
                   <span className="text-xs font-mono">{val}</span>
                 </div>
               );
