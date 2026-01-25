@@ -10,7 +10,7 @@ import {
   type SortingState,
   type Table as TanstackTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -117,10 +117,6 @@ export function DataTable<TData, TValue>({
                   const canSort = header.column.getCanSort();
                   const sortState = header.column.getIsSorted();
 
-import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, EyeOff } from "lucide-react";
-
-// ... inside the render function, mapping headers ...
-
                   return (
                     <TableHead
                       key={header.id}
@@ -159,6 +155,21 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, EyeOff } from "lucide-react";
                             >
                               <EyeOff className="h-3 w-3" />
                             </button>
+
+                            {canSort && header.depth > 1 && (
+                              <button
+                                onClick={header.column.getToggleSortingHandler()}
+                                className="ml-1 opacity-50 hover:opacity-100"
+                              >
+                                {sortState === "asc" ? (
+                                  <ArrowUp className="h-3 w-3" />
+                                ) : sortState === "desc" ? (
+                                  <ArrowDown className="h-3 w-3" />
+                                ) : (
+                                  <ArrowUpDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -182,7 +193,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, EyeOff } from "lucide-react";
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} data-state={row.getIsSelected() && "selected"} className="hover:bg-slate-50">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-1 px-2 border-r last:border-r-0 border-b">
+                    <TableCell key={cell.id} className="py-1 px-2 border-r last:border-r-0 border-b p-0">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
