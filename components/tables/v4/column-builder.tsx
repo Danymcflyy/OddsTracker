@@ -91,13 +91,28 @@ function getShortHeader(
   marketKey: string,
   outcome: OutcomeType,
   point: number | undefined,
-  isClosing: boolean
+  isClosing: boolean,
+  config?: ColumnConfig
 ): string {
-  const marketName = MARKET_SHORT_NAMES[marketKey] || marketKey;
-  const outcomeName = OUTCOME_SHORT_NAMES[outcome];
+  // Use custom label if available in config, otherwise fallback to short names map or key
+  const marketName = config?.marketLabels?.[marketKey] || MARKET_SHORT_NAMES[marketKey] || marketKey;
+  
+  // Use custom outcome label if available
+  const outcomeName = config?.outcomeLabels?.[outcome] || OUTCOME_SHORT_NAMES[outcome];
+  
   const suffix = isClosing ? 'C' : 'O';
 
   if (point !== undefined) {
+    // If a variation template is provided (e.g. "{market} {point} - {outcome}")
+    if (config?.variationTemplate) {
+      const pointStr = point > 0 ? `+${point}` : `${point}`;
+      return config.variationTemplate
+        .replace('{market}', marketName)
+        .replace('{point}', pointStr)
+        .replace('{outcome}', outcomeName)
+        .replace('{type}', suffix);
+    }
+
     const pointStr = point > 0 ? `+${point}` : `${point}`;
     return `${marketName} ${pointStr} ${outcomeName} ${suffix}`;
   }
@@ -115,9 +130,7 @@ export function buildFootballColumns(
 ): ColumnDef<EventWithOdds>[] {
   const columns: ColumnDef<EventWithOdds>[] = [];
 
-  // ============================================================================
-  // COLONNES STATIQUES
-  // ============================================================================
+  // ... (Colonnes statiques inchangées) ...
 
   columns.push({
     id: 'commence_time',
@@ -251,7 +264,7 @@ export function buildFootballColumns(
       // Colonne Opening
       columns.push({
         id: `${market.key}_${outcome}_opening`,
-        header: getShortHeader(baseMarketKey, outcome, targetPoint, false),
+        header: getShortHeader(baseMarketKey, outcome, targetPoint, false, config),
         cell: ({ row }) => {
           const marketData = row.original.opening_odds.find((m) => {
             if (m.market_key !== baseMarketKey) return false;
@@ -289,7 +302,7 @@ export function buildFootballColumns(
       // Colonne Closing
       columns.push({
         id: `${market.key}_${outcome}_closing`,
-        header: getShortHeader(baseMarketKey, outcome, targetPoint, true),
+        header: getShortHeader(baseMarketKey, outcome, targetPoint, true, config),
         cell: ({ row }) => {
           const closingData = row.original.closing_odds;
 
