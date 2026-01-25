@@ -218,65 +218,55 @@ async function getOddsWithCache(
 }
 
 /**
- * Extract market odds from API response
+ * Extract market odds from API response, handling multiple lines/points correctly.
+ * Returns an array of normalized odds objects (one per line).
  */
-function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string) {
-  const odds: any = {
-    last_update: market.last_update,
-  };
-
+function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): any[] {
   const homeLower = homeTeam?.toLowerCase();
   const awayLower = awayTeam?.toLowerCase();
+  
+  // Group outcomes by NORMALIZED point
+  // For Spreads: Home Point. (Away +X -> Home -X)
+  // For Totals: Point.
+  const byPoint = new Map<number, any>();
+  const isSpread = market.key.includes('spread');
 
   for (const outcome of market.outcomes || []) {
     const name = outcome.name.toLowerCase();
+    let point = outcome.point;
+    let type: 'home' | 'away' | 'draw' | 'over' | 'under' | null = null;
 
-    // 1. Exact match (case-insensitive) for team names
-    if (homeLower && name === homeLower) {
-      odds.home = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
-      continue;
-    }
-    
-    if (awayLower && name === awayLower) {
-      odds.away = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
-      continue;
-    }
+    // Determine type
+    if (homeLower && name === homeLower) type = 'home';
+    else if (awayLower && name === awayLower) type = 'away';
+    else if (name === 'draw' || name === 'tie' || name === 'x') type = 'draw';
+    else if (name.startsWith('over') || name === 'o') type = 'over';
+    else if (name.startsWith('under') || name === 'u') type = 'under';
+    else if (name === 'home' || name === '1') type = 'home';
+    else if (name === 'away' || name === '2') type = 'away';
 
-    // 2. Standard outcomes (Over/Under/Draw)
-    if (name === 'draw' || name === 'tie' || name === 'x') {
-      odds.draw = outcome.price;
-      continue;
-    }
-    
-    if (name.startsWith('over') || name === 'o') {
-      odds.over = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
-      continue;
-    }
-    
-    if (name.startsWith('under') || name === 'u') {
-      odds.under = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
-      continue;
+    if (!type) continue;
+
+    // Normalize point for Spreads
+    // If we found an Away outcome with point +X, it belongs to the line -X (Home perspective)
+    if (isSpread && point !== undefined && type === 'away') {
+        point = -1 * point;
     }
 
-    // 3. Generic "Home"/"Away" markers (fallback)
-    if (name === 'home' || name === '1') {
-      odds.home = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
-      continue;
+    // Default point to 0 if undefined (e.g. h2h)
+    const key = point ?? 0;
+
+    if (!byPoint.has(key)) {
+      byPoint.set(key, { point: point, last_update: market.last_update });
     }
     
-    if (name === 'away' || name === '2') {
-      odds.away = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
-      continue;
-    }
+    const entry = byPoint.get(key);
+    entry[type] = outcome.price;
+    // Ensure point is set (in case it was undefined for first element)
+    if (entry.point === undefined && point !== undefined) entry.point = point;
   }
 
-  return odds;
+  return Array.from(byPoint.values());
 }
 
 async function captureSnapshot(
@@ -305,11 +295,11 @@ async function captureSnapshot(
     throw new Error('No bookmaker available');
   }
 
-  // Extract all markets (handle multiple point variations)
+  // Extract all markets
   const markets: any = {};
   const marketsVariations: any = {};
 
-  // Group by market_key to handle multiple variations
+  // Group by market_key
   const marketsByKey = new Map<string, any[]>();
   for (const apiMarket of selectedBookmaker.markets) {
     if (!marketsByKey.has(apiMarket.key)) {
@@ -320,11 +310,41 @@ async function captureSnapshot(
 
   // Process each market type
   for (const [marketKey, apiMarkets] of marketsByKey.entries()) {
-    // For backward compatibility, keep first variation in markets
-    markets[marketKey] = extractMarketOdds(apiMarkets[0], dbEvent.home_team, dbEvent.away_team);
+    // Collect ALL variations from ALL market objects of this type
+    let allVariations: any[] = [];
+    
+    for (const m of apiMarkets) {
+        const extracted = extractMarketOdds(m, dbEvent.home_team, dbEvent.away_team);
+        allVariations.push(...extracted);
+    }
 
-    // Store all variations
-    marketsVariations[marketKey] = apiMarkets.map(m => extractMarketOdds(m, dbEvent.home_team, dbEvent.away_team));
+    // Deduplicate by point (keep latest/best?)
+    // Actually, extractMarketOdds already groups by point within a single market object.
+    // But sometimes API returns multiple market objects for same key (rare but possible).
+    // Let's merge them.
+    const mergedVariations = new Map<number, any>();
+    for (const v of allVariations) {
+        const p = v.point ?? 0;
+        if (!mergedVariations.has(p)) {
+            mergedVariations.set(p, v);
+        } else {
+            // Merge (e.g. one object had home, other had away)
+            mergedVariations.set(p, { ...mergedVariations.get(p), ...v });
+        }
+    }
+    
+    const finalVariations = Array.from(mergedVariations.values());
+
+    // Sort by point for consistency
+    finalVariations.sort((a, b) => (a.point || 0) - (b.point || 0));
+
+    // Store
+    if (finalVariations.length > 0) {
+        // Main market (backward compat): use the one closest to point 0 or balanced?
+        // Just take the first one or the one with most outcomes
+        markets[marketKey] = finalVariations[0]; 
+        marketsVariations[marketKey] = finalVariations;
+    }
   }
 
   // Sauvegarder le snapshot
@@ -360,8 +380,6 @@ async function captureSnapshot(
 
   // Update event tracking
   try {
-    // Increment snapshot_count and update last_snapshot_at
-    // We fetch first to increment safely
     const { data: currentEvent } = await supabase
       .from('events')
       .select('snapshot_count')
@@ -379,7 +397,6 @@ async function captureSnapshot(
       .eq('id', dbEvent.id);
   } catch (trackError) {
     console.warn(`      ⚠️ Failed to update event tracking: ${(trackError as Error).message}`);
-    // Non-blocking error
   }
 }
 
