@@ -214,10 +214,8 @@ function isPopularPoint(marketKey: string, point: number | undefined): boolean {
 
 // ... inside buildFootballColumns ...
 
-    // Trier et filtrer les variations (points)
-    const sortedPoints = Array.from(variationsMap.keys())
-      .filter(point => isPopularPoint(baseKey, point))
-      .sort((a, b) => (a ?? 0) - (b ?? 0));
+    // Trier les variations (points)
+    const sortedPoints = Array.from(variationsMap.keys()).sort((a, b) => (a ?? 0) - (b ?? 0));
 
     sortedPoints.forEach(point => {
       // ... rest of the loop
