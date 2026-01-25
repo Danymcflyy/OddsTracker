@@ -347,14 +347,6 @@ async function captureSnapshot(
     api_request_count: 1,
   };
 
-  // Only add variations if the column is likely to exist (will fail gracefully if not)
-  // But wait, if it fails the whole transaction fails. 
-  // Let's keep it simple: we store it in 'markets' too if needed or just use it during finalization.
-  // Actually, I'll store variations in a dedicated column if I can confirm it exists.
-  // Since I can't confirm easily for every user, I'll use a try/catch or just rely on 'markets'
-  // and do the variation logic during finalization from the API response directly if possible.
-  
-  // Update: I'll include it, assuming the user will run the migration if they want full support.
   snapshotData.markets_variations = marketsVariations;
 
   const { error } = await supabase
@@ -372,6 +364,30 @@ async function captureSnapshot(
     } else {
       throw new Error(`DB insert failed: ${error.message}`);
     }
+  }
+
+  // Update event tracking
+  try {
+    // Increment snapshot_count and update last_snapshot_at
+    // We fetch first to increment safely
+    const { data: currentEvent } = await supabase
+      .from('events')
+      .select('snapshot_count')
+      .eq('id', dbEvent.id)
+      .single();
+    
+    const newCount = (currentEvent?.snapshot_count || 0) + 1;
+
+    await supabase
+      .from('events')
+      .update({
+        last_snapshot_at: new Date().toISOString(),
+        snapshot_count: newCount
+      })
+      .eq('id', dbEvent.id);
+  } catch (trackError) {
+    console.warn(`      ⚠️ Failed to update event tracking: ${(trackError as Error).message}`);
+    // Non-blocking error
   }
 }
 

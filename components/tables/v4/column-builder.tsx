@@ -183,6 +183,38 @@ export function buildFootballColumns(
   });
 
   columns.push({
+    id: 'monitoring',
+    header: 'Snapshots',
+    cell: ({ row }) => {
+      const lastSnapshot = row.original.last_snapshot_at;
+      const count = row.original.snapshot_count || 0;
+      const status = row.original.status;
+
+      // Only relevant for upcoming or recently completed matches
+      if (status === 'completed' && !lastSnapshot) return <span className="text-xs text-muted-foreground">-</span>;
+
+      if (lastSnapshot) {
+        const date = new Date(lastSnapshot);
+        const parisDate = toZonedTime(date, PARIS_TZ);
+        return (
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] font-mono font-medium text-blue-600 bg-blue-50 px-1 rounded">
+              {count} snap(s)
+            </span>
+            <span className="text-[9px] text-muted-foreground mt-0.5" title="Dernier snapshot">
+              {format(parisDate, 'HH:mm', { locale: fr })}
+            </span>
+          </div>
+        );
+      }
+
+      return <span className="text-xs text-muted-foreground">-</span>;
+    },
+    size: 70,
+    enableSorting: false,
+  });
+
+  columns.push({
     id: 'score',
     header: 'Score',
     cell: ({ row }) => {

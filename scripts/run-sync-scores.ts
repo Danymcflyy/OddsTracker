@@ -1,6 +1,13 @@
-import { syncScoresAndClosingOdds } from '../lib/services/theoddsapi/closing-odds';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Charger les variables d'environnement avant tout import
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 async function main() {
+  // Import dynamique pour garantir que les variables d'environnement sont chargées
+  const { syncScoresAndClosingOdds } = await import('../lib/services/theoddsapi/closing-odds');
+
   try {
     console.log('🏃 Syncing scores and closing odds...');
     const result = await syncScoresAndClosingOdds();

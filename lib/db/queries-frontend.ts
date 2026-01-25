@@ -23,6 +23,8 @@ export interface EventWithOdds extends Event {
   capture_percentage: number;
   home_score: number | null;
   away_score: number | null;
+  last_snapshot_at?: string | null; // NEW
+  snapshot_count?: number; // NEW
 }
 
 export interface FilterOptions {
