@@ -28,6 +28,7 @@ interface Settings {
   tracked_markets: string[];
   scan_frequency_minutes: number;
   use_historical_fallback: boolean;
+  use_sql_search: boolean;
 }
 
 export default function DataCollectionSettingsPage() {
@@ -40,6 +41,7 @@ export default function DataCollectionSettingsPage() {
     tracked_markets: [],
     scan_frequency_minutes: 10,
     use_historical_fallback: false,
+    use_sql_search: false,
   });
 
   // Load sports and settings
@@ -64,6 +66,7 @@ export default function DataCollectionSettingsPage() {
             tracked_markets: settingsData.settings.tracked_markets || MVP_MARKETS,
             scan_frequency_minutes: settingsData.settings.scan_frequency_minutes || 10,
             use_historical_fallback: settingsData.settings.use_historical_fallback || false,
+            use_sql_search: settingsData.settings.use_sql_search || false,
           });
         }
       } catch (error) {
@@ -112,6 +115,7 @@ export default function DataCollectionSettingsPage() {
         { key: 'tracked_markets', value: settings.tracked_markets },
         { key: 'scan_frequency_minutes', value: settings.scan_frequency_minutes },
         { key: 'use_historical_fallback', value: settings.use_historical_fallback },
+        { key: 'use_sql_search', value: settings.use_sql_search },
       ];
 
       for (const update of updates) {
