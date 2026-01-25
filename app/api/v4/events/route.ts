@@ -26,6 +26,13 @@ export async function GET(request: Request) {
     const oddsType = (searchParams.get('oddsType') as 'opening' | 'closing' | 'both') || undefined;
     const outcome = searchParams.get('outcome') || undefined;
     const pointValue = searchParams.get('pointValue') ? parseFloat(searchParams.get('pointValue')!) : undefined;
+    const dropMin = searchParams.get('dropMin') ? parseFloat(searchParams.get('dropMin')!) : undefined;
+    const status = searchParams.get('status') || undefined;
+    const minSnapshots = searchParams.get('minSnapshots') ? parseInt(searchParams.get('minSnapshots')!) : undefined;
+
+    console.log('[API] Events Request Params:', { 
+      sportKey, dateFrom, oddsMin, oddsMax, outcome, marketKey, dropMin, status, minSnapshots 
+    });
 
     const result = await fetchEventsForTable({
       sportKey,
@@ -44,7 +51,12 @@ export async function GET(request: Request) {
       oddsType,
       outcome,
       pointValue,
+      dropMin,
+      status,
+      minSnapshots
     });
+
+    console.log('[API] Events Result Count:', result.data.length);
 
     return NextResponse.json({
       success: true,
