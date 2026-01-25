@@ -286,7 +286,26 @@ async function scanEventOpeningOdds(
     }
 
     return { captured: capturedCount, creditsUsed };
-  } catch (error) {
+  } catch (error: any) {
+    // Handle 404 (Event not found / Expired) gracefully
+    if (error.message?.includes('404') || error.status === 404) {
+      console.warn(`[OpeningOdds] Event ${eventApiId} not found (404). Marking markets as not offered.`);
+      
+      // Mark all pending markets as not_offered to stop retrying
+      for (const marketState of pendingMarkets) {
+        await (supabaseAdmin as any)
+          .from('market_states')
+          .update({
+            status: 'not_offered',
+            last_attempt_at: new Date().toISOString(),
+          } as any)
+          .eq('id', marketState.id);
+      }
+      
+      // Return success with 0 captured to continue scan
+      return { captured: 0, creditsUsed: 0 };
+    }
+
     console.error(`[OpeningOdds] Error scanning event ${eventApiId}:`, error);
 
     // Update attempts even on error
