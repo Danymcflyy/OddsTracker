@@ -213,46 +213,46 @@ export function buildFootballColumns(
         const outcomeLabel = getOutcomeLabel(outcome, config);
 
         const dataColumns: ColumnDef<EventWithOdds>[] = [
-          const oddsValue = marketData.odds[outcome];
-          const res = getResult(row.original, baseKey, outcome, point);
-          
-          // Color mapping direct pour éviter les problèmes de purge Tailwind
-          let resultClass = "";
-          if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
-          if (res === 'loss') resultClass = "!bg-red-500 !text-white";
-          if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
+          columnHelper.display({
+            id: `${marketOption.key}_${outcome}_opening`,
+            header: 'O',
+            cell: ({ row }) => {
+              const val = getOddsValue(row.original, baseKey, outcome, point, 'opening');
+              const res = getResult(row.original, baseKey, outcome, point);
+              
+              let resultClass = "";
+              if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
+              if (res === 'loss') resultClass = "!bg-red-500 !text-white";
+              if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
 
-          return (
-            <div className={`flex items-center justify-center w-full h-full -mx-2 -my-1 px-2 py-1 min-h-[32px] ${resultClass}`}>
-              <span className="text-xs font-mono">
-                {formatOddsValue(oddsValue)}
-              </span>
-            </div>
-          );
-        },
-        size: 45,
-      }) as any,
-      columnHelper.display({
-        id: `${marketOption.key}_${outcome}_closing`,
-        header: 'C',
-        cell: ({ row }) => {
-          const val = getOddsValue(row.original, baseKey, outcome, point, 'closing');
-          const res = getResult(row.original, baseKey, outcome, point);
-          
-          let resultClass = "";
-          if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
-          if (res === 'loss') resultClass = "!bg-red-500 !text-white";
-          if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
+              return (
+                <div className={`flex items-center justify-center w-full h-full -mx-2 -my-1 px-2 py-1 min-h-[32px] ${resultClass}`}>
+                  <span className="text-xs font-mono">{val}</span>
+                </div>
+              );
+            },
+            size: 45,
+          }) as any,
+          columnHelper.display({
+            id: `${marketOption.key}_${outcome}_closing`,
+            header: 'C',
+            cell: ({ row }) => {
+              const val = getOddsValue(row.original, baseKey, outcome, point, 'closing');
+              const res = getResult(row.original, baseKey, outcome, point);
+              
+              let resultClass = "";
+              if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
+              if (res === 'loss') resultClass = "!bg-red-500 !text-white";
+              if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
 
-          return (
-            <div className={`flex items-center justify-center w-full h-full -mx-2 -my-1 px-2 py-1 min-h-[32px] ${resultClass}`}>
-              <span className="text-xs font-mono">{val}</span>
-            </div>
-          );
-        },
-        size: 45,
-      }) as any
-    ];
+              return (
+                <div className={`flex items-center justify-center w-full h-full -mx-2 -my-1 px-2 py-1 min-h-[32px] ${resultClass}`}>
+                  <span className="text-xs font-mono">{val}</span>
+                </div>
+              );
+            },
+            size: 45,
+          }) as any
         ];
 
         outcomeColumns.push(columnHelper.group({
