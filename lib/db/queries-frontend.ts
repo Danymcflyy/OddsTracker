@@ -74,6 +74,12 @@ export async function fetchEventsForTable(params: {
     pointValue,
   } = params;
 
+  const hasAdvancedFilters = oddsMin !== undefined || oddsMax !== undefined || outcome || pointValue !== undefined;
+  
+  // If advanced filters are active, we need to fetch more data to filter in memory
+  // This is a trade-off until we implement full JSON filtering in SQL
+  const fetchLimit = hasAdvancedFilters ? 500 : pageSize;
+
   try {
     // Build query
     let query = (supabaseAdmin as any)
@@ -95,52 +101,16 @@ export async function fetchEventsForTable(params: {
         )
       `, { count: 'exact' });
 
-    // Filter by sport
-    if (sportKey) {
-      query = query.eq('sport_key', sportKey);
-    }
+    // ... (filters) ...
 
-    // Filter by date range
-    if (dateFrom) {
-      query = query.gte('commence_time', dateFrom);
-    }
-    if (dateTo) {
-      query = query.lte('commence_time', dateTo);
-    }
-
-    // Search by team names
-    if (search) {
-      query = query.or(`home_team.ilike.%${search}%,away_team.ilike.%${search}%`);
-    }
-
-    // Filter by market key (only show events with this specific market)
-    if (marketKey) {
-      query = query.eq('market_states.market_key', marketKey);
-    }
-
-    // Cursor-based pagination (more efficient for large datasets)
-    if (cursor && sortField === 'commence_time') {
-      if (cursorDirection === 'next') {
-        query = sortDirection === 'asc'
-          ? query.gt('commence_time', cursor)
-          : query.lt('commence_time', cursor);
-      } else if (cursorDirection === 'prev') {
-        query = sortDirection === 'asc'
-          ? query.lt('commence_time', cursor)
-          : query.gt('commence_time', cursor);
-      }
-    }
-
-    // Sorting
-    query = query.order(sortField as any, { ascending: sortDirection === 'asc' });
-
-    // Pagination: Use cursor if provided, otherwise offset-based
+    // Pagination
     if (!cursor) {
       const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
+      // If filtering, fetch a larger batch starting from offset
+      const to = from + fetchLimit - 1;
       query = query.range(from, to);
     } else {
-      query = query.limit(pageSize);
+      query = query.limit(fetchLimit);
     }
 
     const { data: rawData, error, count } = await query;
@@ -150,64 +120,55 @@ export async function fetchEventsForTable(params: {
       return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
     }
 
-    // Transform data for frontend
+    // Transform data
     let data: EventWithOdds[] = (rawData || []).map((event: any) => {
-      // ... existing transformation logic ...
-      const marketStates = event.market_states || [];
-      // closing_odds peut être un objet direct ou un tableau (selon la relation Supabase)
-      const closingOdds = Array.isArray(event.closing_odds)
-        ? event.closing_odds[0] || null
-        : event.closing_odds || null;
-
-      // Unfold opening odds variations to create separate entries for each point value
-      const openingOddsList: any[] = [];
-      marketStates.forEach((ms: any) => {
-        if (ms.status === 'captured' && ms.opening_odds_variations && ms.opening_odds_variations.length > 0) {
-          // Use variations if available
-          ms.opening_odds_variations.forEach((variation: any) => {
-            openingOddsList.push({
-              market_key: ms.market_key,
-              market_name: getMarketDisplayName(ms.market_key),
-              odds: variation,
-              captured_at: ms.opening_captured_at,
-            });
-          });
-        } else if (ms.status === 'captured' && ms.opening_odds) {
-          // Fallback to single opening_odds for backward compatibility
-          openingOddsList.push({
-            market_key: ms.market_key,
-            market_name: getMarketDisplayName(ms.market_key),
-            odds: ms.opening_odds,
-            captured_at: ms.opening_captured_at,
-          });
-        }
-      });
-
-      const marketsCaptured = marketStates.filter((ms: any) => ms.status === 'captured').length;
-      const marketsPending = marketStates.filter((ms: any) => ms.status === 'pending').length;
-      const totalMarkets = marketStates.length;
-      const capturePercentage = totalMarkets > 0 ? Math.round((marketsCaptured / totalMarkets) * 100) : 0;
-
-      return {
-        ...event,
-        opening_odds: openingOddsList,
-        closing_odds: closingOdds,
-        markets_captured: marketsCaptured,
-        markets_pending: marketsPending,
-        capture_percentage: capturePercentage,
-      };
+        // ... (transformation logic is same) ...
+        const marketStates = event.market_states || [];
+        const closingOdds = Array.isArray(event.closing_odds) ? event.closing_odds[0] || null : event.closing_odds || null;
+        const openingOddsList: any[] = [];
+        marketStates.forEach((ms: any) => {
+            if (ms.status === 'captured' && ms.opening_odds_variations && ms.opening_odds_variations.length > 0) {
+                ms.opening_odds_variations.forEach((variation: any) => {
+                    openingOddsList.push({
+                        market_key: ms.market_key,
+                        market_name: getMarketDisplayName(ms.market_key),
+                        odds: variation,
+                        captured_at: ms.opening_captured_at,
+                    });
+                });
+            } else if (ms.status === 'captured' && ms.opening_odds) {
+                openingOddsList.push({
+                    market_key: ms.market_key,
+                    market_name: getMarketDisplayName(ms.market_key),
+                    odds: ms.opening_odds,
+                    captured_at: ms.opening_captured_at,
+                });
+            }
+        });
+        const marketsCaptured = marketStates.filter((ms: any) => ms.status === 'captured').length;
+        const marketsPending = marketStates.filter((ms: any) => ms.status === 'pending').length;
+        const totalMarkets = marketStates.length;
+        const capturePercentage = totalMarkets > 0 ? Math.round((marketsCaptured / totalMarkets) * 100) : 0;
+        return {
+            ...event,
+            opening_odds: openingOddsList,
+            closing_odds: closingOdds,
+            markets_captured: marketsCaptured,
+            markets_pending: marketsPending,
+            capture_percentage: capturePercentage,
+        };
     });
 
     // Apply Advanced Filtering (Post-Fetch)
-    if (oddsMin !== undefined || oddsMax !== undefined || outcome || pointValue !== undefined) {
+    if (hasAdvancedFilters) {
       data = data.filter(event => {
+        // ... (same filtering logic as before) ...
         // Check Opening Odds
         const hasMatchingOpening = event.opening_odds.some(market => {
           if (pointValue !== undefined && market.odds.point !== pointValue) return false;
           
           const oddsValues = Object.values(market.odds).filter(v => typeof v === 'number') as number[];
           
-          // Filter by outcome if specified
           if (outcome && outcome !== 'all') {
              const specificOdd = market.odds[outcome];
              if (!specificOdd) return false;
@@ -216,7 +177,6 @@ export async function fetchEventsForTable(params: {
              return true;
           }
 
-          // Filter any odd in the market
           return oddsValues.some(val => {
             if (oddsMin !== undefined && val < oddsMin) return false;
             if (oddsMax !== undefined && val > oddsMax) return false;
@@ -224,13 +184,12 @@ export async function fetchEventsForTable(params: {
           });
         });
 
-        // Check Closing Odds (if oddsType includes closing)
+        // Check Closing Odds
         let hasMatchingClosing = false;
         if (event.closing_odds && event.closing_odds.markets) {
            const closingMarkets = Object.values(event.closing_odds.markets) as any[];
            hasMatchingClosing = closingMarkets.some(market => {
              if (pointValue !== undefined && market.point !== pointValue) return false;
-             
              const oddsValues = Object.values(market).filter(v => typeof v === 'number') as number[];
 
              if (outcome && outcome !== 'all') {
@@ -255,25 +214,32 @@ export async function fetchEventsForTable(params: {
       });
     }
 
-    // Calculate cursors for next/prev pages (only for cursor-based pagination)
+    // Limit result to requested page size if we fetched more
+    const totalFiltered = hasAdvancedFilters ? data.length : (count || 0); // Approx total if filtered
+    const dataPaginated = hasAdvancedFilters ? data.slice(0, pageSize) : data;
+
+    // Calculate cursors
     let nextCursor: string | undefined;
     let prevCursor: string | undefined;
 
-    if (data.length > 0 && sortField === 'commence_time') {
-      const lastItem = data[data.length - 1];
-      const firstItem = data[0];
-
+    if (dataPaginated.length > 0 && sortField === 'commence_time') {
+      const lastItem = dataPaginated[dataPaginated.length - 1];
+      const firstItem = dataPaginated[0];
       nextCursor = lastItem.commence_time;
       prevCursor = firstItem.commence_time;
     }
 
     return {
-      data,
-      total: count || 0,
+      data: dataPaginated,
+      total: totalFiltered,
       nextCursor,
       prevCursor,
     };
   } catch (error) {
+    console.error('Error in fetchEventsForTable:', error);
+    return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
+  }
+}  } catch (error) {
     console.error('Error in fetchEventsForTable:', error);
     return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
   }
