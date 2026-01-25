@@ -208,6 +208,7 @@ export function buildFootballColumns(
       }
 
       const isLastPoint = sortedPoints.indexOf(point) === sortedPoints.length - 1;
+      const outcomeColumns: ColumnDef<EventWithOdds>[] = [];
 
       activeOutcomes.forEach(outcome => {
         const outcomeLabel = getOutcomeLabel(outcome, config);
