@@ -104,7 +104,7 @@ export function DataTable<TData, TValue>({
       {renderToolbar ? <div className="flex flex-col gap-3">{renderToolbar(table)}</div> : null}
       <div className="rounded-lg border bg-white overflow-x-auto">
         <Table>
-          <TableHeader className="bg-white sticky top-0 z-10 shadow-sm">
+          <TableHeader className="bg-white border-b">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -122,7 +122,7 @@ export function DataTable<TData, TValue>({
                       key={header.id}
                       colSpan={header.colSpan}
                       className={cn(
-                        "sticky top-0 z-10 border-b border-r last:border-r-0 p-0",
+                        "border-b border-r last:border-r-0 p-0",
                         // Hierarchical background colors
                         header.depth === 0 ? "bg-slate-100 font-bold text-slate-900 h-10" : 
                         header.depth === 1 ? "bg-slate-50 font-semibold text-slate-700 h-9" : 
@@ -130,8 +130,6 @@ export function DataTable<TData, TValue>({
                       )}
                       style={{
                         textAlign: header.colSpan > 1 ? "center" : "left",
-                        // Correct sticky offset for nested rows
-                        top: header.depth * 40, // 40px is approx height of each header row
                       }}
                     >
                       <div className="relative group px-2 py-1 h-full flex items-center justify-center">
