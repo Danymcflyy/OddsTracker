@@ -118,32 +118,44 @@ export function DataTable<TData, TValue>({
                   const sortState = header.column.getIsSorted();
 
                   return (
-                    <TableHead key={header.id} className="bg-white sticky top-0 z-10">
-                      {canSort ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 -ml-3"
-                          onClick={header.column.getToggleSortingHandler()}
-                        >
-                          <span className="mr-2">
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
+                    <TableHead
+                      key={header.id}
+                      colSpan={header.colSpan}
+                      className={cn(
+                        "bg-white sticky top-0 z-10 border-b border-r last:border-r-0",
+                        header.depth > 1 && "top-10" // Adjust top for nested headers if needed, but sticky handles it usually
+                      )}
+                      style={{
+                        textAlign: header.colSpan > 1 ? "center" : "left",
+                      }}
+                    >
+                      {header.isPlaceholder ? null : (
+                        canSort ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 -ml-3"
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            <span className="mr-2">
+                              {flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                            </span>
+                            {sortState === "asc" ? (
+                              <ArrowUp className="h-4 w-4" />
+                            ) : sortState === "desc" ? (
+                              <ArrowDown className="h-4 w-4" />
+                            ) : (
+                              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
                             )}
-                          </span>
-                          {sortState === "asc" ? (
-                            <ArrowUp className="h-4 w-4" />
-                          ) : sortState === "desc" ? (
-                            <ArrowDown className="h-4 w-4" />
-                          ) : (
-                            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </Button>
-                      ) : (
-                        flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
+                          </Button>
+                        ) : (
+                          flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )
                         )
                       )}
                     </TableHead>
