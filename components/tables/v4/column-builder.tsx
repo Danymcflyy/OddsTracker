@@ -311,9 +311,14 @@ function getOddsValue(
 }
 
 function getResult(event: EventWithOdds, marketKey: string, outcome: OutcomeType, point: number | undefined) {
-  const score = event.status === 'completed' && event.home_score !== null && event.away_score !== null
-    ? { home: event.home_score, away: event.away_score }
+  // Ensure scores are numbers
+  const homeScore = event.home_score !== null ? Number(event.home_score) : null;
+  const awayScore = event.away_score !== null ? Number(event.away_score) : null;
+
+  const score = event.status === 'completed' && homeScore !== null && awayScore !== null
+    ? { home: homeScore, away: awayScore }
     : null;
+    
   return getMarketResult(marketKey, outcome, point, score);
 }
 
