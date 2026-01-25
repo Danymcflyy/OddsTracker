@@ -49,101 +49,84 @@ async function run() {
 
   console.log(`📊 ${events.length} événement(s) dans la fenêtre\n`);
 
-  // 2. GROUPER PAR SPORT
-  const eventsBySport = events.reduce((acc, event) => {
-    if (!acc[event.sport_key]) acc[event.sport_key] = [];
-    acc[event.sport_key].push(event);
-    return acc;
-  }, {} as Record<string, any[]>);
+  // 2. RÉCUPÉRER TOUS LES MARCHÉS TRACKÉS
+  // On ne filtre plus, on prend tout ce qui est demandé car l'endpoint par événement est plus souple
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('value')
+    .eq('key', 'tracked_markets')
+    .single();
+
+  let marketsToCapture = 'h2h,spreads,totals'; // Default
+  if (settings?.value && Array.isArray(settings.value) && settings.value.length > 0) {
+    marketsToCapture = settings.value.join(',');
+  }
+  console.log(`   Marchés cibles: ${marketsToCapture}\n`);
 
   let totalCaptured = 0;
   let totalSkipped = 0;
   let totalCredits = 0;
 
-  // 3. TRAITER CHAQUE SPORT
-  for (const [sportKey, sportEvents] of Object.entries(eventsBySport)) {
-    console.log(`\n🏆 Sport: ${sportKey}`);
-    console.log(`   ${sportEvents.length} événement(s)\n`);
+  // 3. TRAITER CHAQUE ÉVÉNEMENT INDIVIDUELLEMENT (Stratégie "Qualité")
+  for (const dbEvent of events) {
+    const minutesBeforeKickoff = calculateMinutesBeforeKickoff(dbEvent.commence_time, now);
 
-    // Déterminer quels marchés capturer (progressif)
-    const markets = await getMarketsForCapture(supabase, sportEvents);
-    console.log(`   Marchés à capturer: ${markets}`);
+    console.log(`🏆 ${dbEvent.home_team} vs ${dbEvent.away_team} (${dbEvent.sport_key})`);
+    console.log(`   Kick-off: ${new Date(dbEvent.commence_time).toLocaleTimeString('fr-FR')}`);
+    console.log(`   Position: M${minutesBeforeKickoff > 0 ? '+' : ''}${minutesBeforeKickoff}`);
+
+    // Vérifier fenêtre stricte (M-15 à M+15)
+    if (minutesBeforeKickoff < -15 || minutesBeforeKickoff > 15) {
+      console.log(`   ⏭️ Hors fenêtre de capture stricte\n`);
+      totalSkipped++;
+      continue;
+    }
+
+    // Vérifier si déjà capturé à ce moment (déduplication)
+    const { data: existing } = await supabase
+      .from('closing_odds_snapshots')
+      .select('id')
+      .eq('event_id', dbEvent.id)
+      .eq('minutes_before_kickoff', minutesBeforeKickoff)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      console.log(`   ✓ Déjà capturé à ce moment\n`);
+      totalSkipped++;
+      continue;
+    }
 
     try {
-      // 4. UNE REQUÊTE API PAR SPORT (avec cache)
-      const apiEvents = await getOddsWithCache(client, sportKey, markets);
+      console.log(`   🌐 Appel API (Single Event)...`);
+      // Requête par événement pour supporter tous les marchés
+      const response = await client.getEventOdds(dbEvent.sport_key, dbEvent.api_event_id, {
+        regions: 'eu',
+        markets: marketsToCapture,
+        oddsFormat: 'decimal',
+        dateFormat: 'iso',
+      });
 
-      if (!apiEvents || apiEvents.length === 0) {
-        console.log(`   ⚠️ Aucun événement retourné par l'API`);
+      const apiEvent = response.data;
+      const creditsUsed = response.headers.requestsLast || 0; // Estimation
+      totalCredits += creditsUsed;
+
+      if (!apiEvent || !apiEvent.bookmakers || apiEvent.bookmakers.length === 0) {
+        console.log(`   ⚠️ Pas de bookmakers retournés`);
+        // Finalisation si post-match...
         continue;
       }
 
-      const creditsUsed = apiEvents.length * markets.split(',').length;
-      totalCredits += creditsUsed;
-
-      console.log(`   📊 ${apiEvents.length} match(s) retournés par l'API`);
-      console.log(`   💰 ${creditsUsed} crédits utilisés\n`);
-
-      // 5. TRAITER CHAQUE ÉVÉNEMENT
-      for (const dbEvent of sportEvents) {
-        const minutesBeforeKickoff = calculateMinutesBeforeKickoff(dbEvent.commence_time, now);
-
-        console.log(`   🏆 ${dbEvent.home_team} vs ${dbEvent.away_team}`);
-        console.log(`      Kick-off: ${new Date(dbEvent.commence_time).toLocaleTimeString('fr-FR')}`);
-        console.log(`      Position: M${minutesBeforeKickoff > 0 ? '+' : ''}${minutesBeforeKickoff}`);
-
-        // Vérifier si dans la fenêtre de capture
-        if (minutesBeforeKickoff < -10 || minutesBeforeKickoff > 10) {
-          console.log(`      ⏭️ Hors fenêtre de capture\n`);
-          totalSkipped++;
-          continue;
-        }
-
-        // Trouver l'événement dans la réponse API
-        const apiEvent = apiEvents.find(e => e.id === dbEvent.api_event_id);
-
-        if (!apiEvent || !apiEvent.bookmakers || apiEvent.bookmakers.length === 0) {
-          console.log(`      ⚠️ Match absent de l'API ou pas de bookmakers`);
-
-          // Si après kick-off, finaliser
-          if (minutesBeforeKickoff <= 0) {
-            console.log(`      📊 Finalisation...`);
-            await finalizeClosingOdds(supabase, dbEvent.id);
-          }
-          console.log('');
-          continue;
-        }
-
-        // Vérifier si déjà capturé à ce moment
-        const { data: existing } = await supabase
-          .from('closing_odds_snapshots')
-          .select('id')
-          .eq('event_id', dbEvent.id)
-          .eq('minutes_before_kickoff', minutesBeforeKickoff)
-          .limit(1);
-
-        if (existing && existing.length > 0) {
-          console.log(`      ✓ Déjà capturé à ce moment\n`);
-          totalSkipped++;
-          continue;
-        }
-
-        // Capturer le snapshot
-        try {
-          await captureSnapshot(supabase, dbEvent, apiEvent, minutesBeforeKickoff);
-          console.log(`      ✅ Snapshot capturé\n`);
-          totalCaptured++;
-        } catch (error: any) {
-          console.log(`      ❌ Erreur capture: ${error.message}\n`);
-        }
-      }
+      await captureSnapshot(supabase, dbEvent, apiEvent, minutesBeforeKickoff);
+      console.log(`   ✅ Snapshot capturé (Coût: ~${creditsUsed})\n`);
+      totalCaptured++;
 
     } catch (error: any) {
-      console.error(`   ❌ Erreur pour ${sportKey}:`, error.message);
+      console.log(`   ❌ Erreur API: ${error.message}\n`);
+      // Si 422 ici, c'est que le marché est vraiment invalide même pour cet event
     }
   }
 
-  // 6. FINALISER LES ÉVÉNEMENTS PASSÉS M+10
+  // 4. FINALISER LES ÉVÉNEMENTS PASSÉS (inchangé)
   console.log('\n═══════════════════════════════════════════════════════');
   console.log('FINALISATION');
   console.log('═══════════════════════════════════════════════════════\n');
