@@ -195,11 +195,33 @@ export function buildFootballColumns(
     if (activeOutcomes.length === 0) return;
 
     const marketGroupColumns: ColumnDef<EventWithOdds>[] = [];
-    const sortedPoints = Array.from(variationsMap.keys()).sort((a, b) => (a ?? 0) - (b ?? 0));
+const POPULAR_POINTS = {
+  spreads: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, -0.25, -0.5, -0.75, -1, -1.25, -1.5],
+  totals: [1.5, 2.5, 3.5, 4.5],
+};
+
+function isPopularPoint(marketKey: string, point: number | undefined): boolean {
+  if (point === undefined) return true; // Keep markets without points (1X2)
+  
+  if (marketKey.includes('spreads')) {
+    return POPULAR_POINTS.spreads.includes(point);
+  }
+  if (marketKey.includes('totals') && !marketKey.includes('team')) { // Exclude team totals from strict filtering for now or add specific list
+    return POPULAR_POINTS.totals.includes(point);
+  }
+  return true; // Keep other markets by default
+}
+
+// ... inside buildFootballColumns ...
+
+    // Trier et filtrer les variations (points)
+    const sortedPoints = Array.from(variationsMap.keys())
+      .filter(point => isPopularPoint(baseKey, point))
+      .sort((a, b) => (a ?? 0) - (b ?? 0));
 
     sortedPoints.forEach(point => {
-      const marketOption = variationsMap.get(point)!;
-      let variationLabel = ''; // Empty means direct attachment
+      // ... rest of the loop
+
       
       if (point !== undefined) {
         variationLabel = point > 0 ? `+${point}` : `${point}`;
