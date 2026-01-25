@@ -54,6 +54,7 @@ export async function fetchEventsForTable(params: {
   oddsType?: 'opening' | 'closing' | 'both';
   outcome?: string; // 'home', 'away', 'draw', 'over', 'under'
   pointValue?: number;
+  dropMin?: number; // Nouveau filtre
 }): Promise<{ data: EventWithOdds[]; total: number; nextCursor?: string; prevCursor?: string }> {
   const {
     sportKey,
@@ -69,7 +70,8 @@ export async function fetchEventsForTable(params: {
     pointValue,
     oddsMin,
     oddsMax,
-    outcome
+    outcome,
+    dropMin
   } = params;
 
   try {
@@ -84,6 +86,7 @@ export async function fetchEventsForTable(params: {
       p_odds_max: oddsMax || null,
       p_outcome: outcome && outcome !== 'all' ? outcome : null,
       p_point_value: pointValue || null,
+      p_drop_min: dropMin || null,
       p_page: page,
       p_page_size: pageSize,
     };
@@ -105,8 +108,6 @@ export async function fetchEventsForTable(params: {
       const closingOddsData = event.closing_odds_json || null;
       
       // Closing Odds structure adjustment
-      // The RPC returns the raw closing_odds row as JSON.
-      // We need to map it to the structure expected by the frontend: { markets, ... }
       const closingOdds = closingOddsData ? {
           markets: closingOddsData.markets,
           markets_variations: closingOddsData.markets_variations,
@@ -142,7 +143,7 @@ export async function fetchEventsForTable(params: {
 
       return {
         id: event.id,
-        api_event_id: '', // Not returned by RPC usually, strictly needed? Interface says yes. Let's add it or ignore if not used by UI.
+        api_event_id: '', 
         sport_id: null,
         sport_key: event.sport_key,
         sport_title: event.sport_title,
@@ -154,7 +155,7 @@ export async function fetchEventsForTable(params: {
         away_score: event.away_score,
         completed: event.status === 'completed',
         last_api_update: null,
-        created_at: '', // Not critical for UI
+        created_at: '', 
         updated_at: '',
         opening_odds: openingOddsList,
         closing_odds: closingOdds,
@@ -166,7 +167,7 @@ export async function fetchEventsForTable(params: {
       } as EventWithOdds;
     });
 
-    // Calculate cursors (RPC handles pagination, so cursor logic is less relevant but good for consistency)
+    // Calculate cursors
     let nextCursor: string | undefined;
     let prevCursor: string | undefined;
 
