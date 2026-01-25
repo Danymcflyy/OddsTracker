@@ -132,43 +132,14 @@ export function DataTable<TData, TValue>({
                         textAlign: header.colSpan > 1 ? "center" : "left",
                       }}
                     >
-                      <div className="relative group px-2 py-1 h-full flex items-center justify-center">
+                      <div className="px-2 py-1 h-full flex items-center justify-center">
                         {header.isPlaceholder ? null : (
-                          <>
-                            <span className="truncate">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </span>
-                            
-                            {/* Hide button - visible on hover */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                header.column.toggleVisibility(false);
-                              }}
-                              className="absolute right-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity p-1"
-                              title="Masquer ce groupe"
-                            >
-                              <EyeOff className="h-3 w-3" />
-                            </button>
-
-                            {canSort && header.depth > 1 && (
-                              <button
-                                onClick={header.column.getToggleSortingHandler()}
-                                className="ml-1 opacity-50 hover:opacity-100"
-                              >
-                                {sortState === "asc" ? (
-                                  <ArrowUp className="h-3 w-3" />
-                                ) : sortState === "desc" ? (
-                                  <ArrowDown className="h-3 w-3" />
-                                ) : (
-                                  <ArrowUpDown className="h-3 w-3" />
-                                )}
-                              </button>
+                          <span className="truncate">
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
                             )}
-                          </>
+                          </span>
                         )}
                       </div>
                     </TableHead>
@@ -191,7 +162,7 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} data-state={row.getIsSelected() && "selected"} className="hover:bg-slate-50">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-1 px-2 border-r last:border-r-0 border-b">
+                    <TableCell key={cell.id} className="py-1 px-2 border-r last:border-r-0 border-b overflow-hidden">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
