@@ -32,44 +32,43 @@ async function debugAtleticoMallorca() {
 
   const event = events[0];
   console.log(`Match Found: ${event.home_team} vs ${event.away_team} (ID: ${event.id})`);
+  console.log(`Commence Time: ${event.commence_time}`);
 
-  // 2. Check market_states (Opening Odds)
-  const { data: marketStates, error: msError } = await supabase
-    .from('market_states')
+  // 2. Check Closing Odds (Final table)
+  const { data: closing, error: closingError } = await supabase
+    .from('closing_odds')
     .select('*')
     .eq('event_id', event.id);
 
-  if (msError) {
-    console.error("❌ Error fetching market_states:", msError.message);
-    return;
+  if (closingError) {
+    console.error("❌ Error fetching closing_odds:", closingError.message);
+  } else if (!closing || closing.length === 0) {
+    console.log("❌ No entry in 'closing_odds' table (Finalized odds)");
+  } else {
+    console.log("✅ Found entry in 'closing_odds':");
+    console.log(JSON.stringify(closing[0], null, 2));
   }
 
-  console.log(`Found ${marketStates.length} market states (opening lines).
-`);
+  // 3. Check Snapshots (Real-time capture)
+  const { data: snapshots, error: snapError } = await supabase
+    .from('closing_odds_snapshots')
+    .select('*')
+    .eq('event_id', event.id)
+    .order('captured_at', { ascending: false });
 
-  for (const ms of marketStates) {
-    console.log(`=== Market: ${ms.market_key} (Status: ${ms.status}) ===`);
-    console.log(`Captured At: ${ms.opening_captured_at}`);
-    
-    if (ms.opening_odds) {
-        console.log("  -> Main Line:", JSON.stringify(ms.opening_odds));
-    } else {
-        console.log("  -> Main Line: MISSING");
-    }
-
-    if (ms.opening_odds_variations && Array.isArray(ms.opening_odds_variations)) {
-        console.log(`  -> Variations: Found ${ms.opening_odds_variations.length} entries`);
-        if (ms.opening_odds_variations.length > 0) {
-            // Show variations clearly to see what points are available
-            ms.opening_odds_variations.forEach((v, idx) => {
-                if (idx < 5) console.log(`     [${idx}] Point: ${v.point} | ${JSON.stringify(v)}`);
-            });
-            if (ms.opening_odds_variations.length > 5) console.log("     ...");
+  if (snapError) {
+    console.error("❌ Error fetching snapshots:", snapError.message);
+  } else if (!snapshots || snapshots.length === 0) {
+    console.log("❌ No snapshots found in 'closing_odds_snapshots'");
+  } else {
+    console.log(`✅ Found ${snapshots.length} snapshots:`);
+    snapshots.forEach(s => {
+        console.log(`   - [M${s.minutes_before_kickoff}] Captured at ${s.captured_at}`);
+        console.log(`     Markets: ${Object.keys(s.markets).join(', ')}`);
+        if (s.markets_variations) {
+            console.log(`     Variations: ${Object.keys(s.markets_variations).join(', ')}`);
         }
-    } else {
-        console.log("  -> Variations: NONE");
-    }
-    console.log("");
+    });
   }
 }
 

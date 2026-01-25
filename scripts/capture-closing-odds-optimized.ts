@@ -182,8 +182,17 @@ async function getMarketsForCapture(supabase: any, _sportEvents: any[]): Promise
     .eq('key', 'tracked_markets')
     .single();
 
+  const SAFE_MARKETS = ['h2h', 'spreads', 'totals'];
+  
   if (settings?.value && Array.isArray(settings.value) && settings.value.length > 0) {
-    return settings.value.join(',');
+    // Filtrer pour ne garder que les marchés supportés par l'endpoint /odds (éviter 422)
+    // L'API est stricte: h2h, spreads, totals. (draw_no_bet, etc. font planter)
+    const safeList = settings.value.filter((m: string) => SAFE_MARKETS.includes(m));
+    
+    // Si la liste filtrée est vide (ex: on ne tracke que des trucs exotiques), on force les bases
+    if (safeList.length === 0) return 'h2h,spreads,totals';
+    
+    return safeList.join(',');
   }
 
   // Fallback: marchés par défaut
