@@ -220,7 +220,11 @@ export function buildFootballColumns(
               const val = getOddsValue(row.original, baseKey, outcome, point, 'opening');
               const res = getResult(row.original, baseKey, outcome, point);
               const color = getResultColorClass(res);
-              return <span className={`text-xs font-mono ${color}`}>{val}</span>;
+              return (
+                <div className={`flex items-center justify-center -mx-2 -my-1 px-2 py-1 min-h-[32px] w-[calc(100%+16px)] ${color}`}>
+                  <span className="text-xs font-mono">{val}</span>
+                </div>
+              );
             },
             size: 45,
           }),
@@ -231,7 +235,11 @@ export function buildFootballColumns(
               const val = getOddsValue(row.original, baseKey, outcome, point, 'closing');
               const res = getResult(row.original, baseKey, outcome, point);
               const color = getResultColorClass(res);
-              return <span className={`text-xs font-mono ${color}`}>{val}</span>;
+              return (
+                <div className={`flex items-center justify-center -mx-2 -my-1 px-2 py-1 min-h-[32px] w-[calc(100%+16px)] ${color}`}>
+                  <span className="text-xs font-mono">{val}</span>
+                </div>
+              );
             },
             size: 45,
           })
