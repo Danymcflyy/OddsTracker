@@ -289,6 +289,18 @@ export function buildFootballColumns(
           const result = getMarketResult(baseMarketKey, outcome, targetPoint, score);
           const colorClass = getResultColorClass(result);
 
+          // DEBUG: Log why it's not winning
+          if (row.original.status === 'completed' && baseMarketKey === 'h2h' && Math.random() < 0.01) {
+             console.log(`[Debug Win] Match: ${row.original.home_team} vs ${row.original.away_team}`, {
+               market: baseMarketKey,
+               outcome,
+               score,
+               oddsValue,
+               result,
+               colorClass
+             });
+          }
+
           return (
             <span className={`text-xs font-mono ${colorClass}`}>
               {formatOddsValue(oddsValue)}
