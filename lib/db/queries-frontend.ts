@@ -67,6 +67,9 @@ export async function fetchEventsForTable(params: {
     sortDirection = 'asc',
     cursor,
     pointValue,
+    oddsMin,
+    oddsMax,
+    outcome
   } = params;
 
   try {
@@ -181,15 +184,6 @@ export async function fetchEventsForTable(params: {
       prevCursor,
     };
   } catch (error) {
-    console.error('Error in fetchEventsForTable:', error);
-    return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
-  }
-}
-  } catch (error) {
-    console.error('Error in fetchEventsForTable:', error);
-    return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
-  }
-}  } catch (error) {
     console.error('Error in fetchEventsForTable:', error);
     return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
   }
