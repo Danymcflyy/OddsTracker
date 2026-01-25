@@ -221,9 +221,12 @@ export function buildFootballColumns(
               const res = getResult(row.original, baseKey, outcome, point);
               
               let resultClass = "";
-              if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
-              if (res === 'loss') resultClass = "!bg-red-500 !text-white";
-              if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
+              // Apply color ONLY if odds value is valid
+              if (val !== '-') {
+                if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
+                if (res === 'loss') resultClass = "!bg-red-500 !text-white";
+                if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
+              }
 
               return (
                 <div className={`flex items-center justify-center w-full h-10 px-2 py-1 ${resultClass}`}>
@@ -241,9 +244,12 @@ export function buildFootballColumns(
               const res = getResult(row.original, baseKey, outcome, point);
               
               let resultClass = "";
-              if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
-              if (res === 'loss') resultClass = "!bg-red-500 !text-white";
-              if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
+              // Apply color ONLY if odds value is valid
+              if (val !== '-') {
+                if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
+                if (res === 'loss') resultClass = "!bg-red-500 !text-white";
+                if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
+              }
 
               return (
                 <div className={`flex items-center justify-center w-full h-10 px-2 py-1 ${resultClass}`}>
