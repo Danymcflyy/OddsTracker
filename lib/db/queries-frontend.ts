@@ -48,6 +48,12 @@ export async function fetchEventsForTable(params: {
   sortDirection?: 'asc' | 'desc';
   cursor?: string; // ISO timestamp for cursor-based pagination
   cursorDirection?: 'next' | 'prev';
+  // Advanced filters
+  oddsMin?: number;
+  oddsMax?: number;
+  oddsType?: 'opening' | 'closing' | 'both';
+  outcome?: string; // 'home', 'away', 'draw', 'over', 'under'
+  pointValue?: number;
 }): Promise<{ data: EventWithOdds[]; total: number; nextCursor?: string; prevCursor?: string }> {
   const {
     sportKey,
@@ -61,6 +67,11 @@ export async function fetchEventsForTable(params: {
     sortDirection = 'asc',
     cursor,
     cursorDirection,
+    oddsMin,
+    oddsMax,
+    oddsType,
+    outcome,
+    pointValue,
   } = params;
 
   try {
@@ -140,7 +151,8 @@ export async function fetchEventsForTable(params: {
     }
 
     // Transform data for frontend
-    const data: EventWithOdds[] = (rawData || []).map((event: any) => {
+    let data: EventWithOdds[] = (rawData || []).map((event: any) => {
+      // ... existing transformation logic ...
       const marketStates = event.market_states || [];
       // closing_odds peut être un objet direct ou un tableau (selon la relation Supabase)
       const closingOdds = Array.isArray(event.closing_odds)
@@ -185,6 +197,63 @@ export async function fetchEventsForTable(params: {
         capture_percentage: capturePercentage,
       };
     });
+
+    // Apply Advanced Filtering (Post-Fetch)
+    if (oddsMin !== undefined || oddsMax !== undefined || outcome || pointValue !== undefined) {
+      data = data.filter(event => {
+        // Check Opening Odds
+        const hasMatchingOpening = event.opening_odds.some(market => {
+          if (pointValue !== undefined && market.odds.point !== pointValue) return false;
+          
+          const oddsValues = Object.values(market.odds).filter(v => typeof v === 'number') as number[];
+          
+          // Filter by outcome if specified
+          if (outcome && outcome !== 'all') {
+             const specificOdd = market.odds[outcome];
+             if (!specificOdd) return false;
+             if (oddsMin !== undefined && specificOdd < oddsMin) return false;
+             if (oddsMax !== undefined && specificOdd > oddsMax) return false;
+             return true;
+          }
+
+          // Filter any odd in the market
+          return oddsValues.some(val => {
+            if (oddsMin !== undefined && val < oddsMin) return false;
+            if (oddsMax !== undefined && val > oddsMax) return false;
+            return true;
+          });
+        });
+
+        // Check Closing Odds (if oddsType includes closing)
+        let hasMatchingClosing = false;
+        if (event.closing_odds && event.closing_odds.markets) {
+           const closingMarkets = Object.values(event.closing_odds.markets) as any[];
+           hasMatchingClosing = closingMarkets.some(market => {
+             if (pointValue !== undefined && market.point !== pointValue) return false;
+             
+             const oddsValues = Object.values(market).filter(v => typeof v === 'number') as number[];
+
+             if (outcome && outcome !== 'all') {
+                const specificOdd = market[outcome];
+                if (!specificOdd) return false;
+                if (oddsMin !== undefined && specificOdd < oddsMin) return false;
+                if (oddsMax !== undefined && specificOdd > oddsMax) return false;
+                return true;
+             }
+
+             return oddsValues.some(val => {
+               if (oddsMin !== undefined && val < oddsMin) return false;
+               if (oddsMax !== undefined && val > oddsMax) return false;
+               return true;
+             });
+           });
+        }
+
+        if (oddsType === 'opening') return hasMatchingOpening;
+        if (oddsType === 'closing') return hasMatchingClosing;
+        return hasMatchingOpening || hasMatchingClosing;
+      });
+    }
 
     // Calculate cursors for next/prev pages (only for cursor-based pagination)
     let nextCursor: string | undefined;
