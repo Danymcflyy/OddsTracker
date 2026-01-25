@@ -78,42 +78,65 @@ export async function fetchEventsForTable(params: {
     minSnapshots
   } = params;
 
-  try {
-    // Use RPC for full database search with advanced filters
-    const rpcParams = {
-      p_sport_key: sportKey || null,
-      p_date_from: dateFrom || null,
-      p_date_to: dateTo || null,
-      p_search: search || null,
-      p_market_key: marketKey || null,
-      p_odds_min: oddsMin || null,
-      p_odds_max: oddsMax || null,
-      p_outcome: outcome && outcome !== 'all' ? outcome : null,
-      p_point_value: pointValue || null,
-      p_drop_min: dropMin || null,
-      p_status: status || null,
-      p_min_snapshots: minSnapshots || null,
-      p_page: page,
-      p_page_size: pageSize,
-    };
+  // Fallback: Use standard query + JS filtering because RPC is returning empty
+  const hasAdvancedFilters = oddsMin !== undefined || oddsMax !== undefined || (outcome && outcome !== 'all') || pointValue !== undefined || dropMin !== undefined || (status && status !== 'all') || minSnapshots !== undefined;
+  const fetchLimit = hasAdvancedFilters ? 1000 : pageSize;
 
-    const { data: rawData, error } = await (supabaseAdmin as any)
-      .rpc('search_events', rpcParams);
+  try {
+    // Build query
+    let query = (supabaseAdmin as any)
+      .from('events')
+      .select(`
+        *,
+        market_states!left(
+          id,
+          market_key,
+          status,
+          opening_odds,
+          opening_odds_variations,
+          opening_captured_at
+        ),
+        closing_odds!left(
+          markets,
+          markets_variations,
+          captured_at
+        )
+      `, { count: 'exact' });
+
+    // Basic SQL filters
+    if (sportKey) query = query.eq('sport_key', sportKey);
+    if (dateFrom) query = query.gte('commence_time', dateFrom);
+    if (dateTo) query = query.lte('commence_time', dateTo);
+    if (search) query = query.or(`home_team.ilike.%${search}%,away_team.ilike.%${search}%`);
+    if (marketKey) query = query.eq('market_states.market_key', marketKey);
+    // Simple SQL filters for new params
+    if (status && status !== 'all') query = query.eq('status', status);
+    if (minSnapshots !== undefined) query = query.gte('snapshot_count', minSnapshots);
+
+    // Sorting
+    query = query.order(sortField as any, { ascending: sortDirection === 'asc' });
+
+    // Pagination/Limit
+    if (!cursor) {
+      const from = (page - 1) * pageSize;
+      const to = from + fetchLimit - 1;
+      query = query.range(from, to);
+    } else {
+      query = query.limit(fetchLimit);
+    }
+
+    const { data: rawData, error, count } = await query;
 
     if (error) {
-      console.error('Error fetching events via RPC:', error);
+      console.error('Error fetching events:', error);
       return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
     }
 
-    // Get total count from the first row (window function result)
-    const totalCount = rawData && rawData.length > 0 ? Number(rawData[0].total_count) : 0;
-
-    // Transform RPC data for frontend
-    const data: EventWithOdds[] = (rawData || []).map((event: any) => {
-      const marketStates = event.market_states_json || []; // RPC returns aggregated JSON
-      const closingOddsData = event.closing_odds_json || null;
+    // Transform data for frontend
+    let data: EventWithOdds[] = (rawData || []).map((event: any) => {
+      const marketStates = event.market_states || [];
+      const closingOddsData = Array.isArray(event.closing_odds) ? event.closing_odds[0] : event.closing_odds;
       
-      // Closing Odds structure adjustment
       const closingOdds = closingOddsData ? {
           markets: closingOddsData.markets,
           markets_variations: closingOddsData.markets_variations,
@@ -148,44 +171,114 @@ export async function fetchEventsForTable(params: {
       const capturePercentage = totalMarkets > 0 ? Math.round((marketsCaptured / totalMarkets) * 100) : 0;
 
       return {
-        id: event.id,
-        api_event_id: '', 
-        sport_id: null,
-        sport_key: event.sport_key,
-        sport_title: event.sport_title,
-        commence_time: event.commence_time,
-        home_team: event.home_team,
-        away_team: event.away_team,
-        status: event.status,
-        home_score: event.home_score,
-        away_score: event.away_score,
-        completed: event.status === 'completed',
-        last_api_update: null,
-        created_at: '', 
-        updated_at: '',
+        ...event,
         opening_odds: openingOddsList,
         closing_odds: closingOdds,
         markets_captured: marketsCaptured,
         markets_pending: marketsPending,
         capture_percentage: capturePercentage,
-        last_snapshot_at: event.last_snapshot_at,
-        snapshot_count: event.snapshot_count
+        completed: event.status === 'completed',
+        api_event_id: event.api_event_id || '',
       } as EventWithOdds;
     });
 
-    // Calculate cursors
+    // Apply Advanced Filtering (JS Post-Fetch)
+    if (hasAdvancedFilters) {
+      data = data.filter(event => {
+        // Status & Snapshots (already filtered in SQL but double check)
+        if (status && status !== 'all' && event.status !== status) return false;
+        if (minSnapshots !== undefined && (event.snapshot_count || 0) < minSnapshots) return false;
+
+        // Odds & Drop Filtering logic
+        const checkMarket = (marketOdds: any) => {
+          if (!marketOdds) return false;
+          // Point Check
+          if (pointValue !== undefined) {
+             const p = marketOdds.point ?? marketOdds.odds?.point;
+             if (p !== pointValue) return false;
+          }
+          
+          // Value Check
+          const values = Object.values(marketOdds.odds || marketOdds).filter(v => typeof v === 'number') as number[];
+          
+          // Outcome specific
+          if (outcome && outcome !== 'all') {
+             const val = (marketOdds.odds || marketOdds)[outcome];
+             if (!val) return false;
+             if (oddsMin !== undefined && val < oddsMin) return false;
+             if (oddsMax !== undefined && val > oddsMax) return false;
+             return true;
+          }
+
+          // Any value
+          return values.some(val => {
+            if (oddsMin !== undefined && val < oddsMin) return false;
+            if (oddsMax !== undefined && val > oddsMax) return false;
+            return true;
+          });
+        };
+
+        const hasOpening = event.opening_odds.some(checkMarket);
+        
+        let hasClosing = false;
+        if (event.closing_odds && event.closing_odds.markets) {
+           const markets = Object.values(event.closing_odds.markets);
+           hasClosing = markets.some(checkMarket);
+        }
+
+        // Drop Logic
+        let hasDrop = false;
+        if (dropMin !== undefined) {
+           // Need matching opening and closing
+           // Simplified check: check if ANY market has drop > min
+           // Implementation omitted for brevity in fallback, but crucial if requested.
+           // Let's implement a simple version:
+           if (event.closing_odds && event.closing_odds.markets) {
+             hasDrop = event.opening_odds.some(openMkt => {
+                const closeMkt = event.closing_odds!.markets[openMkt.market_key];
+                if (!closeMkt) return false;
+                // Check home/away/draw
+                const outcomes = ['home', 'away', 'draw', 'over', 'under'];
+                return outcomes.some(o => {
+                   const openVal = openMkt.odds[o];
+                   const closeVal = closeMkt[o];
+                   if (typeof openVal === 'number' && typeof closeVal === 'number') {
+                      const drop = ((openVal - closeVal) / openVal) * 100;
+                      return drop >= dropMin;
+                   }
+                   return false;
+                });
+             });
+           }
+           if (!hasDrop) return false;
+        }
+
+        // Odds Type logic
+        if (oddsMin !== undefined || oddsMax !== undefined) {
+            if (oddsType === 'opening' && !hasOpening) return false;
+            if (oddsType === 'closing' && !hasClosing) return false;
+            if ((!oddsType || oddsType === 'both') && !hasOpening && !hasClosing) return false;
+        }
+
+        return true;
+      });
+    }
+
+    const totalCount = hasAdvancedFilters ? data.length : (count || 0);
+    const dataPaginated = hasAdvancedFilters ? data.slice(0, pageSize) : data;
+
     let nextCursor: string | undefined;
     let prevCursor: string | undefined;
 
-    if (data.length > 0 && sortField === 'commence_time') {
-      const lastItem = data[data.length - 1];
-      const firstItem = data[0];
+    if (dataPaginated.length > 0 && sortField === 'commence_time') {
+      const lastItem = dataPaginated[dataPaginated.length - 1];
+      const firstItem = dataPaginated[0];
       nextCursor = lastItem.commence_time;
       prevCursor = firstItem.commence_time;
     }
 
     return {
-      data,
+      data: dataPaginated,
       total: totalCount,
       nextCursor,
       prevCursor,
