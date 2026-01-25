@@ -195,31 +195,11 @@ export function buildFootballColumns(
     if (activeOutcomes.length === 0) return;
 
     const marketGroupColumns: ColumnDef<EventWithOdds>[] = [];
-const POPULAR_POINTS = {
-  spreads: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, -0.25, -0.5, -0.75, -1, -1.25, -1.5],
-  totals: [1.5, 2.5, 3.5, 4.5],
-};
-
-function isPopularPoint(marketKey: string, point: number | undefined): boolean {
-  if (point === undefined) return true; // Keep markets without points (1X2)
-  
-  if (marketKey.includes('spreads')) {
-    return POPULAR_POINTS.spreads.includes(point);
-  }
-  if (marketKey.includes('totals') && !marketKey.includes('team')) { // Exclude team totals from strict filtering for now or add specific list
-    return POPULAR_POINTS.totals.includes(point);
-  }
-  return true; // Keep other markets by default
-}
-
-// ... inside buildFootballColumns ...
-
-    // Trier les variations (points)
     const sortedPoints = Array.from(variationsMap.keys()).sort((a, b) => (a ?? 0) - (b ?? 0));
 
     sortedPoints.forEach(point => {
-      // ... rest of the loop
-
+      const marketOption = variationsMap.get(point)!;
+      let variationLabel = ''; // Empty means direct attachment
       
       if (point !== undefined) {
         variationLabel = point > 0 ? `+${point}` : `${point}`;
@@ -260,7 +240,7 @@ function isPopularPoint(marketKey: string, point: number | undefined): boolean {
         outcomeColumns.push(columnHelper.group({
           id: `${marketOption.key}_${outcome}_group`,
           header: outcomeLabel,
-          columns: dataColumns,
+          columns: dataColumns as any,
         }));
       });
 
@@ -268,7 +248,7 @@ function isPopularPoint(marketKey: string, point: number | undefined): boolean {
         marketGroupColumns.push(columnHelper.group({
           id: `${marketOption.key}_variation_group`,
           header: variationLabel,
-          columns: outcomeColumns,
+          columns: outcomeColumns as any,
         }));
       } else {
         marketGroupColumns.push(...outcomeColumns);
@@ -278,7 +258,7 @@ function isPopularPoint(marketKey: string, point: number | undefined): boolean {
     columns.push(columnHelper.group({
       id: `${baseKey}_market_group`,
       header: marketLabel,
-      columns: marketGroupColumns,
+      columns: marketGroupColumns as any,
     }));
   });
 
