@@ -54,7 +54,9 @@ export async function fetchEventsForTable(params: {
   oddsType?: 'opening' | 'closing' | 'both';
   outcome?: string; // 'home', 'away', 'draw', 'over', 'under'
   pointValue?: number;
-  dropMin?: number; // Nouveau filtre
+  dropMin?: number;
+  status?: string;
+  minSnapshots?: number;
 }): Promise<{ data: EventWithOdds[]; total: number; nextCursor?: string; prevCursor?: string }> {
   const {
     sportKey,
@@ -71,7 +73,9 @@ export async function fetchEventsForTable(params: {
     oddsMin,
     oddsMax,
     outcome,
-    dropMin
+    dropMin,
+    status,
+    minSnapshots
   } = params;
 
   try {
@@ -87,6 +91,8 @@ export async function fetchEventsForTable(params: {
       p_outcome: outcome && outcome !== 'all' ? outcome : null,
       p_point_value: pointValue || null,
       p_drop_min: dropMin || null,
+      p_status: status || null,
+      p_min_snapshots: minSnapshots || null,
       p_page: page,
       p_page_size: pageSize,
     };
