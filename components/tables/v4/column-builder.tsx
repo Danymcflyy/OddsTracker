@@ -207,12 +207,7 @@ export function buildFootballColumns(
         variationLabel = 'Std';
       }
 
-      // Determine borders
-      const isLastOutcome = activeOutcomes.indexOf(outcome) === activeOutcomes.length - 1;
       const isLastPoint = sortedPoints.indexOf(point) === sortedPoints.length - 1;
-      
-      const variationBorder = isLastOutcome ? "border-r-2 border-r-slate-300" : "border-r border-r-slate-100";
-      const marketBorder = (isLastOutcome && isLastPoint) ? "border-r-4 border-r-slate-800" : variationBorder;
 
       activeOutcomes.forEach(outcome => {
         const outcomeLabel = getOutcomeLabel(outcome, config);
