@@ -45,11 +45,22 @@ function extractOddsFromMarket(
   const isAlternateMarket = market.key.includes('alternate_');
 
   if (isAlternateMarket) {
-    // Group outcomes by point
+    // Group outcomes by point, normalizing spreads to Home perspective
     const byPoint = new Map<number, any[]>();
+    const isSpread = market.key.includes('spread');
 
     for (const outcome of market.outcomes) {
-      const point = outcome.point ?? 0;
+      let point = outcome.point ?? 0;
+      
+      // Normalize Spread points: Away +X is equivalent to Home -X
+      // We want to group them under the Home point perspective
+      if (isSpread) {
+        const name = outcome.name.toLowerCase();
+        if (name === awayTeamLower) {
+           point = -1 * point;
+        }
+      }
+
       if (!byPoint.has(point)) {
         byPoint.set(point, []);
       }
