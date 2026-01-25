@@ -66,175 +66,125 @@ export async function fetchEventsForTable(params: {
     sortField = 'commence_time',
     sortDirection = 'asc',
     cursor,
-    cursorDirection,
-    oddsMin,
-    oddsMax,
-    oddsType,
-    outcome,
     pointValue,
   } = params;
 
-  const hasAdvancedFilters = oddsMin !== undefined || oddsMax !== undefined || outcome || pointValue !== undefined;
-  
-  // If advanced filters are active, we need to fetch more data to filter in memory
-  // This is a trade-off until we implement full JSON filtering in SQL
-  const fetchLimit = hasAdvancedFilters ? 500 : pageSize;
-
   try {
-    // Build query
-    let query = (supabaseAdmin as any)
-      .from('events')
-      .select(`
-        *,
-        market_states!left(
-          id,
-          market_key,
-          status,
-          opening_odds,
-          opening_odds_variations,
-          opening_captured_at
-        ),
-        closing_odds!left(
-          markets,
-          markets_variations,
-          captured_at
-        )
-      `, { count: 'exact' });
+    // Use RPC for full database search with advanced filters
+    const rpcParams = {
+      p_sport_key: sportKey || null,
+      p_date_from: dateFrom || null,
+      p_date_to: dateTo || null,
+      p_search: search || null,
+      p_market_key: marketKey || null,
+      p_odds_min: oddsMin || null,
+      p_odds_max: oddsMax || null,
+      p_outcome: outcome && outcome !== 'all' ? outcome : null,
+      p_point_value: pointValue || null,
+      p_page: page,
+      p_page_size: pageSize,
+    };
 
-    // ... (filters) ...
-
-    // Pagination
-    if (!cursor) {
-      const from = (page - 1) * pageSize;
-      // If filtering, fetch a larger batch starting from offset
-      const to = from + fetchLimit - 1;
-      query = query.range(from, to);
-    } else {
-      query = query.limit(fetchLimit);
-    }
-
-    const { data: rawData, error, count } = await query;
+    const { data: rawData, error } = await (supabaseAdmin as any)
+      .rpc('search_events', rpcParams);
 
     if (error) {
-      console.error('Error fetching events:', error);
+      console.error('Error fetching events via RPC:', error);
       return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
     }
 
-    // Transform data
-    let data: EventWithOdds[] = (rawData || []).map((event: any) => {
-        // ... (transformation logic is same) ...
-        const marketStates = event.market_states || [];
-        const closingOdds = Array.isArray(event.closing_odds) ? event.closing_odds[0] || null : event.closing_odds || null;
-        const openingOddsList: any[] = [];
-        marketStates.forEach((ms: any) => {
-            if (ms.status === 'captured' && ms.opening_odds_variations && ms.opening_odds_variations.length > 0) {
-                ms.opening_odds_variations.forEach((variation: any) => {
-                    openingOddsList.push({
-                        market_key: ms.market_key,
-                        market_name: getMarketDisplayName(ms.market_key),
-                        odds: variation,
-                        captured_at: ms.opening_captured_at,
-                    });
-                });
-            } else if (ms.status === 'captured' && ms.opening_odds) {
-                openingOddsList.push({
-                    market_key: ms.market_key,
-                    market_name: getMarketDisplayName(ms.market_key),
-                    odds: ms.opening_odds,
-                    captured_at: ms.opening_captured_at,
-                });
-            }
-        });
-        const marketsCaptured = marketStates.filter((ms: any) => ms.status === 'captured').length;
-        const marketsPending = marketStates.filter((ms: any) => ms.status === 'pending').length;
-        const totalMarkets = marketStates.length;
-        const capturePercentage = totalMarkets > 0 ? Math.round((marketsCaptured / totalMarkets) * 100) : 0;
-        return {
-            ...event,
-            opening_odds: openingOddsList,
-            closing_odds: closingOdds,
-            markets_captured: marketsCaptured,
-            markets_pending: marketsPending,
-            capture_percentage: capturePercentage,
-        };
+    // Get total count from the first row (window function result)
+    const totalCount = rawData && rawData.length > 0 ? Number(rawData[0].total_count) : 0;
+
+    // Transform RPC data for frontend
+    const data: EventWithOdds[] = (rawData || []).map((event: any) => {
+      const marketStates = event.market_states_json || []; // RPC returns aggregated JSON
+      const closingOddsData = event.closing_odds_json || null;
+      
+      // Closing Odds structure adjustment
+      // The RPC returns the raw closing_odds row as JSON.
+      // We need to map it to the structure expected by the frontend: { markets, ... }
+      const closingOdds = closingOddsData ? {
+          markets: closingOddsData.markets,
+          markets_variations: closingOddsData.markets_variations,
+          captured_at: closingOddsData.captured_at
+      } : null;
+
+      // Unfold opening odds variations
+      const openingOddsList: any[] = [];
+      marketStates.forEach((ms: any) => {
+        if (ms.status === 'captured' && ms.opening_odds_variations && ms.opening_odds_variations.length > 0) {
+          ms.opening_odds_variations.forEach((variation: any) => {
+            openingOddsList.push({
+              market_key: ms.market_key,
+              market_name: getMarketDisplayName(ms.market_key),
+              odds: variation,
+              captured_at: ms.opening_captured_at,
+            });
+          });
+        } else if (ms.status === 'captured' && ms.opening_odds) {
+          openingOddsList.push({
+            market_key: ms.market_key,
+            market_name: getMarketDisplayName(ms.market_key),
+            odds: ms.opening_odds,
+            captured_at: ms.opening_captured_at,
+          });
+        }
+      });
+
+      const marketsCaptured = marketStates.filter((ms: any) => ms.status === 'captured').length;
+      const marketsPending = marketStates.filter((ms: any) => ms.status === 'pending').length;
+      const totalMarkets = marketStates.length;
+      const capturePercentage = totalMarkets > 0 ? Math.round((marketsCaptured / totalMarkets) * 100) : 0;
+
+      return {
+        id: event.id,
+        api_event_id: '', // Not returned by RPC usually, strictly needed? Interface says yes. Let's add it or ignore if not used by UI.
+        sport_id: null,
+        sport_key: event.sport_key,
+        sport_title: event.sport_title,
+        commence_time: event.commence_time,
+        home_team: event.home_team,
+        away_team: event.away_team,
+        status: event.status,
+        home_score: event.home_score,
+        away_score: event.away_score,
+        completed: event.status === 'completed',
+        last_api_update: null,
+        created_at: '', // Not critical for UI
+        updated_at: '',
+        opening_odds: openingOddsList,
+        closing_odds: closingOdds,
+        markets_captured: marketsCaptured,
+        markets_pending: marketsPending,
+        capture_percentage: capturePercentage,
+        last_snapshot_at: event.last_snapshot_at,
+        snapshot_count: event.snapshot_count
+      } as EventWithOdds;
     });
 
-    // Apply Advanced Filtering (Post-Fetch)
-    if (hasAdvancedFilters) {
-      data = data.filter(event => {
-        // ... (same filtering logic as before) ...
-        // Check Opening Odds
-        const hasMatchingOpening = event.opening_odds.some(market => {
-          if (pointValue !== undefined && market.odds.point !== pointValue) return false;
-          
-          const oddsValues = Object.values(market.odds).filter(v => typeof v === 'number') as number[];
-          
-          if (outcome && outcome !== 'all') {
-             const specificOdd = market.odds[outcome];
-             if (!specificOdd) return false;
-             if (oddsMin !== undefined && specificOdd < oddsMin) return false;
-             if (oddsMax !== undefined && specificOdd > oddsMax) return false;
-             return true;
-          }
-
-          return oddsValues.some(val => {
-            if (oddsMin !== undefined && val < oddsMin) return false;
-            if (oddsMax !== undefined && val > oddsMax) return false;
-            return true;
-          });
-        });
-
-        // Check Closing Odds
-        let hasMatchingClosing = false;
-        if (event.closing_odds && event.closing_odds.markets) {
-           const closingMarkets = Object.values(event.closing_odds.markets) as any[];
-           hasMatchingClosing = closingMarkets.some(market => {
-             if (pointValue !== undefined && market.point !== pointValue) return false;
-             const oddsValues = Object.values(market).filter(v => typeof v === 'number') as number[];
-
-             if (outcome && outcome !== 'all') {
-                const specificOdd = market[outcome];
-                if (!specificOdd) return false;
-                if (oddsMin !== undefined && specificOdd < oddsMin) return false;
-                if (oddsMax !== undefined && specificOdd > oddsMax) return false;
-                return true;
-             }
-
-             return oddsValues.some(val => {
-               if (oddsMin !== undefined && val < oddsMin) return false;
-               if (oddsMax !== undefined && val > oddsMax) return false;
-               return true;
-             });
-           });
-        }
-
-        if (oddsType === 'opening') return hasMatchingOpening;
-        if (oddsType === 'closing') return hasMatchingClosing;
-        return hasMatchingOpening || hasMatchingClosing;
-      });
-    }
-
-    // Limit result to requested page size if we fetched more
-    const totalFiltered = hasAdvancedFilters ? data.length : (count || 0); // Approx total if filtered
-    const dataPaginated = hasAdvancedFilters ? data.slice(0, pageSize) : data;
-
-    // Calculate cursors
+    // Calculate cursors (RPC handles pagination, so cursor logic is less relevant but good for consistency)
     let nextCursor: string | undefined;
     let prevCursor: string | undefined;
 
-    if (dataPaginated.length > 0 && sortField === 'commence_time') {
-      const lastItem = dataPaginated[dataPaginated.length - 1];
-      const firstItem = dataPaginated[0];
+    if (data.length > 0 && sortField === 'commence_time') {
+      const lastItem = data[data.length - 1];
+      const firstItem = data[0];
       nextCursor = lastItem.commence_time;
       prevCursor = firstItem.commence_time;
     }
 
     return {
-      data: dataPaginated,
-      total: totalFiltered,
+      data,
+      total: totalCount,
       nextCursor,
       prevCursor,
     };
+  } catch (error) {
+    console.error('Error in fetchEventsForTable:', error);
+    return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
+  }
+}
   } catch (error) {
     console.error('Error in fetchEventsForTable:', error);
     return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
