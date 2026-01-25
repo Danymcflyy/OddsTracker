@@ -132,6 +132,8 @@ export default function FootballPage() {
       if (advancedSearch.marketType && advancedSearch.marketType !== 'all') params.set('marketKey', advancedSearch.marketType);
       if (advancedSearch.pointValue !== undefined) params.set('pointValue', advancedSearch.pointValue.toString());
       if (advancedSearch.dropMin !== undefined) params.set('dropMin', advancedSearch.dropMin.toString());
+      if (advancedSearch.status && advancedSearch.status !== 'all') params.set('status', advancedSearch.status);
+      if (advancedSearch.minSnapshots !== undefined) params.set('minSnapshots', advancedSearch.minSnapshots.toString());
 
       const response = await fetch(`/api/v4/events?${params.toString()}`);
       const result = await response.json();
@@ -287,7 +289,17 @@ export default function FootballPage() {
     setDateRange({ from: null, to: null });
     setTeamSearch('');
     setSelectedSport(null);
-    setAdvancedSearch({ oddsType: 'both', outcome: 'all', marketType: 'all' });
+    setAdvancedSearch({ 
+      oddsType: 'both', 
+      outcome: 'all', 
+      marketType: 'all',
+      status: 'all',
+      minSnapshots: undefined,
+      oddsMin: undefined,
+      oddsMax: undefined,
+      pointValue: undefined,
+      dropMin: undefined
+    });
   }, []);
 
   // Calculer le nombre de pages
