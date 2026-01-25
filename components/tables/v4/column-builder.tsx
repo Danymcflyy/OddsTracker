@@ -103,14 +103,14 @@ function getShortHeader(
   const suffix = isClosing ? 'C' : 'O';
 
   if (point !== undefined) {
-    // If a variation template is provided (e.g. "{market} {point} - {outcome}")
+    // If a variation template is provided (e.g. "{{market}} ({{point}})")
     if (config?.variationTemplate) {
       const pointStr = point > 0 ? `+${point}` : `${point}`;
       return config.variationTemplate
-        .replace('{market}', marketName)
-        .replace('{point}', pointStr)
-        .replace('{outcome}', outcomeName)
-        .replace('{type}', suffix);
+        .replace(/\{\{market\}\}|\{market\}/g, marketName)
+        .replace(/\{\{point\}\}|\{point\}/g, pointStr)
+        .replace(/\{\{outcome\}\}|\{outcome\}/g, outcomeName)
+        .replace(/\{\{type\}\}|\{type\}/g, suffix);
     }
 
     const pointStr = point > 0 ? `+${point}` : `${point}`;
