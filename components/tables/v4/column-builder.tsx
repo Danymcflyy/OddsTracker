@@ -102,7 +102,7 @@ export function buildFootballColumns(
       }
     },
     size: 90,
-  }));
+  }) as any);
 
   columns.push(columnHelper.accessor('sport_title', {
     id: 'sport_title',
@@ -114,7 +114,7 @@ export function buildFootballColumns(
     },
     size: 100,
     enableSorting: false,
-  }));
+  }) as any);
 
   columns.push(columnHelper.accessor('home_team', {
     id: 'home_team',
@@ -126,7 +126,7 @@ export function buildFootballColumns(
     ),
     size: 120,
     enableSorting: false,
-  }));
+  }) as any);
 
   columns.push(columnHelper.accessor('away_team', {
     id: 'away_team',
@@ -138,7 +138,7 @@ export function buildFootballColumns(
     ),
     size: 120,
     enableSorting: false,
-  }));
+  }) as any);
 
   columns.push(columnHelper.display({
     id: 'monitoring',
@@ -160,7 +160,7 @@ export function buildFootballColumns(
     },
     size: 50,
     enableSorting: false,
-  }));
+  }) as any);
 
   columns.push(columnHelper.display({
     id: 'score',
@@ -174,7 +174,7 @@ export function buildFootballColumns(
     },
     size: 50,
     enableSorting: false,
-  }));
+  }) as any);
 
   // 2. Colonnes Dynamiques Groupées (3 niveaux)
   const marketsByBase = new Map<string, Map<number | undefined, MarketOption>>();
