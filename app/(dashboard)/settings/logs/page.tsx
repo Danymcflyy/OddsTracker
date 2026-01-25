@@ -28,7 +28,7 @@ interface LogEntry {
 export default function LogsPage() {
   const [logs, setLogs] = React.useState<LogEntry[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [filter, setFilter] = React.useState<'all' | 'error' | 'success'>('all');
+  const [filter, setFilter] = React.useState<'all' | 'error' | 'success' | 'odds'>('all');
 
   React.useEffect(() => {
     fetchLogs();
@@ -52,6 +52,9 @@ export default function LogsPage() {
     if (filter === 'all') return true;
     if (filter === 'error') return !log.success;
     if (filter === 'success') return log.success;
+    if (filter === 'odds') {
+        return log.job_name.includes('opening_odds') || log.job_name.includes('sync_scores');
+    }
     return true;
   });
 
@@ -84,6 +87,7 @@ export default function LogsPage() {
             <Tabs value={filter} onValueChange={(v) => setFilter(v as any)}>
               <TabsList>
                 <TabsTrigger value="all">Tous</TabsTrigger>
+                <TabsTrigger value="odds" className="text-blue-600">Cotes</TabsTrigger>
                 <TabsTrigger value="error" className="text-red-600">Erreurs</TabsTrigger>
                 <TabsTrigger value="success" className="text-green-600">Succès</TabsTrigger>
               </TabsList>
