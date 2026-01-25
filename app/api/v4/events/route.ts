@@ -20,6 +20,13 @@ export async function GET(request: Request) {
     const cursor = searchParams.get('cursor') || undefined;
     const cursorDirection = (searchParams.get('cursorDirection') as 'next' | 'prev') || undefined;
 
+    // Advanced filters
+    const oddsMin = searchParams.get('oddsMin') ? parseFloat(searchParams.get('oddsMin')!) : undefined;
+    const oddsMax = searchParams.get('oddsMax') ? parseFloat(searchParams.get('oddsMax')!) : undefined;
+    const oddsType = (searchParams.get('oddsType') as 'opening' | 'closing' | 'both') || undefined;
+    const outcome = searchParams.get('outcome') || undefined;
+    const pointValue = searchParams.get('pointValue') ? parseFloat(searchParams.get('pointValue')!) : undefined;
+
     const result = await fetchEventsForTable({
       sportKey,
       dateFrom,
@@ -32,6 +39,11 @@ export async function GET(request: Request) {
       sortDirection,
       cursor,
       cursorDirection,
+      oddsMin,
+      oddsMax,
+      oddsType,
+      outcome,
+      pointValue,
     });
 
     return NextResponse.json({
