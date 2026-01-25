@@ -104,7 +104,7 @@ export function DataTable<TData, TValue>({
       {renderToolbar ? <div className="flex flex-col gap-3">{renderToolbar(table)}</div> : null}
       <div className="rounded-lg border bg-white">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-white sticky top-0 z-10 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -118,7 +118,7 @@ export function DataTable<TData, TValue>({
                   const sortState = header.column.getIsSorted();
 
                   return (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} className="bg-white sticky top-0 z-10">
                       {canSort ? (
                         <Button
                           variant="ghost"

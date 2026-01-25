@@ -138,11 +138,11 @@ export function getMarketResult(
 export function getResultColorClass(result: BetResult): string {
   switch (result) {
     case 'win':
-      return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-semibold';
+      return 'bg-green-600 text-white font-bold'; // Vert vif + texte blanc
     case 'loss':
-      return 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400';
+      return 'bg-red-500 text-white font-medium'; // Rouge vif + texte blanc
     case 'push':
-      return 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400';
+      return 'bg-yellow-400 text-black font-medium'; // Jaune vif + texte noir
     case 'pending':
     default:
       return '';
