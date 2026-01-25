@@ -1,10 +1,9 @@
 /**
  * Column Builder v4 - The Odds API v4
- * Génère les colonnes dynamiques pour le tableau de matchs
- * Noms de colonnes courts et clairs en français
+ * Génère les colonnes dynamiques imbriquées (3 niveaux) pour le tableau de matchs
  */
 
-import { ColumnDef } from '@tanstack/react-table';
+import { ColumnDef, createColumnHelper } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { fr } from 'date-fns/locale';
@@ -12,6 +11,7 @@ import type { EventWithOdds } from '@/lib/db/queries-frontend';
 import { getMarketResult, getResultColorClass } from '@/lib/utils/bet-results';
 
 const PARIS_TZ = 'Europe/Paris';
+const columnHelper = createColumnHelper<EventWithOdds>();
 
 interface MarketOption {
   key: string;
@@ -21,18 +21,35 @@ interface MarketOption {
 
 export type OutcomeType = 'home' | 'away' | 'draw' | 'over' | 'under';
 
-/**
- * Configuration personnalisable des colonnes
- */
 export interface ColumnConfig {
   marketLabels?: Record<string, string>;
   outcomeLabels?: Record<string, string>;
   variationTemplate?: string;
 }
 
-/**
- * Retourne les outcomes disponibles pour un type de marché
- */
+const MARKET_SHORT_NAMES: Record<string, string> = {
+  'h2h': '1X2',
+  'h2h_h1': '1X2 MT1',
+  'h2h_h2': '1X2 MT2',
+  'spreads': 'Handicap',
+  'spreads_h1': 'Handicap MT1',
+  'spreads_h2': 'Handicap MT2',
+  'totals': 'O/U',
+  'totals_h1': 'O/U MT1',
+  'totals_h2': 'O/U MT2',
+  'draw_no_bet': 'DNB',
+  'btts': 'BTTS',
+  'team_totals': 'TT',
+};
+
+const OUTCOME_SHORT_NAMES: Record<OutcomeType, string> = {
+  'home': '1',
+  'draw': 'X',
+  'away': '2',
+  'over': '+',
+  'under': '-',
+};
+
 function getMarketOutcomes(marketKey: string): OutcomeType[] {
   if (marketKey === 'h2h' || marketKey === 'h2h_h1' || marketKey === 'h2h_h2' || marketKey === 'h2h_3_way') {
     return ['home', 'draw', 'away'];
@@ -54,75 +71,14 @@ function getMarketOutcomes(marketKey: string): OutcomeType[] {
   return ['home', 'away', 'draw'];
 }
 
-/**
- * Noms courts pour les marchés
- */
-const MARKET_SHORT_NAMES: Record<string, string> = {
-  'h2h': '1X2',
-  'h2h_h1': '1X2 MT1',
-  'h2h_h2': '1X2 MT2',
-  'spreads': 'AH',
-  'spreads_h1': 'AH MT1',
-  'spreads_h2': 'AH MT2',
-  'totals': 'O/U',
-  'totals_h1': 'O/U MT1',
-  'totals_h2': 'O/U MT2',
-  'draw_no_bet': 'DNB',
-  'btts': 'BTTS',
-  'team_totals': 'TT',
-};
-
-/**
- * Noms courts pour les outcomes
- */
-const OUTCOME_SHORT_NAMES: Record<OutcomeType, string> = {
-  'home': '1',
-  'draw': 'X',
-  'away': '2',
-  'over': '+',
-  'under': '-',
-};
-
-/**
- * Génère le header court de la colonne
- * Ex: "1X2 - 1 (Ouv.)" ou "AH -0.5 - 1 (Clôt.)"
- */
-function getShortHeader(
-  marketKey: string,
-  outcome: OutcomeType,
-  point: number | undefined,
-  isClosing: boolean,
-  config?: ColumnConfig
-): string {
-  // Use custom label if available in config, otherwise fallback to short names map or key
-  const marketName = config?.marketLabels?.[marketKey] || MARKET_SHORT_NAMES[marketKey] || marketKey;
-  
-  // Use custom outcome label if available
-  const outcomeName = config?.outcomeLabels?.[outcome] || OUTCOME_SHORT_NAMES[outcome];
-  
-  const suffix = isClosing ? 'C' : 'O';
-
-  if (point !== undefined) {
-    // If a variation template is provided (e.g. "{{market}} ({{point}})")
-    if (config?.variationTemplate) {
-      const pointStr = point > 0 ? `+${point}` : `${point}`;
-      return config.variationTemplate
-        .replace(/\{\{market\}\}|\{market\}/g, marketName)
-        .replace(/\{\{point\}\}|\{point\}/g, pointStr)
-        .replace(/\{\{outcome\}\}|\{outcome\}/g, outcomeName)
-        .replace(/\{\{type\}\}|\{type\}/g, suffix);
-    }
-
-    const pointStr = point > 0 ? `+${point}` : `${point}`;
-    return `${marketName} ${pointStr} ${outcomeName} ${suffix}`;
-  }
-
-  return `${marketName} ${outcomeName} ${suffix}`;
+function getMarketLabel(marketKey: string, config?: ColumnConfig): string {
+  return config?.marketLabels?.[marketKey] || MARKET_SHORT_NAMES[marketKey] || marketKey;
 }
 
-/**
- * Construit toutes les colonnes pour le tableau football
- */
+function getOutcomeLabel(outcome: OutcomeType, config?: ColumnConfig): string {
+  return config?.outcomeLabels?.[outcome] || OUTCOME_SHORT_NAMES[outcome];
+}
+
 export function buildFootballColumns(
   markets: MarketOption[],
   visibleOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under'],
@@ -130,48 +86,38 @@ export function buildFootballColumns(
 ): ColumnDef<EventWithOdds>[] {
   const columns: ColumnDef<EventWithOdds>[] = [];
 
-  // ... (Colonnes statiques inchangées) ...
-
-  columns.push({
+  // 1. Colonnes Statiques
+  columns.push(columnHelper.accessor('commence_time', {
     id: 'commence_time',
-    accessorKey: 'commence_time',
     header: 'Date',
     cell: ({ row }) => {
       const dateStr = row.original.commence_time;
       if (!dateStr) return '-';
-
       try {
         const date = new Date(dateStr);
         const parisDate = toZonedTime(date, PARIS_TZ);
-        return (
-          <span className="whitespace-nowrap text-xs">
-            {format(parisDate, 'dd/MM HH:mm', { locale: fr })}
-          </span>
-        );
+        return <span className="whitespace-nowrap text-xs">{format(parisDate, 'dd/MM HH:mm', { locale: fr })}</span>;
       } catch {
         return dateStr;
       }
     },
     size: 90,
-  });
+  }));
 
-  columns.push({
+  columns.push(columnHelper.accessor('sport_title', {
     id: 'sport_title',
-    accessorKey: 'sport_title',
     header: 'Ligue',
     cell: ({ row }) => {
       const title = row.original.sport_title || '-';
-      // Extraire juste le nom court (ex: "Ligue 1" de "Ligue 1 - France")
       const shortTitle = title.split(' - ')[0];
       return <span className="text-xs truncate max-w-[100px]" title={title}>{shortTitle}</span>;
     },
     size: 100,
     enableSorting: false,
-  });
+  }));
 
-  columns.push({
+  columns.push(columnHelper.accessor('home_team', {
     id: 'home_team',
-    accessorKey: 'home_team',
     header: 'Dom.',
     cell: ({ row }) => (
       <span className="text-xs font-medium truncate max-w-[120px]" title={row.original.home_team}>
@@ -180,11 +126,10 @@ export function buildFootballColumns(
     ),
     size: 120,
     enableSorting: false,
-  });
+  }));
 
-  columns.push({
+  columns.push(columnHelper.accessor('away_team', {
     id: 'away_team',
-    accessorKey: 'away_team',
     header: 'Ext.',
     cell: ({ row }) => (
       <span className="text-xs truncate max-w-[120px]" title={row.original.away_team}>
@@ -193,193 +138,177 @@ export function buildFootballColumns(
     ),
     size: 120,
     enableSorting: false,
-  });
+  }));
 
-  columns.push({
+  columns.push(columnHelper.display({
     id: 'monitoring',
-    header: 'Snapshots',
+    header: 'Snaps',
     cell: ({ row }) => {
       const lastSnapshot = row.original.last_snapshot_at;
       const count = row.original.snapshot_count || 0;
-      const status = row.original.status;
-
-      // Only relevant for upcoming or recently completed matches
-      if (status === 'completed' && !lastSnapshot) return <span className="text-xs text-muted-foreground">-</span>;
-
       if (lastSnapshot) {
         const date = new Date(lastSnapshot);
         const parisDate = toZonedTime(date, PARIS_TZ);
         return (
           <div className="flex flex-col items-center">
-            <span className="text-[10px] font-mono font-medium text-blue-600 bg-blue-50 px-1 rounded">
-              {count} snap(s)
-            </span>
-            <span className="text-[9px] text-muted-foreground mt-0.5" title="Dernier snapshot">
-              {format(parisDate, 'HH:mm', { locale: fr })}
-            </span>
+            <span className="text-[10px] font-mono font-medium text-blue-600 bg-blue-50 px-1 rounded">{count}</span>
+            <span className="text-[9px] text-muted-foreground mt-0.5">{format(parisDate, 'HH:mm', { locale: fr })}</span>
           </div>
         );
       }
-
       return <span className="text-xs text-muted-foreground">-</span>;
     },
-    size: 70,
+    size: 50,
     enableSorting: false,
-  });
+  }));
 
-  columns.push({
+  columns.push(columnHelper.display({
     id: 'score',
     header: 'Score',
     cell: ({ row }) => {
-      const status = row.original.status;
-      const homeScore = row.original.home_score;
-      const awayScore = row.original.away_score;
-
-      if (status === 'completed' && homeScore !== null && homeScore !== undefined && awayScore !== null && awayScore !== undefined) {
-        return (
-          <span className="text-xs font-bold text-center">
-            {homeScore}-{awayScore}
-          </span>
-        );
+      const { status, home_score, away_score } = row.original;
+      if (status === 'completed' && home_score !== null && away_score !== null) {
+        return <span className="text-xs font-bold text-center">{home_score}-{away_score}</span>;
       }
-
       return <span className="text-muted-foreground text-xs">-</span>;
     },
     size: 50,
     enableSorting: false,
+  }));
+
+  // 2. Colonnes Dynamiques Groupées (3 niveaux)
+  const marketsByBase = new Map<string, Map<number | undefined, MarketOption>>();
+
+  markets.forEach(market => {
+    const baseKey = market.key.includes(':') ? market.key.split(':')[0] : market.key;
+    if (!marketsByBase.has(baseKey)) {
+      marketsByBase.set(baseKey, new Map());
+    }
+    marketsByBase.get(baseKey)!.set(market.point, market);
   });
 
-  // ============================================================================
-  // COLONNES DYNAMIQUES (MARCHÉS)
-  // ============================================================================
+  marketsByBase.forEach((variationsMap, baseKey) => {
+    const marketLabel = getMarketLabel(baseKey, config);
+    const outcomes = getMarketOutcomes(baseKey);
+    const activeOutcomes = outcomes.filter(o => visibleOutcomes.includes(o));
+    
+    if (activeOutcomes.length === 0) return;
 
-  for (const market of markets) {
-    const baseMarketKey = market.key.includes(':') ? market.key.split(':')[0] : market.key;
-    const targetPoint = market.point;
-    const outcomes = getMarketOutcomes(baseMarketKey);
+    const marketGroupColumns: ColumnDef<EventWithOdds>[] = [];
+    const sortedPoints = Array.from(variationsMap.keys()).sort((a, b) => (a ?? 0) - (b ?? 0));
 
-    for (const outcome of outcomes) {
-      if (!visibleOutcomes.includes(outcome)) continue;
+    sortedPoints.forEach(point => {
+      const marketOption = variationsMap.get(point)!;
+      let variationLabel = ''; // Empty means direct attachment
+      
+      if (point !== undefined) {
+        variationLabel = point > 0 ? `+${point}` : `${point}`;
+      } else if (sortedPoints.length > 1) {
+        variationLabel = 'Std';
+      }
 
-      // Colonne Opening
-      columns.push({
-        id: `${market.key}_${outcome}_opening`,
-        header: getShortHeader(baseMarketKey, outcome, targetPoint, false, config),
-        cell: ({ row }) => {
-          const marketData = row.original.opening_odds.find((m) => {
-            if (m.market_key !== baseMarketKey) return false;
-            if (targetPoint !== undefined) {
-              return m.odds?.point === targetPoint;
-            }
-            return true;
-          });
+      const outcomeColumns: ColumnDef<EventWithOdds>[] = [];
 
-          if (!marketData || !marketData.odds) {
-            return <span className="text-muted-foreground text-xs">-</span>;
-          }
+      activeOutcomes.forEach(outcome => {
+        const outcomeLabel = getOutcomeLabel(outcome, config);
 
-          const oddsValue = marketData.odds[outcome];
+        const dataColumns: ColumnDef<EventWithOdds>[] = [
+          columnHelper.display({
+            id: `${marketOption.key}_${outcome}_opening`,
+            header: 'O',
+            cell: ({ row }) => {
+              const val = getOddsValue(row.original, baseKey, outcome, point, 'opening');
+              const res = getResult(row.original, baseKey, outcome, point);
+              const color = getResultColorClass(res);
+              return <span className={`text-xs font-mono ${color}`}>{val}</span>;
+            },
+            size: 45,
+          }),
+          columnHelper.display({
+            id: `${marketOption.key}_${outcome}_closing`,
+            header: 'C',
+            cell: ({ row }) => {
+              const val = getOddsValue(row.original, baseKey, outcome, point, 'closing');
+              const res = getResult(row.original, baseKey, outcome, point);
+              const color = getResultColorClass(res);
+              return <span className={`text-xs font-mono ${color}`}>{val}</span>;
+            },
+            size: 45,
+          })
+        ];
 
-          const score = row.original.status === 'completed' &&
-            row.original.home_score !== null &&
-            row.original.away_score !== null
-            ? { home: row.original.home_score, away: row.original.away_score }
-            : null;
-
-          const result = getMarketResult(baseMarketKey, outcome, targetPoint, score);
-          const colorClass = getResultColorClass(result);
-
-          // DEBUG: Log why it's not winning
-          if (row.original.status === 'completed' && baseMarketKey === 'h2h' && Math.random() < 0.01) {
-             console.log(`[Debug Win] Match: ${row.original.home_team} vs ${row.original.away_team}`, {
-               market: baseMarketKey,
-               outcome,
-               score,
-               oddsValue,
-               result,
-               colorClass
-             });
-          }
-
-          return (
-            <span className={`text-xs font-mono ${colorClass}`}>
-              {formatOddsValue(oddsValue)}
-            </span>
-          );
-        },
-        size: 55,
-        enableSorting: false,
+        outcomeColumns.push(columnHelper.group({
+          id: `${marketOption.key}_${outcome}_group`,
+          header: outcomeLabel,
+          columns: dataColumns,
+        }));
       });
 
-      // Colonne Closing
-      columns.push({
-        id: `${market.key}_${outcome}_closing`,
-        header: getShortHeader(baseMarketKey, outcome, targetPoint, true, config),
-        cell: ({ row }) => {
-          const closingData = row.original.closing_odds;
+      if (variationLabel) {
+        marketGroupColumns.push(columnHelper.group({
+          id: `${marketOption.key}_variation_group`,
+          header: variationLabel,
+          columns: outcomeColumns,
+        }));
+      } else {
+        marketGroupColumns.push(...outcomeColumns);
+      }
+    });
 
-          if (!closingData) {
-            return <span className="text-muted-foreground text-xs">-</span>;
-          }
-
-          let marketData = null;
-
-          // 1. Try to find in variations (more precise)
-          if (closingData.markets_variations && closingData.markets_variations[baseMarketKey]) {
-            const variations = closingData.markets_variations[baseMarketKey];
-            if (Array.isArray(variations)) {
-              if (targetPoint !== undefined) {
-                // Find exact point match
-                marketData = variations.find((v: any) => v.point === targetPoint);
-              } else {
-                // Take first one if no point specified
-                marketData = variations[0];
-              }
-            }
-          }
-
-          // 2. Fallback to main markets object
-          if (!marketData && closingData.markets && closingData.markets[baseMarketKey]) {
-            const fallbackData = closingData.markets[baseMarketKey];
-            // Only use fallback if points match or no point required
-            if (targetPoint === undefined || fallbackData.point === targetPoint) {
-              marketData = fallbackData;
-            }
-          }
-
-          if (!marketData) {
-            return <span className="text-muted-foreground text-xs">-</span>;
-          }
-
-          const oddsValue = marketData[outcome];
-
-          const score = row.original.status === 'completed' &&
-            row.original.home_score !== null &&
-            row.original.away_score !== null
-            ? { home: row.original.home_score, away: row.original.away_score }
-            : null;
-
-          const result = getMarketResult(baseMarketKey, outcome, targetPoint, score);
-          const colorClass = getResultColorClass(result);
-
-          return (
-            <span className={`text-xs font-mono ${colorClass}`}>
-              {formatOddsValue(oddsValue)}
-            </span>
-          );
-        },
-        size: 55,
-        enableSorting: false,
-      });
-    }
-  }
+    columns.push(columnHelper.group({
+      id: `${baseKey}_market_group`,
+      header: marketLabel,
+      columns: marketGroupColumns,
+    }));
+  });
 
   return columns;
 }
 
-/**
- * Formate une valeur de cote
- */
+function getOddsValue(
+  event: EventWithOdds,
+  marketKey: string,
+  outcome: string,
+  point: number | undefined,
+  type: 'opening' | 'closing'
+): string {
+  if (type === 'opening') {
+    const marketData = event.opening_odds.find((m) => {
+      if (m.market_key !== marketKey) return false;
+      if (point !== undefined) return m.odds?.point === point;
+      return true;
+    });
+    return formatOddsValue(marketData?.odds?.[outcome]);
+  } else {
+    const closingData = event.closing_odds;
+    if (!closingData) return '-';
+
+    let marketData = null;
+    if (closingData.markets_variations && closingData.markets_variations[marketKey]) {
+      const variations = closingData.markets_variations[marketKey];
+      if (Array.isArray(variations)) {
+        marketData = point !== undefined 
+          ? variations.find((v: any) => v.point === point)
+          : variations[0];
+      }
+    }
+    if (!marketData && closingData.markets && closingData.markets[marketKey]) {
+      const fallback = closingData.markets[marketKey];
+      if (point === undefined || fallback.point === point) {
+        marketData = fallback;
+      }
+    }
+    return formatOddsValue(marketData?.[outcome]);
+  }
+}
+
+function getResult(event: EventWithOdds, marketKey: string, outcome: OutcomeType, point: number | undefined) {
+  const score = event.status === 'completed' && event.home_score !== null && event.away_score !== null
+    ? { home: event.home_score, away: event.away_score }
+    : null;
+  return getMarketResult(marketKey, outcome, point, score);
+}
+
 function formatOddsValue(value: number | undefined | null): string {
   if (value === null || value === undefined) return '-';
   return value.toFixed(2);
