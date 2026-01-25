@@ -167,6 +167,7 @@ export interface AppSettings {
   use_historical_fallback: boolean;
   bookmaker: string;
   region: string;
+  use_sql_search: boolean;
 }
 
 /**
