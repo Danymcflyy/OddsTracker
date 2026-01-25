@@ -75,7 +75,8 @@ export async function fetchEventsForTable(params: {
     outcome,
     dropMin,
     status,
-    minSnapshots
+    minSnapshots,
+    oddsType
   } = params;
 
   // Fallback: Use standard query + JS filtering because RPC is returning empty
