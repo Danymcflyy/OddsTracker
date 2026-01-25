@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database, Settings as SettingsIcon, Key, Table2 } from "lucide-react";
+import { Database, Settings as SettingsIcon, Key, Table2, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function SettingsPage() {
@@ -53,6 +53,26 @@ export default function SettingsPage() {
             <Link href="/settings/columns">
               <Button className="w-full">
                 Personnaliser
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Logs & Monitoring */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              Logs & Monitoring
+            </CardTitle>
+            <CardDescription>
+              Historique des appels API et erreurs
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/settings/logs">
+              <Button className="w-full">
+                Voir les logs
               </Button>
             </Link>
           </CardContent>
