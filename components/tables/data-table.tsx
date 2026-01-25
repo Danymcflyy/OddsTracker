@@ -102,7 +102,7 @@ export function DataTable<TData, TValue>({
   return (
     <div className={cn("space-y-4", className)}>
       {renderToolbar ? <div className="flex flex-col gap-3">{renderToolbar(table)}</div> : null}
-      <div className="rounded-lg border bg-white">
+      <div className="rounded-lg border bg-white overflow-x-auto">
         <Table>
           <TableHeader className="bg-white sticky top-0 z-10 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
