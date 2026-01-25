@@ -162,7 +162,7 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} data-state={row.getIsSelected() && "selected"} className="hover:bg-slate-50">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-1 px-2 border-r last:border-r-0 border-b overflow-hidden">
+                    <TableCell key={cell.id} className="p-0 border-r last:border-r-0 border-b overflow-hidden">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}

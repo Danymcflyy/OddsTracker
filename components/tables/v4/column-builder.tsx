@@ -92,13 +92,13 @@ export function buildFootballColumns(
     header: 'Date',
     cell: ({ row }) => {
       const dateStr = row.original.commence_time;
-      if (!dateStr) return '-';
+      if (!dateStr) return <div className="px-2 py-1">-</div>;
       try {
         const date = new Date(dateStr);
         const parisDate = toZonedTime(date, PARIS_TZ);
-        return <span className="whitespace-nowrap text-xs">{format(parisDate, 'dd/MM HH:mm', { locale: fr })}</span>;
+        return <div className="px-2 py-1 whitespace-nowrap text-xs">{format(parisDate, 'dd/MM HH:mm', { locale: fr })}</div>;
       } catch {
-        return dateStr;
+        return <div className="px-2 py-1">{dateStr}</div>;
       }
     },
     size: 90,
@@ -110,7 +110,7 @@ export function buildFootballColumns(
     cell: ({ row }) => {
       const title = row.original.sport_title || '-';
       const shortTitle = title.split(' - ')[0];
-      return <span className="text-xs truncate max-w-[100px]" title={title}>{shortTitle}</span>;
+      return <div className="px-2 py-1 text-xs truncate max-w-[100px]" title={title}>{shortTitle}</div>;
     },
     size: 100,
     enableSorting: false,
@@ -120,9 +120,9 @@ export function buildFootballColumns(
     id: 'home_team',
     header: 'Dom.',
     cell: ({ row }) => (
-      <span className="text-xs font-medium truncate max-w-[120px]" title={row.original.home_team}>
+      <div className="px-2 py-1 text-xs font-medium truncate max-w-[120px]" title={row.original.home_team}>
         {row.original.home_team || '-'}
-      </span>
+      </div>
     ),
     size: 120,
     enableSorting: false,
@@ -132,9 +132,9 @@ export function buildFootballColumns(
     id: 'away_team',
     header: 'Ext.',
     cell: ({ row }) => (
-      <span className="text-xs truncate max-w-[120px]" title={row.original.away_team}>
+      <div className="px-2 py-1 text-xs truncate max-w-[120px]" title={row.original.away_team}>
         {row.original.away_team || '-'}
-      </span>
+      </div>
     ),
     size: 120,
     enableSorting: false,
@@ -150,13 +150,13 @@ export function buildFootballColumns(
         const date = new Date(lastSnapshot);
         const parisDate = toZonedTime(date, PARIS_TZ);
         return (
-          <div className="flex flex-col items-center">
+          <div className="px-2 py-1 flex flex-col items-center">
             <span className="text-[10px] font-mono font-medium text-blue-600 bg-blue-50 px-1 rounded">{count}</span>
             <span className="text-[9px] text-muted-foreground mt-0.5">{format(parisDate, 'HH:mm', { locale: fr })}</span>
           </div>
         );
       }
-      return <span className="text-xs text-muted-foreground">-</span>;
+      return <div className="px-2 py-1 text-xs text-muted-foreground">-</div>;
     },
     size: 50,
     enableSorting: false,
@@ -168,9 +168,9 @@ export function buildFootballColumns(
     cell: ({ row }) => {
       const { status, home_score, away_score } = row.original;
       if (status === 'completed' && home_score !== null && away_score !== null) {
-        return <span className="text-xs font-bold text-center">{home_score}-{away_score}</span>;
+        return <div className="px-2 py-1 text-xs font-bold text-center">{home_score}-{away_score}</div>;
       }
-      return <span className="text-muted-foreground text-xs">-</span>;
+      return <div className="px-2 py-1 text-muted-foreground text-xs">-</div>;
     },
     size: 50,
     enableSorting: false,
@@ -226,7 +226,7 @@ export function buildFootballColumns(
               if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
 
               return (
-                <div className={`flex items-center justify-center w-full h-full -mx-2 -my-1 px-2 py-1 min-h-[32px] ${resultClass}`}>
+                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 ${resultClass}`}>
                   <span className="text-xs font-mono">{val}</span>
                 </div>
               );
@@ -246,7 +246,7 @@ export function buildFootballColumns(
               if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
 
               return (
-                <div className={`flex items-center justify-center w-full h-full -mx-2 -my-1 px-2 py-1 min-h-[32px] ${resultClass}`}>
+                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 ${resultClass}`}>
                   <span className="text-xs font-mono">{val}</span>
                 </div>
               );
