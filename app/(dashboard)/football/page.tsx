@@ -124,6 +124,15 @@ export default function FootballPage() {
         params.set('sportKey', selectedSport);
       }
 
+      // Filtres avancés
+      if (advancedSearch.oddsMin !== undefined) params.set('oddsMin', advancedSearch.oddsMin.toString());
+      if (advancedSearch.oddsMax !== undefined) params.set('oddsMax', advancedSearch.oddsMax.toString());
+      if (advancedSearch.oddsType && advancedSearch.oddsType !== 'both') params.set('oddsType', advancedSearch.oddsType);
+      if (advancedSearch.outcome && advancedSearch.outcome !== 'all') params.set('outcome', advancedSearch.outcome);
+      if (advancedSearch.marketType && advancedSearch.marketType !== 'all') params.set('marketKey', advancedSearch.marketType);
+      if (advancedSearch.pointValue !== undefined) params.set('pointValue', advancedSearch.pointValue.toString());
+      if (advancedSearch.dropMin !== undefined) params.set('dropMin', advancedSearch.dropMin.toString());
+
       const response = await fetch(`/api/v4/events?${params.toString()}`);
       const result = await response.json();
 
@@ -136,7 +145,7 @@ export default function FootballPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.pageIndex, pagination.pageSize, dateRange, teamSearch, selectedSport, sorting]);
+  }, [pagination.pageIndex, pagination.pageSize, dateRange, teamSearch, selectedSport, sorting, advancedSearch]);
 
   // Découvrir toutes les combinaisons uniques (market, point) depuis les events
   const marketPointCombinations = React.useMemo(() => {
