@@ -14,7 +14,7 @@ interface CacheEntry {
 // In serverless, this might reset often, but useful for warm starts
 const apiCache = new Map<string, CacheEntry>();
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   // 1. SECURITY CHECK
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.SUPABASE_CRON_SECRET}`) {

@@ -10,7 +10,7 @@ export const maxDuration = 60;
  * Purpose: Discover new upcoming events for tracked sports
  * Cost: 0 credits (FREE endpoint)
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   // 1. SECURITY CHECK
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.SUPABASE_CRON_SECRET}`) {
