@@ -118,6 +118,10 @@ function extractOddsFromMarket(
         odds['x2'] = outcome.price;
       } else if (name === 'home/away' || name === '12') {
         odds['12'] = outcome.price;
+      } else if (name === 'yes') {
+        odds.yes = outcome.price;
+      } else if (name === 'no') {
+        odds.no = outcome.price;
       }
     }
 

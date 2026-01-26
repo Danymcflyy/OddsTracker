@@ -42,7 +42,7 @@ export default function FootballPage() {
   });
 
   // Outcomes toujours tous affichés
-  const selectedOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under'];
+  const selectedOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under', 'yes', 'no'];
 
   // TanStack Table states
   const [pagination, setPagination] = React.useState<PaginationState>({
@@ -181,6 +181,8 @@ export default function FootballPage() {
       'spreads_h1', // Handicap H1
       'totals_h1',  // Over/Under H1
       'team_totals', // Team Totals
+      'draw_no_bet', // Draw No Bet
+      'btts',       // Les deux équipes marquent
     ];
 
     return Array.from(combinations.values()).sort((a, b) => {

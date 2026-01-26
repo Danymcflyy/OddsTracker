@@ -89,7 +89,7 @@ export function calculateTeamTotalsResult(
  */
 export function getMarketResult(
   marketKey: string,
-  outcome: 'home' | 'away' | 'draw' | 'over' | 'under',
+  outcome: 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no',
   point: number | undefined,
   score: MatchScore | null
 ): BetResult {
@@ -97,16 +97,35 @@ export function getMarketResult(
     return 'pending';
   }
 
+  // BTTS
+  if (marketKey === 'btts') {
+    if (outcome === 'yes') {
+      return (score.home > 0 && score.away > 0) ? 'win' : 'loss';
+    }
+    if (outcome === 'no') {
+      return (score.home === 0 || score.away === 0) ? 'win' : 'loss';
+    }
+    return 'pending';
+  }
+
+  // Draw No Bet
+  if (marketKey === 'draw_no_bet') {
+     if (score.home === score.away) return 'push';
+     if (outcome === 'home') return score.home > score.away ? 'win' : 'loss';
+     if (outcome === 'away') return score.away > score.home ? 'win' : 'loss';
+     return 'pending';
+  }
+
   // 1X2 markets (no point)
   if (marketKey === 'h2h' || marketKey === 'h2h_h1' || marketKey === 'h2h_h2') {
-    if (outcome === 'over' || outcome === 'under') return 'pending';
+    if (outcome === 'over' || outcome === 'under' || outcome === 'yes' || outcome === 'no') return 'pending';
     return calculate1X2Result(outcome as 'home' | 'draw' | 'away', score);
   }
 
   // Handicap markets
   if (marketKey === 'spreads' || marketKey === 'spreads_h1' || marketKey === 'spreads_h2' ||
       marketKey === 'alternate_spreads' || marketKey === 'alternate_spreads_h1') {
-    if (point === undefined || outcome === 'draw' || outcome === 'over' || outcome === 'under') {
+    if (point === undefined || outcome === 'draw' || outcome === 'over' || outcome === 'under' || outcome === 'yes' || outcome === 'no') {
       return 'pending';
     }
     return calculateHandicapResult(outcome as 'home' | 'away', point, score);
@@ -115,7 +134,7 @@ export function getMarketResult(
   // Totals markets
   if (marketKey === 'totals' || marketKey === 'totals_h1' || marketKey === 'totals_h2' ||
       marketKey === 'alternate_totals' || marketKey === 'alternate_totals_h1') {
-    if (point === undefined || outcome === 'home' || outcome === 'away' || outcome === 'draw') {
+    if (point === undefined || outcome === 'home' || outcome === 'away' || outcome === 'draw' || outcome === 'yes' || outcome === 'no') {
       return 'pending';
     }
     return calculateTotalsResult(outcome as 'over' | 'under', point, score);
@@ -123,7 +142,7 @@ export function getMarketResult(
 
   // Team totals (need to determine which team)
   if (marketKey === 'team_totals' || marketKey === 'alternate_team_totals') {
-    if (point === undefined || outcome === 'draw') return 'pending';
+    if (point === undefined || outcome === 'draw' || outcome === 'yes' || outcome === 'no') return 'pending';
     // Note: team_totals nécessite de savoir quelle équipe, on utilise home par défaut
     // Dans la vraie implémentation, il faudrait passer l'info de l'équipe
     return 'pending';

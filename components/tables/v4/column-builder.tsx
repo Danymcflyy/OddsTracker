@@ -19,7 +19,7 @@ interface MarketOption {
   point?: number;
 }
 
-export type OutcomeType = 'home' | 'away' | 'draw' | 'over' | 'under';
+export type OutcomeType = 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no';
 
 export interface ColumnConfig {
   marketLabels?: Record<string, string>;
@@ -48,6 +48,8 @@ const OUTCOME_SHORT_NAMES: Record<OutcomeType, string> = {
   'away': '2',
   'over': '+',
   'under': '-',
+  'yes': 'Oui',
+  'no': 'Non',
 };
 
 function getMarketOutcomes(marketKey: string): OutcomeType[] {
@@ -65,7 +67,7 @@ function getMarketOutcomes(marketKey: string): OutcomeType[] {
     return ['home', 'draw', 'away'];
   }
   if (marketKey === 'btts') {
-    return ['over', 'under'];
+    return ['yes', 'no'];
   }
   return ['home', 'away', 'draw'];
 }
