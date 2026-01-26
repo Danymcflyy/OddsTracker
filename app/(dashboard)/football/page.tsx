@@ -82,7 +82,11 @@ export default function FootballPage() {
       const result = await response.json();
 
       if (result.success && result.data) {
-        setFilterOptions(result.data);
+        // Ensure sports and markets are arrays
+        setFilterOptions({
+          sports: Array.isArray(result.data.sports) ? result.data.sports : [],
+          markets: Array.isArray(result.data.markets) ? result.data.markets : [],
+        });
       }
     } catch (error) {
       console.error('Erreur chargement filter options:', error);
@@ -371,7 +375,7 @@ export default function FootballPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tous les championnats</SelectItem>
-                {filterOptions.sports.map((sport) => (
+                {(filterOptions.sports || []).map((sport) => (
                   <SelectItem key={sport.api_key} value={sport.api_key}>
                     {sport.title}
                   </SelectItem>
