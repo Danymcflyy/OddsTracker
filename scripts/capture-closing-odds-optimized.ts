@@ -228,57 +228,96 @@ async function getOddsWithCache(
 /**
  * Extract market odds from API response, handling multiple lines/points correctly.
  * Returns an array of normalized odds objects (one per line).
+ *
+ * For team_totals, uses the 'description' field to identify which team:
+ * - Returns separate entries with 'team' property ('home' or 'away')
  */
 function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): any[] {
-  const homeLower = homeTeam?.toLowerCase();
-  const awayLower = awayTeam?.toLowerCase();
-  
-  // Group outcomes by NORMALIZED point
-  // For Spreads: Home Point. (Away +X -> Home -X)
-  // For Totals: Point.
-  const byPoint = new Map<number, any>();
+  const homeLower = homeTeam?.toLowerCase().trim();
+  const awayLower = awayTeam?.toLowerCase().trim();
+
   const isSpread = market.key.includes('spread');
+  const isTeamTotals = market.key === 'team_totals' || market.key === 'alternate_team_totals';
+  const isBtts = market.key === 'btts';
+
+  // For team_totals, group by (point, team)
+  // For other markets, group by point
+  const byKey = new Map<string, any>();
 
   for (const outcome of market.outcomes || []) {
     const name = outcome.name.toLowerCase();
     let point = outcome.point;
-    let type: 'home' | 'away' | 'draw' | 'over' | 'under' | null = null;
+    let type: 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no' | null = null;
+    let teamSide: 'home' | 'away' | null = null;
 
-    // Determine type
-    if (homeLower && name === homeLower) type = 'home';
-    else if (awayLower && name === awayLower) type = 'away';
-    else if (name === 'draw' || name === 'tie' || name === 'x') type = 'draw';
-    else if (name.startsWith('over') || name === 'o') type = 'over';
-    else if (name.startsWith('under') || name === 'u') type = 'under';
-    else if (name === 'home' || name === '1') type = 'home';
-    else if (name === 'away' || name === '2') type = 'away';
-    // Double Chance
-    else if (name === 'home/draw' || name === '1x') type = '1x' as any;
-    else if (name === 'draw/away' || name === 'x2') type = 'x2' as any;
-    else if (name === 'home/away' || name === '12') type = '12' as any;
+    // BTTS: Yes/No
+    if (isBtts) {
+      if (name === 'yes') type = 'yes';
+      else if (name === 'no') type = 'no';
+    }
+    // Team Totals: Over/Under with description indicating team
+    else if (isTeamTotals) {
+      const description = outcome.description?.toLowerCase().trim() || '';
+
+      // Determine which team this belongs to
+      if (description && homeLower && description.includes(homeLower)) {
+        teamSide = 'home';
+      } else if (description && awayLower && description.includes(awayLower)) {
+        teamSide = 'away';
+      } else if (description) {
+        // Fallback: check if description matches exactly
+        if (description === homeLower) teamSide = 'home';
+        else if (description === awayLower) teamSide = 'away';
+      }
+
+      // Determine over/under
+      if (name.startsWith('over') || name === 'o') type = 'over';
+      else if (name.startsWith('under') || name === 'u') type = 'under';
+    }
+    // Standard markets
+    else {
+      if (homeLower && name === homeLower) type = 'home';
+      else if (awayLower && name === awayLower) type = 'away';
+      else if (name === 'draw' || name === 'tie' || name === 'x') type = 'draw';
+      else if (name.startsWith('over') || name === 'o') type = 'over';
+      else if (name.startsWith('under') || name === 'u') type = 'under';
+      else if (name === 'home' || name === '1') type = 'home';
+      else if (name === 'away' || name === '2') type = 'away';
+      // Double Chance
+      else if (name === 'home/draw' || name === '1x') type = '1x' as any;
+      else if (name === 'draw/away' || name === 'x2') type = 'x2' as any;
+      else if (name === 'home/away' || name === '12') type = '12' as any;
+    }
 
     if (!type) continue;
 
     // Normalize point for Spreads
-    // If we found an Away outcome with point +X, it belongs to the line -X (Home perspective)
     if (isSpread && point !== undefined && type === 'away') {
         point = -1 * point;
     }
 
-    // Default point to 0 if undefined (e.g. h2h)
-    const key = point ?? 0;
-
-    if (!byPoint.has(key)) {
-      byPoint.set(key, { point: point, last_update: market.last_update });
+    // Build composite key
+    let compositeKey: string;
+    if (isTeamTotals && teamSide) {
+      compositeKey = `${point ?? 0}_${teamSide}`;
+    } else {
+      compositeKey = `${point ?? 0}`;
     }
-    
-    const entry = byPoint.get(key);
+
+    if (!byKey.has(compositeKey)) {
+      const entry: any = { point: point, last_update: market.last_update };
+      if (isTeamTotals && teamSide) {
+        entry.team = teamSide;
+      }
+      byKey.set(compositeKey, entry);
+    }
+
+    const entry = byKey.get(compositeKey);
     entry[type] = outcome.price;
-    // Ensure point is set (in case it was undefined for first element)
     if (entry.point === undefined && point !== undefined) entry.point = point;
   }
 
-  return Array.from(byPoint.values());
+  return Array.from(byKey.values());
 }
 
 async function captureSnapshot(
@@ -324,38 +363,57 @@ async function captureSnapshot(
   for (const [marketKey, apiMarkets] of marketsByKey.entries()) {
     // Collect ALL variations from ALL market objects of this type
     let allVariations: any[] = [];
-    
+
     for (const m of apiMarkets) {
         const extracted = extractMarketOdds(m, dbEvent.home_team, dbEvent.away_team);
         allVariations.push(...extracted);
     }
 
-    // Deduplicate by point (keep latest/best?)
-    // Actually, extractMarketOdds already groups by point within a single market object.
-    // But sometimes API returns multiple market objects for same key (rare but possible).
-    // Let's merge them.
-    const mergedVariations = new Map<number, any>();
-    for (const v of allVariations) {
-        const p = v.point ?? 0;
-        if (!mergedVariations.has(p)) {
-            mergedVariations.set(p, v);
-        } else {
-            // Merge (e.g. one object had home, other had away)
-            mergedVariations.set(p, { ...mergedVariations.get(p), ...v });
-        }
-    }
-    
-    const finalVariations = Array.from(mergedVariations.values());
+    // Special handling for team_totals: split into home and away
+    const isTeamTotals = marketKey === 'team_totals' || marketKey === 'alternate_team_totals';
 
-    // Sort by point for consistency
-    finalVariations.sort((a, b) => (a.point || 0) - (b.point || 0));
+    if (isTeamTotals) {
+      // Separate home and away team totals
+      const homeVariations = allVariations.filter(v => v.team === 'home');
+      const awayVariations = allVariations.filter(v => v.team === 'away');
 
-    // Store
-    if (finalVariations.length > 0) {
-        // Main market (backward compat): use the one closest to point 0 or balanced?
-        // Just take the first one or the one with most outcomes
-        markets[marketKey] = finalVariations[0]; 
-        marketsVariations[marketKey] = finalVariations;
+      // Store as separate market keys
+      if (homeVariations.length > 0) {
+        const sortedHome = homeVariations.sort((a, b) => (a.point || 0) - (b.point || 0));
+        const storeKey = marketKey === 'team_totals' ? 'team_totals_home' : 'alternate_team_totals_home';
+        markets[storeKey] = sortedHome[0];
+        marketsVariations[storeKey] = sortedHome;
+      }
+      if (awayVariations.length > 0) {
+        const sortedAway = awayVariations.sort((a, b) => (a.point || 0) - (b.point || 0));
+        const storeKey = marketKey === 'team_totals' ? 'team_totals_away' : 'alternate_team_totals_away';
+        markets[storeKey] = sortedAway[0];
+        marketsVariations[storeKey] = sortedAway;
+      }
+    } else {
+      // Standard processing for other markets
+      // Deduplicate by point
+      const mergedVariations = new Map<number, any>();
+      for (const v of allVariations) {
+          const p = v.point ?? 0;
+          if (!mergedVariations.has(p)) {
+              mergedVariations.set(p, v);
+          } else {
+              // Merge (e.g. one object had home, other had away)
+              mergedVariations.set(p, { ...mergedVariations.get(p), ...v });
+          }
+      }
+
+      const finalVariations = Array.from(mergedVariations.values());
+
+      // Sort by point for consistency
+      finalVariations.sort((a, b) => (a.point || 0) - (b.point || 0));
+
+      // Store
+      if (finalVariations.length > 0) {
+          markets[marketKey] = finalVariations[0];
+          marketsVariations[marketKey] = finalVariations;
+      }
     }
   }
 

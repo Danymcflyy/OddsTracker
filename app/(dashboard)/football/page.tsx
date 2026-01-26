@@ -174,15 +174,16 @@ export default function FootballPage() {
 
     // Ordre d'affichage des marchés (utiliser l'ordre personnalisé si disponible)
     const marketOrder = customMarketOrder.length > 0 ? customMarketOrder : [
-      'h2h',        // 1X2 en premier
-      'spreads',    // Handicap
-      'totals',     // Over/Under
-      'h2h_h1',     // 1X2 H1
-      'spreads_h1', // Handicap H1
-      'totals_h1',  // Over/Under H1
-      'team_totals', // Team Totals
-      'draw_no_bet', // Draw No Bet
-      'btts',       // Les deux équipes marquent
+      'h2h',              // 1X2 en premier
+      'spreads',          // Handicap
+      'totals',           // Over/Under
+      'h2h_h1',           // 1X2 H1
+      'spreads_h1',       // Handicap H1
+      'totals_h1',        // Over/Under H1
+      'team_totals_home', // Team Totals Domicile
+      'team_totals_away', // Team Totals Extérieur
+      'draw_no_bet',      // Draw No Bet
+      'btts',             // Les deux équipes marquent
     ];
 
     return Array.from(combinations.values()).sort((a, b) => {

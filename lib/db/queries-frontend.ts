@@ -90,13 +90,14 @@ export async function fetchEventsForTable(params: {
         p_date_from: dateFrom || null,
         p_date_to: dateTo || null,
         p_search: search || null,
-        p_market_key: marketKey || null,
+        p_market_key: marketKey && marketKey !== 'all' ? marketKey : null,
         p_odds_min: oddsMin || null,
         p_odds_max: oddsMax || null,
+        p_odds_type: params.oddsType && params.oddsType !== 'both' ? params.oddsType : null,
         p_outcome: outcome && outcome !== 'all' ? outcome : null,
         p_point_value: pointValue || null,
         p_drop_min: dropMin || null,
-        p_status: status || null,
+        p_status: status && status !== 'all' ? status : null,
         p_min_snapshots: minSnapshots || null,
         p_page: page,
         p_page_size: pageSize,
@@ -180,8 +181,16 @@ export async function fetchEventsForTable(params: {
   }
 
   // STRATEGY B: HYBRID (Standard Query + JS Filter) - Fallback or Default
-  const hasAdvancedFilters = oddsMin !== undefined || oddsMax !== undefined || (outcome && outcome !== 'all') || pointValue !== undefined || dropMin !== undefined || (status && status !== 'all') || minSnapshots !== undefined;
-  const fetchLimit = hasAdvancedFilters ? 1000 : pageSize;
+  const hasAdvancedFilters = oddsMin !== undefined ||
+                             oddsMax !== undefined ||
+                             (outcome && outcome !== 'all') ||
+                             pointValue !== undefined ||
+                             dropMin !== undefined ||
+                             (status && status !== 'all') ||
+                             minSnapshots !== undefined ||
+                             (marketKey && marketKey !== 'all');
+  // Fetch more rows when using advanced filters to allow proper JS filtering
+  const fetchLimit = hasAdvancedFilters ? 2000 : pageSize;
 
   try {
     // Build query
@@ -209,7 +218,7 @@ export async function fetchEventsForTable(params: {
     if (dateFrom) query = query.gte('commence_time', dateFrom);
     if (dateTo) query = query.lte('commence_time', dateTo);
     if (search) query = query.or(`home_team.ilike.%${search}%,away_team.ilike.%${search}%`);
-    if (marketKey) query = query.eq('market_states.market_key', marketKey);
+    // Note: marketKey filter is applied in JS post-fetch for better accuracy
     // Simple SQL filters for new params
     if (status && status !== 'all') query = query.eq('status', status);
     if (minSnapshots !== undefined) query = query.gte('snapshot_count', minSnapshots);
@@ -285,78 +294,110 @@ export async function fetchEventsForTable(params: {
 
     // Apply Advanced Filtering (JS Post-Fetch)
     if (hasAdvancedFilters) {
+      // Get oddsType from params (it was destructured but we reference it here for clarity)
+      const effectiveOddsType = params.oddsType;
+
       data = data.filter(event => {
         // Status & Snapshots (already filtered in SQL but double check)
         if (status && status !== 'all' && event.status !== status) return false;
         if (minSnapshots !== undefined && (event.snapshot_count || 0) < minSnapshots) return false;
 
-        // Odds & Drop Filtering logic
-        const checkMarket = (marketOdds: any) => {
+        // Helper: Check if a market matches the filters
+        const checkMarket = (marketOdds: any, mktKey?: string) => {
           if (!marketOdds) return false;
+
+          // Market Key filter
+          if (marketKey && mktKey && mktKey !== marketKey) return false;
+
           // Point Check
           if (pointValue !== undefined) {
              const p = marketOdds.point ?? marketOdds.odds?.point;
              if (p !== pointValue) return false;
           }
-          
-          // Value Check
-          const values = Object.values(marketOdds.odds || marketOdds).filter(v => typeof v === 'number') as number[];
-          
-          // Outcome specific
+
+          // Get odds object (handle both opening_odds structure and closing_odds structure)
+          const oddsObj = marketOdds.odds || marketOdds;
+
+          // Outcome specific filter
           if (outcome && outcome !== 'all') {
-             const val = (marketOdds.odds || marketOdds)[outcome];
-             if (!val) return false;
+             const val = oddsObj[outcome];
+             if (val === undefined || val === null) return false;
+             if (typeof val !== 'number') return false;
              if (oddsMin !== undefined && val < oddsMin) return false;
              if (oddsMax !== undefined && val > oddsMax) return false;
              return true;
           }
 
-          // Any value
-          return values.some(val => {
-            if (oddsMin !== undefined && val < oddsMin) return false;
-            if (oddsMax !== undefined && val > oddsMax) return false;
-            return true;
-          });
+          // Any numeric value check (no specific outcome)
+          if (oddsMin !== undefined || oddsMax !== undefined) {
+            const values = Object.values(oddsObj).filter(v => typeof v === 'number') as number[];
+            return values.some(val => {
+              if (oddsMin !== undefined && val < oddsMin) return false;
+              if (oddsMax !== undefined && val > oddsMax) return false;
+              return true;
+            });
+          }
+
+          return true;
         };
 
-        const hasOpening = event.opening_odds.some(checkMarket);
-        
+        // Check opening odds
+        let hasOpening = false;
+        if (!effectiveOddsType || effectiveOddsType === 'opening' || effectiveOddsType === 'both') {
+          hasOpening = event.opening_odds.some(m => checkMarket(m, m.market_key));
+        }
+
+        // Check closing odds
         let hasClosing = false;
-        if (event.closing_odds && event.closing_odds.markets) {
-           const markets = Object.values(event.closing_odds.markets);
-           hasClosing = markets.some(checkMarket);
+        if (!effectiveOddsType || effectiveOddsType === 'closing' || effectiveOddsType === 'both') {
+          if (event.closing_odds && event.closing_odds.markets) {
+            const marketEntries = Object.entries(event.closing_odds.markets);
+            hasClosing = marketEntries.some(([key, mkt]) => checkMarket(mkt, key));
+          }
         }
 
-        // Drop Logic
-        let hasDrop = false;
+        // Drop Logic - only applies when dropMin is set
         if (dropMin !== undefined) {
-           // Need matching opening and closing
-           if (event.closing_odds && event.closing_odds.markets) {
-             hasDrop = event.opening_odds.some(openMkt => {
-                const closeMkt = event.closing_odds!.markets[openMkt.market_key];
-                if (!closeMkt) return false;
-                // Check home/away/draw
-                const outcomes = ['home', 'away', 'draw', 'over', 'under'];
-                return outcomes.some(o => {
-                   const openVal = openMkt.odds[o];
-                   const closeVal = closeMkt[o];
-                   if (typeof openVal === 'number' && typeof closeVal === 'number') {
-                      const drop = ((openVal - closeVal) / openVal) * 100;
-                      return drop >= dropMin;
-                   }
-                   return false;
-                });
-             });
-           }
-           if (!hasDrop) return false;
+          let hasDrop = false;
+          if (event.closing_odds && event.closing_odds.markets) {
+            hasDrop = event.opening_odds.some(openMkt => {
+              // Market key filter for drop
+              if (marketKey && openMkt.market_key !== marketKey) return false;
+
+              const closeMkt = event.closing_odds!.markets[openMkt.market_key];
+              if (!closeMkt) return false;
+
+              // Check all outcome types for drops
+              const outcomeTypes = ['home', 'away', 'draw', 'over', 'under', 'yes', 'no'];
+              return outcomeTypes.some(o => {
+                // Filter by specific outcome if set
+                if (outcome && outcome !== 'all' && o !== outcome) return false;
+
+                const openVal = openMkt.odds?.[o];
+                const closeVal = closeMkt[o];
+                if (typeof openVal === 'number' && typeof closeVal === 'number' && openVal > 0) {
+                  const drop = ((openVal - closeVal) / openVal) * 100;
+                  return drop >= dropMin;
+                }
+                return false;
+              });
+            });
+          }
+          if (!hasDrop) return false;
         }
 
-        // Odds Type logic
-        const { oddsType } = params; // Re-access from params if not destructured above
-        if (oddsMin !== undefined || oddsMax !== undefined) {
-            if (oddsType === 'opening' && !hasOpening) return false;
-            if (oddsType === 'closing' && !hasClosing) return false;
-            if ((!oddsType || oddsType === 'both') && !hasOpening && !hasClosing) return false;
+        // Odds range filter logic - at least one odds type must match
+        if (oddsMin !== undefined || oddsMax !== undefined || (outcome && outcome !== 'all') || pointValue !== undefined) {
+          if (effectiveOddsType === 'opening' && !hasOpening) return false;
+          if (effectiveOddsType === 'closing' && !hasClosing) return false;
+          if ((!effectiveOddsType || effectiveOddsType === 'both') && !hasOpening && !hasClosing) return false;
+        }
+
+        // Market key filter without odds range - check if event has this market
+        if (marketKey && !oddsMin && !oddsMax && !outcome && !pointValue && !dropMin) {
+          const hasMarketOpening = event.opening_odds.some(m => m.market_key === marketKey);
+          const hasMarketClosing = event.closing_odds?.markets?.[marketKey] !== undefined;
+          if (!hasMarketOpening && !hasMarketClosing) return false;
         }
 
         return true;
@@ -364,7 +405,10 @@ export async function fetchEventsForTable(params: {
     }
 
     const totalCount = hasAdvancedFilters ? data.length : (count || 0);
-    const dataPaginated = hasAdvancedFilters ? data.slice(0, pageSize) : data;
+    // Apply pagination for JS-filtered data
+    const startIdx = hasAdvancedFilters ? (page - 1) * pageSize : 0;
+    const endIdx = startIdx + pageSize;
+    const dataPaginated = hasAdvancedFilters ? data.slice(startIdx, endIdx) : data;
 
     let nextCursor: string | undefined;
     let prevCursor: string | undefined;
@@ -441,6 +485,11 @@ function getMarketDisplayName(marketKey: string): string {
     h2h_3_way: '3-Way Result',
     draw_no_bet: 'Draw No Bet',
     btts: 'Both Teams to Score',
+    team_totals: 'Team Totals',
+    team_totals_home: 'Team Totals (Home)',
+    team_totals_away: 'Team Totals (Away)',
+    alternate_team_totals_home: 'Alt Team Totals (Home)',
+    alternate_team_totals_away: 'Alt Team Totals (Away)',
   };
   return names[marketKey] || marketKey;
 }

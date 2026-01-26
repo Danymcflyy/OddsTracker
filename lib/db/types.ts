@@ -54,9 +54,12 @@ export interface OpeningOdds {
   draw?: number;
   over?: number;
   under?: number;
+  yes?: number;    // BTTS
+  no?: number;     // BTTS
   point?: number;
+  team?: 'home' | 'away';  // Team Totals: identifies which team
   // Flexible structure for different market types
-  [key: string]: number | undefined;
+  [key: string]: number | string | undefined;
 }
 
 export interface ClosingOdds {
@@ -100,7 +103,10 @@ export interface MarketOdds {
   draw?: number;
   over?: number;
   under?: number;
+  yes?: number;    // BTTS
+  no?: number;     // BTTS
   point?: number;
+  team?: 'home' | 'away';  // Team Totals: identifies which team
   last_update?: string;
   [key: string]: number | string | undefined;
 }

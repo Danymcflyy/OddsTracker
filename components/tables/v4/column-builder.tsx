@@ -40,6 +40,10 @@ const MARKET_SHORT_NAMES: Record<string, string> = {
   'draw_no_bet': 'DNB',
   'btts': 'BTTS',
   'team_totals': 'TT',
+  'team_totals_home': 'TT Dom',
+  'team_totals_away': 'TT Ext',
+  'alternate_team_totals_home': 'Alt TT Dom',
+  'alternate_team_totals_away': 'Alt TT Ext',
 };
 
 const OUTCOME_SHORT_NAMES: Record<OutcomeType, string> = {
@@ -53,22 +57,34 @@ const OUTCOME_SHORT_NAMES: Record<OutcomeType, string> = {
 };
 
 function getMarketOutcomes(marketKey: string): OutcomeType[] {
+  // 1X2 markets
   if (marketKey === 'h2h' || marketKey === 'h2h_h1' || marketKey === 'h2h_h2' || marketKey === 'h2h_3_way') {
     return ['home', 'draw', 'away'];
   }
+  // Over/Under markets (including team totals)
   if (marketKey === 'totals' || marketKey === 'totals_h1' || marketKey === 'totals_h2' ||
-      marketKey === 'team_totals' || marketKey === 'alternate_team_totals') {
+      marketKey === 'team_totals' || marketKey === 'alternate_team_totals' ||
+      marketKey === 'team_totals_home' || marketKey === 'team_totals_away' ||
+      marketKey === 'alternate_team_totals_home' || marketKey === 'alternate_team_totals_away') {
     return ['over', 'under'];
   }
+  // Spreads/Handicap
   if (marketKey.includes('spread')) {
     return ['home', 'away'];
   }
-  if (marketKey === 'draw_no_bet' || marketKey === 'double_chance') {
+  // Draw No Bet (home or away only, no draw option)
+  if (marketKey === 'draw_no_bet') {
+    return ['home', 'away'];
+  }
+  // Double Chance
+  if (marketKey === 'double_chance') {
     return ['home', 'draw', 'away'];
   }
+  // Both Teams To Score
   if (marketKey === 'btts') {
     return ['yes', 'no'];
   }
+  // Default
   return ['home', 'away', 'draw'];
 }
 

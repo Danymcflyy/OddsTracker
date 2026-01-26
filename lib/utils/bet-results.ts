@@ -140,11 +140,22 @@ export function getMarketResult(
     return calculateTotalsResult(outcome as 'over' | 'under', point, score);
   }
 
-  // Team totals (need to determine which team)
-  if (marketKey === 'team_totals' || marketKey === 'alternate_team_totals') {
+  // Team totals - Home team
+  if (marketKey === 'team_totals_home' || marketKey === 'alternate_team_totals_home') {
     if (point === undefined || outcome === 'draw' || outcome === 'yes' || outcome === 'no') return 'pending';
-    // Note: team_totals nécessite de savoir quelle équipe, on utilise home par défaut
-    // Dans la vraie implémentation, il faudrait passer l'info de l'équipe
+    if (outcome !== 'over' && outcome !== 'under') return 'pending';
+    return calculateTeamTotalsResult(outcome as 'over' | 'under', point, score.home);
+  }
+
+  // Team totals - Away team
+  if (marketKey === 'team_totals_away' || marketKey === 'alternate_team_totals_away') {
+    if (point === undefined || outcome === 'draw' || outcome === 'yes' || outcome === 'no') return 'pending';
+    if (outcome !== 'over' && outcome !== 'under') return 'pending';
+    return calculateTeamTotalsResult(outcome as 'over' | 'under', point, score.away);
+  }
+
+  // Legacy team_totals (without home/away suffix) - return pending since we can't determine team
+  if (marketKey === 'team_totals' || marketKey === 'alternate_team_totals') {
     return 'pending';
   }
 

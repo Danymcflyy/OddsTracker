@@ -11,8 +11,8 @@ export interface AdvancedSearchParams {
   oddsMin?: number;
   oddsMax?: number;
   oddsType: 'opening' | 'closing' | 'both';
-  outcome?: 'home' | 'away' | 'draw' | 'over' | 'under' | 'all';
-  marketType?: 'all' | 'h2h' | 'spreads' | 'totals' | 'h2h_h1' | 'spreads_h1' | 'totals_h1';
+  outcome?: 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no' | 'all';
+  marketType?: 'all' | 'h2h' | 'spreads' | 'totals' | 'h2h_h1' | 'spreads_h1' | 'totals_h1' | 'btts' | 'draw_no_bet' | 'team_totals_home' | 'team_totals_away';
   pointValue?: number;
   dropMin?: number;
   status?: 'all' | 'upcoming' | 'completed';
@@ -161,6 +161,8 @@ export function AdvancedSearchFilter({
                   <SelectItem value="away">2 (Extérieur)</SelectItem>
                   <SelectItem value="over">Over (+)</SelectItem>
                   <SelectItem value="under">Under (-)</SelectItem>
+                  <SelectItem value="yes">Oui (BTTS)</SelectItem>
+                  <SelectItem value="no">Non (BTTS)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -183,6 +185,10 @@ export function AdvancedSearchFilter({
                   <SelectItem value="h2h_h1">1X2 Mi-temps</SelectItem>
                   <SelectItem value="spreads_h1">Handicap Mi-temps</SelectItem>
                   <SelectItem value="totals_h1">O/U Mi-temps</SelectItem>
+                  <SelectItem value="btts">Les 2 marquent (BTTS)</SelectItem>
+                  <SelectItem value="draw_no_bet">Draw No Bet</SelectItem>
+                  <SelectItem value="team_totals_home">Team Totals Dom.</SelectItem>
+                  <SelectItem value="team_totals_away">Team Totals Ext.</SelectItem>
                 </SelectContent>
               </Select>
             </div>

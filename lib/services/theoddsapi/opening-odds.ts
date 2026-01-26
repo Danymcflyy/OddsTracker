@@ -27,6 +27,7 @@ interface ScanResult {
 /**
  * Extract odds from API market data
  * For alternate markets (spreads/totals), this returns multiple OpeningOdds (one per point)
+ * For team_totals, returns separate entries for home and away teams
  * For regular markets (h2h), this returns a single OpeningOdds
  */
 function extractOddsFromMarket(
@@ -38,20 +39,75 @@ function extractOddsFromMarket(
     return [];
   }
 
-  const homeTeamLower = homeTeam.toLowerCase();
-  const awayTeamLower = awayTeam.toLowerCase();
+  const homeTeamLower = homeTeam.toLowerCase().trim();
+  const awayTeamLower = awayTeam.toLowerCase().trim();
+
+  const isSpread = market.key.includes('spread');
+  const isTeamTotals = market.key === 'team_totals' || market.key === 'alternate_team_totals';
+  const isBtts = market.key === 'btts';
 
   // For alternate markets, group outcomes by point value
   const isAlternateMarket = market.key.includes('alternate_') || market.key.includes('spread') || market.key.includes('total');
 
+  // Team Totals: need to separate home and away team outcomes
+  if (isTeamTotals) {
+    // Group by (point, team)
+    const byKey = new Map<string, any>();
+
+    for (const outcome of market.outcomes as any[]) {
+      const name = outcome.name.toLowerCase();
+      const point = outcome.point ?? 0;
+      const description = outcome.description?.toLowerCase().trim() || '';
+
+      // Determine which team
+      let teamSide: 'home' | 'away' | null = null;
+      if (description.includes(homeTeamLower)) {
+        teamSide = 'home';
+      } else if (description.includes(awayTeamLower)) {
+        teamSide = 'away';
+      } else if (description === homeTeamLower) {
+        teamSide = 'home';
+      } else if (description === awayTeamLower) {
+        teamSide = 'away';
+      }
+
+      if (!teamSide) continue;
+
+      // Determine over/under
+      let type: 'over' | 'under' | null = null;
+      if (name.includes('over')) type = 'over';
+      else if (name.includes('under')) type = 'under';
+
+      if (!type) continue;
+
+      const compositeKey = `${point}_${teamSide}`;
+      if (!byKey.has(compositeKey)) {
+        byKey.set(compositeKey, { point, team: teamSide });
+      }
+      byKey.get(compositeKey)![type] = outcome.price;
+    }
+
+    return Array.from(byKey.values());
+  }
+
+  // BTTS: Yes/No
+  if (isBtts) {
+    const odds: OpeningOdds = {};
+    for (const outcome of market.outcomes as any[]) {
+      const name = outcome.name.toLowerCase();
+      if (name === 'yes') odds.yes = outcome.price;
+      else if (name === 'no') odds.no = outcome.price;
+    }
+    return Object.keys(odds).length > 0 ? [odds] : [];
+  }
+
   if (isAlternateMarket) {
     // Group outcomes by point, normalizing spreads to Home perspective
     const byPoint = new Map<number, any[]>();
-    const isSpread = market.key.includes('spread');
 
-    for (const outcome of market.outcomes) {
+    for (const outcome of market.outcomes as any[]) {
       let point = outcome.point ?? 0;
-      
+
       // Normalize Spread points: Away +X is equivalent to Home -X
       if (isSpread) {
         const name = outcome.name.toLowerCase();
@@ -85,7 +141,7 @@ function extractOddsFromMarket(
         }
       }
 
-      if (Object.keys(odds).length > 1) { 
+      if (Object.keys(odds).length > 1) {
         results.push(odds);
       }
     }
@@ -95,7 +151,7 @@ function extractOddsFromMarket(
     // Regular market (h2h, dnb, dc) - single odds object
     const odds: OpeningOdds = {};
 
-    for (const outcome of market.outcomes) {
+    for (const outcome of market.outcomes as any[]) {
       const name = outcome.name.toLowerCase();
 
       if (name === homeTeamLower) {
@@ -110,7 +166,7 @@ function extractOddsFromMarket(
       } else if (name.includes('under')) {
         odds.under = outcome.price;
         if (outcome.point !== undefined) odds.point = outcome.point;
-      } 
+      }
       // Double Chance handling
       else if (name === 'home/draw' || name === '1x') {
         odds['1x'] = outcome.price;
@@ -238,18 +294,72 @@ async function scanEventOpeningOdds(
       const oddsVariations: OpeningOdds[] = [];
       for (const apiMarket of apiMarkets) {
         const odds = extractOddsFromMarket(apiMarket, event.home_team, event.away_team);
-        // extractOddsFromMarket now returns an array (multiple variations per market)
         oddsVariations.push(...odds);
       }
 
-      if (oddsVariations.length > 0) {
-        // Capture all variations
+      // Special handling for team_totals: split into home and away
+      const isTeamTotals = dbMarketKey === 'team_totals';
+
+      if (isTeamTotals && oddsVariations.length > 0) {
+        // Separate home and away team totals
+        const homeVariations = oddsVariations.filter((v: any) => v.team === 'home');
+        const awayVariations = oddsVariations.filter((v: any) => v.team === 'away');
+
+        // Store as separate market keys
+        if (homeVariations.length > 0) {
+          await upsertMarketState({
+            event_id: eventDbId,
+            market_key: 'team_totals_home',
+            status: 'captured',
+            opening_odds: homeVariations[0],
+            opening_odds_variations: homeVariations,
+            opening_captured_at: new Date().toISOString(),
+            opening_bookmaker_update: apiMarkets[0].last_update,
+            deadline: marketState.deadline,
+            attempts: marketState.attempts + 1,
+            last_attempt_at: new Date().toISOString(),
+          });
+          console.log(`[OpeningOdds] ✅ Captured team_totals_home (${homeVariations.length} variation(s)) for ${eventApiId}`);
+        }
+        if (awayVariations.length > 0) {
+          await upsertMarketState({
+            event_id: eventDbId,
+            market_key: 'team_totals_away',
+            status: 'captured',
+            opening_odds: awayVariations[0],
+            opening_odds_variations: awayVariations,
+            opening_captured_at: new Date().toISOString(),
+            opening_bookmaker_update: apiMarkets[0].last_update,
+            deadline: marketState.deadline,
+            attempts: marketState.attempts + 1,
+            last_attempt_at: new Date().toISOString(),
+          });
+          console.log(`[OpeningOdds] ✅ Captured team_totals_away (${awayVariations.length} variation(s)) for ${eventApiId}`);
+        }
+
+        // Mark original market_state as captured
         await upsertMarketState({
           event_id: eventDbId,
           market_key: dbMarketKey,
           status: 'captured',
-          opening_odds: oddsVariations[0], // Keep first variation for backward compatibility
-          opening_odds_variations: oddsVariations, // Store all variations
+          opening_odds: oddsVariations[0],
+          opening_odds_variations: oddsVariations,
+          opening_captured_at: new Date().toISOString(),
+          opening_bookmaker_update: apiMarkets[0].last_update,
+          deadline: marketState.deadline,
+          attempts: marketState.attempts + 1,
+          last_attempt_at: new Date().toISOString(),
+        });
+
+        capturedCount++;
+      } else if (oddsVariations.length > 0) {
+        // Standard processing for other markets
+        await upsertMarketState({
+          event_id: eventDbId,
+          market_key: dbMarketKey,
+          status: 'captured',
+          opening_odds: oddsVariations[0],
+          opening_odds_variations: oddsVariations,
           opening_captured_at: new Date().toISOString(),
           opening_bookmaker_update: apiMarkets[0].last_update,
           deadline: marketState.deadline,
