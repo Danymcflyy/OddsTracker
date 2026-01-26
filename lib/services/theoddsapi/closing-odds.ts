@@ -390,8 +390,15 @@ export async function syncScoresAndClosingOdds(): Promise<ClosingResult> {
     }
 
     // Get completed events without closing odds
-    const completedEvents = await getCompletedEventsWithoutClosing();
+    let completedEvents = await getCompletedEventsWithoutClosing();
     console.log(`[ClosingOdds] Found ${completedEvents.length} completed events without closing odds`);
+
+    // LIMIT: Process max 20 events per run to avoid timeout
+    const MAX_EVENTS_PER_RUN = 20;
+    if (completedEvents.length > MAX_EVENTS_PER_RUN) {
+      console.log(`[ClosingOdds] Limiting to ${MAX_EVENTS_PER_RUN} events to avoid timeout`);
+      completedEvents = completedEvents.slice(0, MAX_EVENTS_PER_RUN);
+    }
 
     // Capture closing odds for each
     for (const event of completedEvents) {
