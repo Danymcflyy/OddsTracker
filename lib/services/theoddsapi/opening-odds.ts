@@ -475,13 +475,20 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
 
   try {
     // Get all events with pending markets
-    const eventsWithPending = await getEventsWithPendingMarkets();
+    let eventsWithPending = await getEventsWithPendingMarkets();
 
     console.log(`[OpeningOdds] Found ${eventsWithPending.length} events with pending markets`);
 
     if (eventsWithPending.length === 0) {
       console.log('[OpeningOdds] No events to scan');
       return result;
+    }
+
+    // LIMIT: Process max 10 events per run to avoid timeout
+    const MAX_EVENTS_PER_RUN = 10;
+    if (eventsWithPending.length > MAX_EVENTS_PER_RUN) {
+      console.log(`[OpeningOdds] Limiting to ${MAX_EVENTS_PER_RUN} events to avoid timeout`);
+      eventsWithPending = eventsWithPending.slice(0, MAX_EVENTS_PER_RUN);
     }
 
     // Optimize: Fetch all pending markets in one query (avoid N+1)

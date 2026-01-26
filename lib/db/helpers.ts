@@ -251,7 +251,7 @@ export async function getEventsWithPendingMarkets(): Promise<EventWithMarketProg
 export async function insertClosingOdds(closingOdds: InsertClosingOdds): Promise<ClosingOdds | null> {
   const { data, error } = await (supabaseAdmin as any)
     .from('closing_odds')
-    .insert(closingOdds as any)
+    .upsert(closingOdds as any, { onConflict: 'event_id' })
     .select()
     .single();
 
