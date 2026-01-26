@@ -1,6 +1,13 @@
-import { scanAllOpeningOdds } from '../lib/services/theoddsapi/opening-odds';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load environment variables immediately
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 async function main() {
+  // Dynamic import to ensure env vars are loaded first
+  const { scanAllOpeningOdds } = await import('../lib/services/theoddsapi/opening-odds');
+
   try {
     console.log('🏃 Scanning opening odds...');
     const result = await scanAllOpeningOdds();

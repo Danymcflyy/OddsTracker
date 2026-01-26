@@ -58,12 +58,11 @@ function getMarketOutcomes(marketKey: string): OutcomeType[] {
       marketKey === 'team_totals' || marketKey === 'alternate_team_totals') {
     return ['over', 'under'];
   }
-  if (marketKey === 'spreads' || marketKey === 'spreads_h1' || marketKey === 'spreads_h2' ||
-      marketKey === 'alternate_spreads' || marketKey === 'alternate_spreads_h1') {
+  if (marketKey.includes('spread')) {
     return ['home', 'away'];
   }
-  if (marketKey === 'draw_no_bet') {
-    return ['home', 'away'];
+  if (marketKey === 'draw_no_bet' || marketKey === 'double_chance') {
+    return ['home', 'draw', 'away'];
   }
   if (marketKey === 'btts') {
     return ['over', 'under'];
@@ -181,10 +180,22 @@ export function buildFootballColumns(
 
   markets.forEach(market => {
     const baseKey = market.key.includes(':') ? market.key.split(':')[0] : market.key;
+    const isSpread = baseKey.includes('spread');
+    
+    // Normalize point for Spreads to merge mirrors (e.g. +0.5 and -0.5 -> -0.5)
+    let normalizedPoint = market.point;
+    if (isSpread && normalizedPoint !== undefined && normalizedPoint > 0) {
+        normalizedPoint = -1 * normalizedPoint;
+    }
+
     if (!marketsByBase.has(baseKey)) {
       marketsByBase.set(baseKey, new Map());
     }
-    marketsByBase.get(baseKey)!.set(market.point, market);
+    
+    // If multiple points map to same normalized point, we just need one entry for the group header
+    if (!marketsByBase.get(baseKey)!.has(normalizedPoint)) {
+        marketsByBase.get(baseKey)!.set(normalizedPoint, { ...market, point: normalizedPoint });
+    }
   });
 
   marketsByBase.forEach((variationsMap, baseKey) => {
@@ -195,11 +206,12 @@ export function buildFootballColumns(
     if (activeOutcomes.length === 0) return;
 
     const marketGroupColumns: ColumnDef<EventWithOdds>[] = [];
+    // Sort points: favorites/negatives first
     const sortedPoints = Array.from(variationsMap.keys()).sort((a, b) => (a ?? 0) - (b ?? 0));
 
     sortedPoints.forEach(point => {
       const marketOption = variationsMap.get(point)!;
-      let variationLabel = ''; // Empty means direct attachment
+      let variationLabel = ''; 
       
       if (point !== undefined) {
         variationLabel = point > 0 ? `+${point}` : `${point}`;
@@ -312,33 +324,74 @@ function getOddsValue(
   point: number | undefined,
   type: 'opening' | 'closing'
 ): string {
+  const isSpread = marketKey.includes('spread');
+
   if (type === 'opening') {
-    const marketData = event.opening_odds.find((m) => {
+    // 1. Direct search
+    let marketData = event.opening_odds.find((m) => {
       if (m.market_key !== marketKey) return false;
       if (point !== undefined) return m.odds?.point === point;
       return true;
     });
-    return formatOddsValue(marketData?.odds?.[outcome]);
+
+    if (marketData?.odds?.[outcome]) return formatOddsValue(marketData.odds[outcome]);
+
+    // 2. Mirror search for spreads (if point is -0.5, check +0.5 and swap home/away)
+    if (isSpread && point !== undefined) {
+        const mirrorPoint = -1 * point;
+        const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
+        
+        marketData = event.opening_odds.find((m) => {
+            if (m.market_key !== marketKey) return false;
+            return m.odds?.point === mirrorPoint;
+        });
+        
+        if (marketData?.odds?.[mirrorOutcome]) return formatOddsValue(marketData.odds[mirrorOutcome]);
+    }
+
+    return '-';
   } else {
     const closingData = event.closing_odds;
     if (!closingData) return '-';
 
-    let marketData = null;
-    if (closingData.markets_variations && closingData.markets_variations[marketKey]) {
-      const variations = closingData.markets_variations[marketKey];
-      if (Array.isArray(variations)) {
-        marketData = point !== undefined 
-          ? variations.find((v: any) => v.point === point)
+    const findInVariations = (targetPoint: number | undefined, targetOutcome: string) => {
+        if (!closingData.markets_variations || !closingData.markets_variations[marketKey]) return null;
+        const variations = closingData.markets_variations[marketKey];
+        if (!Array.isArray(variations)) return null;
+        
+        const found = targetPoint !== undefined 
+          ? variations.find((v: any) => v.point === targetPoint)
           : variations[0];
-      }
+          
+        return found?.[targetOutcome];
+    };
+
+    // 1. Direct search in variations
+    let val = findInVariations(point, outcome);
+    if (val) return formatOddsValue(val as number);
+
+    // 2. Mirror search for spreads
+    if (isSpread && point !== undefined) {
+        const mirrorPoint = -1 * point;
+        const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
+        val = findInVariations(mirrorPoint, mirrorOutcome);
+        if (val) return formatOddsValue(val as number);
     }
-    if (!marketData && closingData.markets && closingData.markets[marketKey]) {
+
+    // 3. Fallback to main markets object
+    if (closingData.markets && closingData.markets[marketKey]) {
       const fallback = closingData.markets[marketKey];
       if (point === undefined || fallback.point === point) {
-        marketData = fallback;
+        if (fallback[outcome]) return formatOddsValue(fallback[outcome] as number);
+      }
+      // Mirror fallback
+      if (isSpread && point !== undefined && fallback.point === (-1 * point)) {
+          const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
+          if (fallback[mirrorOutcome]) return formatOddsValue(fallback[mirrorOutcome] as number);
       }
     }
-    return formatOddsValue(marketData?.[outcome]);
+
+    return '-';
   }
 }
 
