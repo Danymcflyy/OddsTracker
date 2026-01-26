@@ -52,7 +52,7 @@ export default function DataCollectionSettingsPage() {
         const sportsRes = await fetch('/api/v4/sports');
         const sportsData = await sportsRes.json();
 
-        if (sportsData.success) {
+        if (sportsData.success && Array.isArray(sportsData.sports)) {
           setSports(sportsData.sports);
         }
 
@@ -175,11 +175,11 @@ export default function DataCollectionSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sports.map((sport) => (
+            {(sports || []).map((sport) => (
               <div key={sport.id} className="flex items-center space-x-2">
                 <Checkbox
                   id={sport.api_key}
-                  checked={settings.tracked_sports.includes(sport.api_key)}
+                  checked={(settings.tracked_sports || []).includes(sport.api_key)}
                   onCheckedChange={() => toggleSport(sport.api_key)}
                 />
                 <Label htmlFor={sport.api_key} className="cursor-pointer">
