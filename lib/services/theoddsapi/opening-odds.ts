@@ -42,7 +42,7 @@ function extractOddsFromMarket(
   const awayTeamLower = awayTeam.toLowerCase();
 
   // For alternate markets, group outcomes by point value
-  const isAlternateMarket = market.key.includes('alternate_');
+  const isAlternateMarket = market.key.includes('alternate_') || market.key.includes('spread') || market.key.includes('total');
 
   if (isAlternateMarket) {
     // Group outcomes by point, normalizing spreads to Home perspective
@@ -53,7 +53,6 @@ function extractOddsFromMarket(
       let point = outcome.point ?? 0;
       
       // Normalize Spread points: Away +X is equivalent to Home -X
-      // We want to group them under the Home point perspective
       if (isSpread) {
         const name = outcome.name.toLowerCase();
         if (name === awayTeamLower) {
@@ -67,7 +66,6 @@ function extractOddsFromMarket(
       byPoint.get(point)!.push(outcome);
     }
 
-    // Create one OpeningOdds per point
     const results: OpeningOdds[] = [];
 
     for (const [point, outcomes] of byPoint.entries()) {
@@ -87,14 +85,14 @@ function extractOddsFromMarket(
         }
       }
 
-      if (Object.keys(odds).length > 1) { // More than just 'point'
+      if (Object.keys(odds).length > 1) { 
         results.push(odds);
       }
     }
 
     return results;
   } else {
-    // Regular market (h2h) - single odds object
+    // Regular market (h2h, dnb, dc) - single odds object
     const odds: OpeningOdds = {};
 
     for (const outcome of market.outcomes) {
@@ -104,7 +102,7 @@ function extractOddsFromMarket(
         odds.home = outcome.price;
       } else if (name === awayTeamLower) {
         odds.away = outcome.price;
-      } else if (name.includes('draw') || name.includes('tie')) {
+      } else if (name === 'draw' || name === 'tie' || name === 'x') {
         odds.draw = outcome.price;
       } else if (name.includes('over')) {
         odds.over = outcome.price;
@@ -112,6 +110,14 @@ function extractOddsFromMarket(
       } else if (name.includes('under')) {
         odds.under = outcome.price;
         if (outcome.point !== undefined) odds.point = outcome.point;
+      } 
+      // Double Chance handling
+      else if (name === 'home/draw' || name === '1x') {
+        odds['1x'] = outcome.price;
+      } else if (name === 'draw/away' || name === 'x2') {
+        odds['x2'] = outcome.price;
+      } else if (name === 'home/away' || name === '12') {
+        odds['12'] = outcome.price;
       }
     }
 
@@ -129,6 +135,7 @@ function mapToApiMarketKey(dbMarketKey: string): string {
     'totals': 'alternate_totals',
     'spreads_h1': 'alternate_spreads_h1',
     'totals_h1': 'alternate_totals_h1',
+    'team_totals': 'alternate_team_totals', // NEW: Get all TT lines
   };
 
   return mapping[dbMarketKey] || dbMarketKey;
@@ -143,6 +150,7 @@ function mapToDbMarketKey(apiMarketKey: string): string {
     'alternate_totals': 'totals',
     'alternate_spreads_h1': 'spreads_h1',
     'alternate_totals_h1': 'totals_h1',
+    'alternate_team_totals': 'team_totals', // NEW
   };
 
   return mapping[apiMarketKey] || apiMarketKey;
