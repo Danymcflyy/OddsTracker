@@ -449,7 +449,7 @@ export async function getFilterOptions(): Promise<FilterOptions> {
       .from('settings')
       .select('value')
       .eq('key', 'tracked_markets')
-      .single();
+      .maybeSingle();
 
     const trackedMarkets = settings?.value;
     const marketsArray = Array.isArray(trackedMarkets) ? trackedMarkets : [];

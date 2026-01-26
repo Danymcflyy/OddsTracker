@@ -81,11 +81,16 @@ export default function FootballPage() {
       const response = await fetch('/api/v4/filter-options');
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success && result.data) {
         setFilterOptions(result.data);
       }
     } catch (error) {
       console.error('Erreur chargement filter options:', error);
+      // Keep default empty arrays on error
+      setFilterOptions({
+        sports: [],
+        markets: [],
+      });
     }
   }, []);
 
