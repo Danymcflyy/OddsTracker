@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getTheOddsApiClient } from '@/lib/api/theoddsapi/client';
 
 export const dynamic = 'force-dynamic'; // Prevent caching
-export const maxDuration = 60; // Allow 60 seconds (Vercel Hobby limit is 10s, Pro 300s. We'll try to be fast)
+export const maxDuration = 300; // 5 minutes for extensive closing odds capture
 
 interface CacheEntry {
   timestamp: Date;

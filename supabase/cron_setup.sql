@@ -22,11 +22,13 @@ SELECT cron.schedule(
   $$
 );
 
--- Job 2: Scan Opening Odds (Every 5 minutes)
+-- Job 2: Scan Opening Odds (Every 2 minutes)
 -- Captures opening odds for pending markets (~6 credits per event)
+-- Processes up to 200 events per run (~260s execution time with 300s maxDuration)
+-- Capacity: 6000 events/hour (massively increased with 300s timeout)
 SELECT cron.schedule(
   'scan-opening-odds',
-  '*/5 * * * *', -- Every 5 minutes
+  '*/2 * * * *', -- Every 2 minutes (increased from 5 min for better coverage)
   $$
   SELECT
     net.http_post(

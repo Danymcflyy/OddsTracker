@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { syncSports, syncAllTrackedEvents } from '@/lib/services/theoddsapi/discovery';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300; // 5 minutes for large event syncs
 
 /**
  * Cron Job: Sync Events (Discover new matches)
- * Frequency: Configurable (recommended: every 15-30 minutes)
+ * Frequency: Every hour
  * Purpose: Discover new upcoming events for tracked sports
  * Cost: 0 credits (FREE endpoint)
  */

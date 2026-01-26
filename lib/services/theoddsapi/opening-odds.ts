@@ -484,8 +484,10 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
       return result;
     }
 
-    // LIMIT: Process max 10 events per run to avoid timeout
-    const MAX_EVENTS_PER_RUN = 10;
+    // LIMIT: Process max 200 events per run to avoid timeout
+    // With ~1.3s per event, 200 events = ~260s (well under 300s maxDuration)
+    // Capacity: 200 events × 30 runs/hour = 6000 events/hour
+    const MAX_EVENTS_PER_RUN = 200;
     if (eventsWithPending.length > MAX_EVENTS_PER_RUN) {
       console.log(`[OpeningOdds] Limiting to ${MAX_EVENTS_PER_RUN} events to avoid timeout`);
       eventsWithPending = eventsWithPending.slice(0, MAX_EVENTS_PER_RUN);

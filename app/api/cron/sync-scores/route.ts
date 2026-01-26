@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { syncScoresAndClosingOdds } from '@/lib/services/theoddsapi/closing-odds';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // 1 minute - only syncing scores now
+export const maxDuration = 300; // 5 minutes for large score syncs
 
 /**
  * Cron Job: Sync Scores ONLY

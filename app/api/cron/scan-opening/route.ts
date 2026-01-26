@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { scanAllOpeningOdds } from '@/lib/services/theoddsapi/opening-odds';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300; // 5 minutes - can process up to 200 events
 
 /**
  * Cron Job: Scan Opening Odds
- * Frequency: Every 5 minutes
+ * Frequency: Every 2 minutes
  * Purpose: Capture opening odds for pending markets
  * Cost: ~6 credits per event with pending markets
+ * Capacity: 200 events × 30 runs/hour = 6000 events/hour
  */
 export async function POST(request: Request) {
   // 1. SECURITY CHECK
