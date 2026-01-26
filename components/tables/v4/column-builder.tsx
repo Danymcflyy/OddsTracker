@@ -345,6 +345,9 @@ function getOddsValue(
   const isSpread = marketKey.includes('spread');
 
   if (type === 'opening') {
+    // Safety check: ensure opening_odds exists and is an array
+    if (!event.opening_odds || !Array.isArray(event.opening_odds)) return '-';
+
     // 1. Direct search
     let marketData = event.opening_odds.find((m) => {
       if (m.market_key !== marketKey) return false;
@@ -358,12 +361,12 @@ function getOddsValue(
     if (isSpread && point !== undefined) {
         const mirrorPoint = -1 * point;
         const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
-        
+
         marketData = event.opening_odds.find((m) => {
             if (m.market_key !== marketKey) return false;
             return m.odds?.point === mirrorPoint;
         });
-        
+
         if (marketData?.odds?.[mirrorOutcome]) return formatOddsValue(marketData.odds[mirrorOutcome]);
     }
 
