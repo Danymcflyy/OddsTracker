@@ -65,7 +65,8 @@
     "debug-ligue1-slug": "tsx scripts/debug-ligue1-slug.ts",
     "debug-ligue1-join": "tsx scripts/debug-ligue1-join.ts",
     "gen:supabase-types": "tsx scripts/generate-supabase-types.ts",
-    "fix:ligue1-slug": "tsx scripts/fix-ligue1-slug.ts"
+    "fix:ligue1-slug": "tsx scripts/fix-ligue1-slug.ts",
+    "enable-sql-search": "tsx scripts/enable-sql-search.ts"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",
