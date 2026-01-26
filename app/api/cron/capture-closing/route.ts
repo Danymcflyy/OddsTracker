@@ -63,15 +63,27 @@ export async function POST(request: Request) {
       .eq('key', 'tracked_markets')
       .single();
 
-    let marketsToCapture = 'h2h,spreads,totals'; // Default
+    let marketsToCapture = 'h2h,alternate_spreads,alternate_totals'; // Default with alternates
     if (settings?.value && Array.isArray(settings.value) && settings.value.length > 0) {
       const requested = [...settings.value];
-      
-      // Auto-include alternate markets for full coverage
+
+      // Auto-include alternate markets for full coverage (multiple point variations)
+      if (requested.includes('spreads') && !requested.includes('alternate_spreads')) {
+          requested.push('alternate_spreads');
+      }
+      if (requested.includes('totals') && !requested.includes('alternate_totals')) {
+          requested.push('alternate_totals');
+      }
+      if (requested.includes('spreads_h1') && !requested.includes('alternate_spreads_h1')) {
+          requested.push('alternate_spreads_h1');
+      }
+      if (requested.includes('totals_h1') && !requested.includes('alternate_totals_h1')) {
+          requested.push('alternate_totals_h1');
+      }
       if (requested.includes('team_totals') && !requested.includes('alternate_team_totals')) {
           requested.push('alternate_team_totals');
       }
-      
+
       marketsToCapture = requested.join(',');
     }
     console.log(`   Marchés cibles: ${marketsToCapture}\n`);
@@ -299,15 +311,15 @@ async function captureSnapshot(
 
       if (homeVariations.length > 0) {
         const sortedHome = homeVariations.sort((a, b) => (a.point || 0) - (b.point || 0));
-        const storeKey = marketKey === 'team_totals' ? 'team_totals_home' : 'alternate_team_totals_home';
-        markets[storeKey] = sortedHome[0];
-        marketsVariations[storeKey] = sortedHome;
+        // Always store as team_totals_home (remove alternate_ prefix for consistency)
+        markets['team_totals_home'] = sortedHome[0];
+        marketsVariations['team_totals_home'] = sortedHome;
       }
       if (awayVariations.length > 0) {
         const sortedAway = awayVariations.sort((a, b) => (a.point || 0) - (b.point || 0));
-        const storeKey = marketKey === 'team_totals' ? 'team_totals_away' : 'alternate_team_totals_away';
-        markets[storeKey] = sortedAway[0];
-        marketsVariations[storeKey] = sortedAway;
+        // Always store as team_totals_away (remove alternate_ prefix for consistency)
+        markets['team_totals_away'] = sortedAway[0];
+        marketsVariations['team_totals_away'] = sortedAway;
       }
     } else {
       const mergedVariations = new Map<number, any>();
@@ -324,8 +336,10 @@ async function captureSnapshot(
       finalVariations.sort((a, b) => (a.point || 0) - (b.point || 0));
 
       if (finalVariations.length > 0) {
-          markets[marketKey] = finalVariations[0];
-          marketsVariations[marketKey] = finalVariations;
+          // Map alternate_* keys back to regular keys for storage consistency
+          const storageKey = marketKey.replace('alternate_', '');
+          markets[storageKey] = finalVariations[0];
+          marketsVariations[storageKey] = finalVariations;
       }
     }
   }
