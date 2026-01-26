@@ -60,7 +60,7 @@ export default function DataCollectionSettingsPage() {
         const settingsRes = await fetch('/api/v4/settings');
         const settingsData = await settingsRes.json();
 
-        if (settingsData.success) {
+        if (settingsData.success && settingsData.settings) {
           setSettings({
             tracked_sports: settingsData.settings.tracked_sports || [],
             tracked_markets: settingsData.settings.tracked_markets || MVP_MARKETS,

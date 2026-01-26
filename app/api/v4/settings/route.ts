@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSetting, updateSetting } from '@/lib/db/helpers';
+import { getSetting, updateSetting, getAllSettings } from '@/lib/db/helpers';
 import { requireAuth } from '@/lib/auth/middleware';
 
 export const dynamic = 'force-dynamic';
@@ -12,18 +12,22 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
 
-    if (!key) {
-      return NextResponse.json(
-        { success: false, error: 'Missing key parameter' },
-        { status: 400 }
-      );
+    // Case 1: Get a specific setting by key
+    if (key) {
+      const value = await getSetting(key as any);
+
+      return NextResponse.json({
+        success: true,
+        data: value,
+      });
     }
 
-    const value = await getSetting(key as any);
+    // Case 2: Get all settings (no key parameter)
+    const allSettings = await getAllSettings();
 
     return NextResponse.json({
       success: true,
-      data: value,
+      settings: allSettings,
     });
   } catch (error) {
     console.error('Error in settings API:', error);

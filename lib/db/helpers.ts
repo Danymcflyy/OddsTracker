@@ -29,10 +29,15 @@ export async function getSetting<K extends keyof AppSettings>(
     .from('settings')
     .select('value')
     .eq('key', key)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
     console.error(`Failed to get setting ${key}:`, error);
+    return null;
+  }
+
+  if (!data) {
+    // Setting doesn't exist yet - return null without logging error
     return null;
   }
 

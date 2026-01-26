@@ -423,19 +423,8 @@ async function finalizeClosingOdds(supabase: any, eventId: string) {
       used_historical_api: false,
     });
 
-  const markets = bestSnapshot.markets || {};
-  for (const [marketKey, odds] of Object.entries(markets)) {
-    const { error } = await supabase
-      .from('market_states')
-      .update({
-        closing_odds: odds,
-        status: 'closed',
-      })
-      .eq('event_id', eventId)
-      .eq('market_key', marketKey);
-      
-    if (error) console.error(`Failed to update market state: ${error.message}`);
-  }
+  // Note: market_states table tracks opening odds only.
+  // Closing odds are stored in closing_odds_snapshots and closing_odds tables.
 }
 
 async function finalizeOldEvents(supabase: any, now: Date): Promise<number> {
