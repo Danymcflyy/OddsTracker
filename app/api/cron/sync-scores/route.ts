@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server';
 import { syncScoresAndClosingOdds } from '@/lib/services/theoddsapi/closing-odds';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutes - this can take longer
+export const maxDuration = 60; // 1 minute - only syncing scores now
 
 /**
- * Cron Job: Sync Scores & Closing Odds
+ * Cron Job: Sync Scores ONLY
  * Frequency: Once daily (2:27 AM UTC)
- * Purpose: Update scores and capture closing odds for completed events
- * Cost: ~2 credits for scores + ~6 credits per completed event
+ * Purpose: Update scores for completed events
+ * Cost: ~2 credits total (scores API is free, only counts as usage)
+ *
+ * Note: Closing odds are handled by capture-closing job (every 5 min)
  */
 export async function POST(request: Request) {
   // 1. SECURITY CHECK

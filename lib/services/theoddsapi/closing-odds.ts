@@ -295,12 +295,13 @@ async function retryFailedClosingOdds(): Promise<{ retriesAttempted: number; ret
 }
 
 /**
- * Main function: Sync scores and capture closing odds
+ * Simplified function: Sync scores ONLY
+ * Closing odds are already handled by capture-closing cron job (every 5 min)
  */
 export async function syncScoresAndClosingOdds(): Promise<ClosingResult> {
   const startTime = Date.now();
 
-  console.log('[ClosingOdds] Starting scores and closing odds sync...');
+  console.log('[Scores] Starting scores sync...');
 
   const result: ClosingResult = {
     success: true,
@@ -316,14 +317,14 @@ export async function syncScoresAndClosingOdds(): Promise<ClosingResult> {
     const trackedSports = await getSetting('tracked_sports') || [];
 
     if (trackedSports.length === 0) {
-      console.log('[ClosingOdds] No tracked sports');
+      console.log('[Scores] No tracked sports');
       return result;
     }
 
     // Sync scores for each sport (past 3 days)
     for (const sportKey of trackedSports) {
       try {
-        console.log(`[ClosingOdds] Fetching scores for ${sportKey}...`);
+        console.log(`[Scores] Fetching scores for ${sportKey}...`);
 
         // Get scores from the last 3 days
         const response = await client.getScores(sportKey, {
@@ -335,11 +336,11 @@ export async function syncScoresAndClosingOdds(): Promise<ClosingResult> {
         const creditsUsed = response.headers.requestsLast;
         result.creditsUsed += creditsUsed;
 
-        console.log(`[ClosingOdds] Found ${scores.length} recent events for ${sportKey}`);
+        console.log(`[Scores] Found ${scores.length} recent events for ${sportKey}`);
 
         // Log scores API call
         await logApiUsage({
-          job_name: 'sync_scores_closing',
+          job_name: 'sync_scores',
           endpoint: `/sports/${sportKey}/scores`,
           sport_key: sportKey,
           request_params: { daysFrom: '3' },
@@ -355,6 +356,8 @@ export async function syncScoresAndClosingOdds(): Promise<ClosingResult> {
         // Update events with scores
         for (const score of scores) {
           if (!score.completed) continue;
+
+          result.eventsProcessed++;
 
           // Update event in DB
           const { data: existingEvent } = await (supabaseAdmin as any)
@@ -382,78 +385,22 @@ export async function syncScoresAndClosingOdds(): Promise<ClosingResult> {
         }
 
         // Small delay between sports
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch (error) {
-        console.error(`[ClosingOdds] Error fetching scores for ${sportKey}:`, error);
+        console.error(`[Scores] Error fetching scores for ${sportKey}:`, error);
         result.errors.push(`Scores ${sportKey}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
-    // Get completed events without closing odds
-    let completedEvents = await getCompletedEventsWithoutClosing();
-    console.log(`[ClosingOdds] Found ${completedEvents.length} completed events without closing odds`);
-
-    // LIMIT: Process max 20 events per run to avoid timeout
-    const MAX_EVENTS_PER_RUN = 20;
-    if (completedEvents.length > MAX_EVENTS_PER_RUN) {
-      console.log(`[ClosingOdds] Limiting to ${MAX_EVENTS_PER_RUN} events to avoid timeout`);
-      completedEvents = completedEvents.slice(0, MAX_EVENTS_PER_RUN);
-    }
-
-    // Capture closing odds for each
-    for (const event of completedEvents) {
-      result.eventsProcessed++;
-
-      const captureResult = await captureEventClosingOdds(
-        event.api_event_id,
-        event.id,
-        event.sport_key,
-        event.commence_time
-      );
-
-      result.creditsUsed += captureResult.creditsUsed;
-
-      if (captureResult.success) {
-        result.closingCaptured++;
-      } else {
-        result.closingFailed++;
-      }
-
-      // Log closing odds API call
-      await logApiUsage({
-        job_name: 'sync_scores_closing',
-        endpoint: `/sports/${event.sport_key}/events/${event.api_event_id}/odds`,
-        sport_key: event.sport_key,
-        request_params: { event_id: event.api_event_id },
-        credits_used: captureResult.creditsUsed,
-        credits_remaining: null,
-        events_processed: 1,
-        markets_captured: captureResult.success ? 1 : 0,
-        success: captureResult.success,
-        error_message: captureResult.error || null,
-        duration_ms: null,
-      });
-
-      // Delay between events
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // Retry failed captures
-    const retryResult = await retryFailedClosingOdds();
-    result.creditsUsed += retryResult.creditsUsed;
-    result.closingCaptured += retryResult.retriesSucceeded;
-
     const duration = Date.now() - startTime;
-    console.log(`[ClosingOdds] Sync complete in ${duration}ms:`);
-    console.log(`  - Events processed: ${result.eventsProcessed}`);
-    console.log(`  - Closing captured: ${result.closingCaptured}`);
-    console.log(`  - Closing failed: ${result.closingFailed}`);
+    console.log(`\n[Scores] Sync complete in ${duration}ms:`);
+    console.log(`  - Events updated: ${result.eventsProcessed}`);
     console.log(`  - Credits used: ${result.creditsUsed}`);
     console.log(`  - Errors: ${result.errors.length}`);
 
     return result;
   } catch (error) {
-    console.error('[ClosingOdds] Fatal error:', error);
+    console.error('[Scores] Fatal error:', error);
     result.success = false;
     result.errors.push(error instanceof Error ? error.message : String(error));
     return result;
