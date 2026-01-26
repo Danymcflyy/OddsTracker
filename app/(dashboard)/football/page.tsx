@@ -159,6 +159,9 @@ export default function FootballPage() {
     const combinations = new Map<string, { key: string; name: string; point?: number }>();
 
     for (const event of events) {
+      // Skip events without opening_odds
+      if (!event.opening_odds || !Array.isArray(event.opening_odds)) continue;
+
       for (const market of event.opening_odds) {
         const point = market.odds?.point;
         const combinationKey = point !== undefined ? `${market.market_key}:${point}` : market.market_key;
