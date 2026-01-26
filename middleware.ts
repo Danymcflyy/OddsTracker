@@ -14,7 +14,11 @@ export async function middleware(request: NextRequest) {
   const publicPaths = ["/login"];
 
   // API routes publiques
-  const publicApiPaths = ["/api/auth/login", "/api/sync/test"];
+  const publicApiPaths = [
+    "/api/auth/login",
+    "/api/sync/test",
+    "/api/cron/", // Supabase Cron endpoints
+  ];
 
   // Vérifier si le chemin est public
   const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
