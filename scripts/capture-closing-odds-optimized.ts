@@ -59,7 +59,15 @@ async function run() {
 
   let marketsToCapture = 'h2h,spreads,totals'; // Default
   if (settings?.value && Array.isArray(settings.value) && settings.value.length > 0) {
-    marketsToCapture = settings.value.join(',');
+    const requested = [...settings.value];
+    
+    // Auto-include alternate markets for full coverage
+    if (requested.includes('team_totals') && !requested.includes('alternate_team_totals')) {
+        requested.push('alternate_team_totals');
+    }
+    // Note: spreads and totals usually include alternates in single-event endpoint but explicit doesn't hurt if quota allows
+    
+    marketsToCapture = requested.join(',');
   }
   console.log(`   Marchés cibles: ${marketsToCapture}\n`);
 
