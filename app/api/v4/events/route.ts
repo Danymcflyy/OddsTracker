@@ -61,6 +61,11 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       ...result,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+      },
     });
   } catch (error) {
     console.error('Error in events API:', error);
