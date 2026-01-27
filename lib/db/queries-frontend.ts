@@ -246,7 +246,13 @@ export async function fetchEventsForTable(params: {
     let data: EventWithOdds[] = (rawData || []).map((event: any) => {
       const marketStates = event.market_states || [];
       const closingOddsData = Array.isArray(event.closing_odds) ? event.closing_odds[0] : event.closing_odds;
-      
+
+      // Debug: log closing odds for completed events
+      if (event.status === 'completed' && event.home_team?.includes('Everton')) {
+        console.log('[DEBUG] Everton closing_odds raw:', JSON.stringify(event.closing_odds));
+        console.log('[DEBUG] Everton closingOddsData:', JSON.stringify(closingOddsData));
+      }
+
       const closingOdds = closingOddsData ? {
           markets: closingOddsData.markets,
           markets_variations: closingOddsData.markets_variations,
