@@ -3,9 +3,34 @@
  * Queries optimized for displaying data in the frontend
  */
 
+import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getSetting } from './helpers';
 import type { Event, MarketState, ClosingOdds } from './types';
+
+/**
+ * Creates a fresh Supabase client for each request
+ * This bypasses any potential connection/query caching in Vercel serverless
+ */
+function createFreshClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    db: {
+      schema: 'public',
+    },
+    global: {
+      headers: {
+        'x-request-id': `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      },
+    },
+  });
+}
 
 export interface EventWithOdds extends Event {
   opening_odds: Array<{
@@ -86,6 +111,9 @@ export async function fetchEventsForTable(params: {
   // STRATEGY A: ADVANCED SQL SEARCH (RPC)
   if (useSqlSearch) {
     try {
+      // Create a fresh client for each request to avoid any Vercel caching
+      const freshClient = createFreshClient();
+
       const rpcParams = {
         p_sport_key: sportKey || null,
         p_date_from: dateFrom || null,
@@ -104,7 +132,7 @@ export async function fetchEventsForTable(params: {
         p_page_size: pageSize,
       };
 
-      const { data: rawData, error } = await (supabaseAdmin as any).rpc('search_events', rpcParams);
+      const { data: rawData, error } = await (freshClient as any).rpc('search_events', rpcParams);
 
       if (!error) {
         // Get total count from the first row (window function result)
@@ -193,9 +221,12 @@ export async function fetchEventsForTable(params: {
   // Fetch more rows when using advanced filters to allow proper JS filtering
   const fetchLimit = hasAdvancedFilters ? 2000 : pageSize;
 
+  // Create a fresh client for fallback too
+  const fallbackClient = createFreshClient();
+
   try {
     // STEP 1: Fetch events first WITHOUT joins for correct pagination
-    let eventsQuery = (supabaseAdmin as any)
+    let eventsQuery = (fallbackClient as any)
       .from('events')
       .select('*', { count: 'exact' });
 
@@ -234,13 +265,13 @@ export async function fetchEventsForTable(params: {
     const eventIds = eventsData.map((e: any) => e.id);
 
     // STEP 3: Fetch market_states for these events
-    const { data: marketStatesData } = await (supabaseAdmin as any)
+    const { data: marketStatesData } = await (fallbackClient as any)
       .from('market_states')
       .select('event_id, id, market_key, status, opening_odds, opening_odds_variations, opening_captured_at')
       .in('event_id', eventIds);
 
     // STEP 4: Fetch closing_odds for these events
-    const { data: closingOddsData } = await (supabaseAdmin as any)
+    const { data: closingOddsData } = await (fallbackClient as any)
       .from('closing_odds')
       .select('event_id, markets, markets_variations, captured_at')
       .in('event_id', eventIds);
