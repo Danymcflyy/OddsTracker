@@ -18,6 +18,7 @@ export async function middleware(request: NextRequest) {
     "/api/auth/login",
     "/api/sync/test",
     "/api/cron/", // Supabase Cron endpoints
+    "/api/debug/", // Debug endpoints (temporary)
   ];
 
   // Vérifier si le chemin est public
