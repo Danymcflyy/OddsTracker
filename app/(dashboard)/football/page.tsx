@@ -147,21 +147,6 @@ export default function FootballPage() {
       const response = await fetch(`/api/v4/events?${params.toString()}`);
       const result = await response.json();
 
-      // DEBUG: Log what we received
-      console.log('[DEBUG] API Response:', {
-        page,
-        search: teamSearch,
-        totalReturned: result.data?.length,
-        firstEvent: result.data?.[0] ? {
-          home: result.data[0].home_team,
-          status: result.data[0].status,
-          home_score: result.data[0].home_score,
-          away_score: result.data[0].away_score,
-          opening_odds_count: result.data[0].opening_odds?.length,
-          has_closing_odds: !!result.data[0].closing_odds,
-        } : null,
-      });
-
       if (result.success) {
         setEvents(result.data);
         setTotal(result.total);

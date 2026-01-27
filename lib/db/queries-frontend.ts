@@ -220,19 +220,6 @@ export async function fetchEventsForTable(params: {
 
     const { data: eventsData, error: eventsError, count } = await eventsQuery;
 
-    // DEBUG: Log events query result
-    console.log('[HYBRID DEBUG] Step 1 - Events fetched:', {
-      count: eventsData?.length,
-      total: count,
-      firstEvent: eventsData?.[0] ? {
-        id: eventsData[0].id,
-        home: eventsData[0].home_team,
-        status: eventsData[0].status,
-        home_score: eventsData[0].home_score,
-        away_score: eventsData[0].away_score,
-      } : null
-    });
-
     if (eventsError) {
       console.error('Error fetching events:', eventsError);
       return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
@@ -269,15 +256,6 @@ export async function fetchEventsForTable(params: {
     const closingOddsMap = new Map<string, any>();
     (closingOddsData || []).forEach((co: any) => {
       closingOddsMap.set(co.event_id, co);
-    });
-
-    // DEBUG: Log related data
-    console.log('[HYBRID DEBUG] Step 2 - Related data:', {
-      marketStatesCount: marketStatesData?.length || 0,
-      closingOddsCount: closingOddsData?.length || 0,
-      firstEventId: eventIds[0],
-      firstEventHasMarketStates: marketStatesMap.has(eventIds[0]),
-      firstEventHasClosingOdds: closingOddsMap.has(eventIds[0]),
     });
 
     // Transform data for frontend
@@ -329,19 +307,6 @@ export async function fetchEventsForTable(params: {
         api_event_id: event.api_event_id || '',
       } as EventWithOdds;
     });
-
-    // DEBUG: Log transformed data
-    if (data[0]) {
-      console.log('[HYBRID DEBUG] Step 3 - Transformed first event:', {
-        home: data[0].home_team,
-        status: data[0].status,
-        home_score: data[0].home_score,
-        away_score: data[0].away_score,
-        opening_odds_count: data[0].opening_odds?.length,
-        has_closing_odds: !!data[0].closing_odds,
-        closing_odds_markets: data[0].closing_odds ? Object.keys(data[0].closing_odds.markets || {}) : null,
-      });
-    }
 
     // Apply Advanced Filtering (JS Post-Fetch)
     if (hasAdvancedFilters) {

@@ -292,3 +292,20 @@ export const DEFAULT_CONFIG = {
   USE_HISTORICAL_FALLBACK: false,
   CLOSING_RETRY_DAYS: 3,
 };
+
+/**
+ * Markets recommended for Historical API Fallback (to ensure coverage)
+ * Based on support advice: "These markets can be queried one event at a time"
+ */
+export const HISTORICAL_FALLBACK_MARKETS = [
+  'h2h',
+  'spreads',
+  'totals',
+  'draw_no_bet',
+  'btts',
+  'alternate_totals',
+  'alternate_spreads',
+  'h2h_h1',
+  'spreads_h1',
+  'totals_h1',
+];
