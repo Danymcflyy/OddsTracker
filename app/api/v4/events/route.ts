@@ -57,6 +57,17 @@ export async function GET(request: Request) {
     });
 
     console.log('[API] Events Result Count:', result.data.length);
+    // DEBUG: Log first event details
+    if (result.data[0]) {
+      console.log('[API] First Event Debug:', {
+        home: result.data[0].home_team,
+        status: result.data[0].status,
+        home_score: result.data[0].home_score,
+        away_score: result.data[0].away_score,
+        opening_odds_count: result.data[0].opening_odds?.length,
+        has_closing: !!result.data[0].closing_odds,
+      });
+    }
 
     return NextResponse.json({
       success: true,

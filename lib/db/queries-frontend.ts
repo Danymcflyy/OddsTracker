@@ -193,64 +193,102 @@ export async function fetchEventsForTable(params: {
   const fetchLimit = hasAdvancedFilters ? 2000 : pageSize;
 
   try {
-    // Build query
-    let query = (supabaseAdmin as any)
+    // STEP 1: Fetch events first WITHOUT joins for correct pagination
+    let eventsQuery = (supabaseAdmin as any)
       .from('events')
-      .select(`
-        *,
-        market_states!left(
-          id,
-          market_key,
-          status,
-          opening_odds,
-          opening_odds_variations,
-          opening_captured_at
-        ),
-        closing_odds!left(
-          markets,
-          markets_variations,
-          captured_at
-        )
-      `, { count: 'exact' });
+      .select('*', { count: 'exact' });
 
     // Basic SQL filters
-    if (sportKey) query = query.eq('sport_key', sportKey);
-    if (dateFrom) query = query.gte('commence_time', dateFrom);
-    if (dateTo) query = query.lte('commence_time', dateTo);
-    if (search) query = query.or(`home_team.ilike.%${search}%,away_team.ilike.%${search}%`);
-    // Note: marketKey filter is applied in JS post-fetch for better accuracy
-    // Simple SQL filters for new params
-    if (status && status !== 'all') query = query.eq('status', status);
-    if (minSnapshots !== undefined) query = query.gte('snapshot_count', minSnapshots);
+    if (sportKey) eventsQuery = eventsQuery.eq('sport_key', sportKey);
+    if (dateFrom) eventsQuery = eventsQuery.gte('commence_time', dateFrom);
+    if (dateTo) eventsQuery = eventsQuery.lte('commence_time', dateTo);
+    if (search) eventsQuery = eventsQuery.or(`home_team.ilike.%${search}%,away_team.ilike.%${search}%`);
+    if (status && status !== 'all') eventsQuery = eventsQuery.eq('status', status);
+    if (minSnapshots !== undefined) eventsQuery = eventsQuery.gte('snapshot_count', minSnapshots);
 
     // Sorting
-    query = query.order(sortField as any, { ascending: sortDirection === 'asc' });
+    eventsQuery = eventsQuery.order(sortField as any, { ascending: sortDirection === 'asc' });
 
     // Pagination/Limit
     if (!cursor) {
       const from = (page - 1) * pageSize;
       const to = from + fetchLimit - 1;
-      query = query.range(from, to);
+      eventsQuery = eventsQuery.range(from, to);
     } else {
-      query = query.limit(fetchLimit);
+      eventsQuery = eventsQuery.limit(fetchLimit);
     }
 
-    const { data: rawData, error, count } = await query;
+    const { data: eventsData, error: eventsError, count } = await eventsQuery;
 
-    if (error) {
-      console.error('Error fetching events:', error);
+    // DEBUG: Log events query result
+    console.log('[HYBRID DEBUG] Step 1 - Events fetched:', {
+      count: eventsData?.length,
+      total: count,
+      firstEvent: eventsData?.[0] ? {
+        id: eventsData[0].id,
+        home: eventsData[0].home_team,
+        status: eventsData[0].status,
+        home_score: eventsData[0].home_score,
+        away_score: eventsData[0].away_score,
+      } : null
+    });
+
+    if (eventsError) {
+      console.error('Error fetching events:', eventsError);
       return { data: [], total: 0, nextCursor: undefined, prevCursor: undefined };
     }
 
-    // Transform data for frontend
-    let data: EventWithOdds[] = (rawData || []).map((event: any) => {
-      const marketStates = event.market_states || [];
-      const closingOddsData = Array.isArray(event.closing_odds) ? event.closing_odds[0] : event.closing_odds;
+    if (!eventsData || eventsData.length === 0) {
+      return { data: [], total: count || 0, nextCursor: undefined, prevCursor: undefined };
+    }
 
-      const closingOdds = closingOddsData ? {
-          markets: closingOddsData.markets,
-          markets_variations: closingOddsData.markets_variations,
-          captured_at: closingOddsData.captured_at
+    // STEP 2: Get event IDs for fetching related data
+    const eventIds = eventsData.map((e: any) => e.id);
+
+    // STEP 3: Fetch market_states for these events
+    const { data: marketStatesData } = await (supabaseAdmin as any)
+      .from('market_states')
+      .select('event_id, id, market_key, status, opening_odds, opening_odds_variations, opening_captured_at')
+      .in('event_id', eventIds);
+
+    // STEP 4: Fetch closing_odds for these events
+    const { data: closingOddsData } = await (supabaseAdmin as any)
+      .from('closing_odds')
+      .select('event_id, markets, markets_variations, captured_at')
+      .in('event_id', eventIds);
+
+    // Create lookup maps
+    const marketStatesMap = new Map<string, any[]>();
+    (marketStatesData || []).forEach((ms: any) => {
+      if (!marketStatesMap.has(ms.event_id)) {
+        marketStatesMap.set(ms.event_id, []);
+      }
+      marketStatesMap.get(ms.event_id)!.push(ms);
+    });
+
+    const closingOddsMap = new Map<string, any>();
+    (closingOddsData || []).forEach((co: any) => {
+      closingOddsMap.set(co.event_id, co);
+    });
+
+    // DEBUG: Log related data
+    console.log('[HYBRID DEBUG] Step 2 - Related data:', {
+      marketStatesCount: marketStatesData?.length || 0,
+      closingOddsCount: closingOddsData?.length || 0,
+      firstEventId: eventIds[0],
+      firstEventHasMarketStates: marketStatesMap.has(eventIds[0]),
+      firstEventHasClosingOdds: closingOddsMap.has(eventIds[0]),
+    });
+
+    // Transform data for frontend
+    let data: EventWithOdds[] = eventsData.map((event: any) => {
+      const marketStates = marketStatesMap.get(event.id) || [];
+      const closingOddsRow = closingOddsMap.get(event.id);
+
+      const closingOdds = closingOddsRow ? {
+          markets: closingOddsRow.markets,
+          markets_variations: closingOddsRow.markets_variations,
+          captured_at: closingOddsRow.captured_at
       } : null;
 
       // Unfold opening odds variations
@@ -291,6 +329,19 @@ export async function fetchEventsForTable(params: {
         api_event_id: event.api_event_id || '',
       } as EventWithOdds;
     });
+
+    // DEBUG: Log transformed data
+    if (data[0]) {
+      console.log('[HYBRID DEBUG] Step 3 - Transformed first event:', {
+        home: data[0].home_team,
+        status: data[0].status,
+        home_score: data[0].home_score,
+        away_score: data[0].away_score,
+        opening_odds_count: data[0].opening_odds?.length,
+        has_closing_odds: !!data[0].closing_odds,
+        closing_odds_markets: data[0].closing_odds ? Object.keys(data[0].closing_odds.markets || {}) : null,
+      });
+    }
 
     // Apply Advanced Filtering (JS Post-Fetch)
     if (hasAdvancedFilters) {
