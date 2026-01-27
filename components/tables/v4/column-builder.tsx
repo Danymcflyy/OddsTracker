@@ -344,19 +344,6 @@ function getOddsValue(
 ): string {
   const isSpread = marketKey.includes('spread');
 
-  // Debug: Log closing odds lookup for completed events (h2h only to reduce noise)
-  if (type === 'closing' && event.status === 'completed' && marketKey === 'h2h') {
-    console.log('[DEBUG getOddsValue]', {
-      home_team: event.home_team,
-      marketKey,
-      outcome,
-      point,
-      has_closing_odds: !!event.closing_odds,
-      closing_odds_markets: event.closing_odds?.markets ? Object.keys(event.closing_odds.markets) : 'none',
-      h2h_data: event.closing_odds?.markets?.h2h,
-    });
-  }
-
   if (type === 'opening') {
     // Safety check: ensure opening_odds exists and is an array
     if (!event.opening_odds || !Array.isArray(event.opening_odds)) return '-';
