@@ -79,8 +79,9 @@ export async function fetchEventsForTable(params: {
     minSnapshots
   } = params;
 
-  // Check feature flag for SQL Search
-  const useSqlSearch = await getSetting('use_sql_search');
+  // ALWAYS use RPC for reliable pagination
+  // The hybrid approach has caching issues with Vercel
+  const useSqlSearch = true;
 
   // STRATEGY A: ADVANCED SQL SEARCH (RPC)
   if (useSqlSearch) {
