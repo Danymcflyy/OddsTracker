@@ -144,7 +144,15 @@ export default function FootballPage() {
       if (advancedSearch.status && advancedSearch.status !== 'all') params.set('status', advancedSearch.status);
       if (advancedSearch.minSnapshots !== undefined) params.set('minSnapshots', advancedSearch.minSnapshots.toString());
 
-      const response = await fetch(`/api/v4/events?${params.toString()}`);
+      // Add cache-busting parameter
+      params.set('_t', Date.now().toString());
+
+      const response = await fetch(`/api/v4/events?${params.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
       const result = await response.json();
 
       if (result.success) {
