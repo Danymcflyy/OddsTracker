@@ -289,10 +289,8 @@ export default function FootballPage() {
   const filteredEvents = events;
 
   // Générer les colonnes dynamiquement et filtrer par visibleMarkets
+  // Note: Toujours appeler buildFootballColumns même sans marchés pour avoir les colonnes statiques (Score, Équipes, etc.)
   const columns = React.useMemo(() => {
-    if (marketPointCombinations.length === 0) return [];
-
-    // Filtrer les combinaisons visibles
     const visibleCombinations = marketPointCombinations.filter((m) => visibleMarkets.has(m.key));
     return buildFootballColumns(visibleCombinations, selectedOutcomes, columnConfig);
   }, [marketPointCombinations, visibleMarkets, selectedOutcomes, columnConfig]);
