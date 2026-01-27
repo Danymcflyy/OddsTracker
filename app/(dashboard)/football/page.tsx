@@ -265,6 +265,11 @@ export default function FootballPage() {
     }
   }, [filterOptions.markets.length, loadEvents]);
 
+  // Reset pagination to page 1 when filters change
+  React.useEffect(() => {
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+  }, [teamSearch, selectedSport, dateRange, advancedSearch]);
+
   // Les événements sont directement utilisés (filtrage côté serveur)
   const filteredEvents = events;
 
