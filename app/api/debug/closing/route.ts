@@ -41,6 +41,8 @@ export async function GET(request: Request) {
       closing_odds_type: e.closing_odds ? (Array.isArray(e.closing_odds) ? 'array' : 'object') : 'null',
       closing_markets: e.closing_odds?.markets ? Object.keys(e.closing_odds.markets) : [],
       h2h_closing: e.closing_odds?.markets?.h2h || null,
+      has_markets_variations: !!e.closing_odds?.markets_variations,
+      h2h_variations: e.closing_odds?.markets_variations?.h2h || null,
     })),
   });
 }
