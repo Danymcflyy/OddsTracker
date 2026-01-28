@@ -100,15 +100,16 @@ export async function POST(request: Request) {
       console.log(`   Kick-off: ${new Date(dbEvent.commence_time).toLocaleTimeString('fr-FR')}`);
       console.log(`   Position: M${minutesBeforeKickoff > 0 ? '+' : ''}${minutesBeforeKickoff}`);
 
-      // Snapshots cibles: M-10, M-5, M-0 (3 snapshots max)
+      // Snapshots cibles: M-10, M-5 (2 snapshots max)
       // On capture si on est à ±1 minute d'un slot cible
-      const TARGET_SLOTS = [-10, -5, 0];
+      // Note: Pas de M-0 pour éviter de scanner après le début du match
+      const TARGET_SLOTS = [-10, -5];
       const isNearTargetSlot = TARGET_SLOTS.some(slot =>
         Math.abs(minutesBeforeKickoff - slot) <= 1
       );
 
       if (!isNearTargetSlot) {
-        console.log(`   ⏭️ Pas un slot cible (M-10, M-5, M-0)\n`);
+        console.log(`   ⏭️ Pas un slot cible (M-10, M-5)\n`);
         totalSkipped++;
         continue;
       }
@@ -194,6 +195,42 @@ function calculateMinutesBeforeKickoff(commenceTime: string, now: Date): number 
   return Math.floor(diffMs / (60 * 1000));
 }
 
+/**
+ * Normalize string for comparison: remove accents, lowercase, trim
+ */
+function normalizeString(str: string): string {
+  return str
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // Remove diacritics/accents
+}
+
+/**
+ * Check if text contains team name (fuzzy match with accent removal)
+ */
+function containsTeamName(text: string, teamName: string): boolean {
+  const normalizedText = normalizeString(text);
+  const normalizedTeam = normalizeString(teamName);
+
+  // Direct match
+  if (normalizedText.includes(normalizedTeam)) {
+    return true;
+  }
+
+  // Try matching first significant word (e.g., "Atlético Madrid" -> "atletico")
+  const teamWords = normalizedTeam.split(/\s+/);
+  if (teamWords.length > 1) {
+    for (const word of teamWords) {
+      if (word.length > 3 && normalizedText.includes(word)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): any[] {
   const homeLower = homeTeam?.toLowerCase().trim();
   const awayLower = awayTeam?.toLowerCase().trim();
@@ -217,13 +254,11 @@ function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): a
     else if (isTeamTotals) {
       const description = outcome.description?.toLowerCase().trim() || '';
 
-      if (description && homeLower && description.includes(homeLower)) {
+      // Use fuzzy matching to handle accents and name variations
+      if (description && homeTeam && containsTeamName(description, homeTeam)) {
         teamSide = 'home';
-      } else if (description && awayLower && description.includes(awayLower)) {
+      } else if (description && awayTeam && containsTeamName(description, awayTeam)) {
         teamSide = 'away';
-      } else if (description) {
-        if (description === homeLower) teamSide = 'home';
-        else if (description === awayLower) teamSide = 'away';
       }
 
       if (name.startsWith('over') || name === 'o') type = 'over';

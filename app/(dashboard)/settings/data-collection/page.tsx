@@ -104,6 +104,9 @@ export default function DataCollectionSettingsPage() {
         { key: 'tracked_markets', value: settings.tracked_markets },
       ];
 
+      let totalMarketsAdded = 0;
+      let totalEventsUpdated = 0;
+
       for (const update of updates) {
         const res = await fetch('/api/v4/settings', {
           method: 'POST',
@@ -116,12 +119,26 @@ export default function DataCollectionSettingsPage() {
         if (!data.success) {
           throw new Error(`Failed to update ${update.key}`);
         }
+
+        // Capture sync results for tracked_markets
+        if (update.key === 'tracked_markets' && data.syncResult) {
+          totalMarketsAdded = data.syncResult.marketsAdded || 0;
+          totalEventsUpdated = data.syncResult.eventsUpdated || 0;
+        }
       }
 
-      toast({
-        title: 'Succès',
-        description: 'Réglages sauvegardés avec succès',
-      });
+      // Show appropriate message based on sync result
+      if (totalMarketsAdded > 0) {
+        toast({
+          title: 'Succès',
+          description: `Réglages sauvegardés. ${totalMarketsAdded} marchés ajoutés à ${totalEventsUpdated} événements.`,
+        });
+      } else {
+        toast({
+          title: 'Succès',
+          description: 'Réglages sauvegardés avec succès',
+        });
+      }
     } catch (error) {
       console.error('Échec de la sauvegarde:', error);
       toast({

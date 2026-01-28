@@ -21,6 +21,30 @@ const SPORTS_META = [
     description: "Toutes les ligues - The Odds API v4",
     comingSoon: false,
   },
+  {
+    name: "Tennis",
+    slug: "tennis",
+    accent: "bg-yellow-50 text-yellow-600",
+    emoji: "🎾",
+    description: "ATP, WTA, Grand Slams",
+    comingSoon: true,
+  },
+  {
+    name: "Hockey",
+    slug: "hockey",
+    accent: "bg-blue-50 text-blue-600",
+    emoji: "🏒",
+    description: "NHL et ligues européennes",
+    comingSoon: true,
+  },
+  {
+    name: "Handball",
+    slug: "handball",
+    accent: "bg-orange-50 text-orange-600",
+    emoji: "🤾",
+    description: "Championnats et coupes",
+    comingSoon: true,
+  },
 ] as const;
 
 type SportCardData = {
@@ -38,20 +62,29 @@ async function fetchSportCards(): Promise<SportCardData[]> {
   const formatter = new Intl.NumberFormat("fr-FR");
   const cards: SportCardData[] = [];
 
+  // Get stats only once for Football
+  const stats = await getDashboardStats();
+
   for (const sport of SPORTS_META) {
-    // Get stats for this sport
-    const stats = await getDashboardStats();
+    if (sport.comingSoon) {
+      // Coming soon sports don't have stats
+      cards.push({
+        ...sport,
+        matches: "-",
+        lastSync: "-",
+      });
+    } else {
+      const matches = formatter.format(stats.eventsCount);
+      const lastSync = stats.lastSync
+        ? formatDateTime(stats.lastSync)
+        : "Aucune sync";
 
-    const matches = formatter.format(stats.eventsCount);
-    const lastSync = stats.lastSync
-      ? formatDateTime(stats.lastSync)
-      : "Aucune sync";
-
-    cards.push({
-      ...sport,
-      matches,
-      lastSync,
-    });
+      cards.push({
+        ...sport,
+        matches,
+        lastSync,
+      });
+    }
   }
 
   return cards;
@@ -156,26 +189,30 @@ export default async function DashboardHomePage() {
                       </div>
                     </div>
                     <div className="mt-4 flex items-end justify-between border-t border-slate-100 pt-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Matchs disponibles
-                        </p>
-                        <p className="text-3xl font-semibold text-slate-900">
-                          {matches}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Sync : {lastSync}
-                        </p>
-                      </div>
                       {comingSoon ? (
-                        <span className="inline-flex items-center rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs font-semibold text-slate-500">
-                          Feature à venir
-                        </span>
+                        <div className="flex w-full items-center justify-center">
+                          <span className="inline-flex items-center rounded-full border border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-500">
+                            Coming Soon
+                          </span>
+                        </div>
                       ) : (
-                        <span className="inline-flex items-center gap-2 text-sm font-medium text-primary transition group-hover:gap-3">
-                          Explorer
-                          <ArrowRight className="h-4 w-4" />
-                        </span>
+                        <>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                              Matchs disponibles
+                            </p>
+                            <p className="text-3xl font-semibold text-slate-900">
+                              {matches}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Sync : {lastSync}
+                            </p>
+                          </div>
+                          <span className="inline-flex items-center gap-2 text-sm font-medium text-primary transition group-hover:gap-3">
+                            Explorer
+                            <ArrowRight className="h-4 w-4" />
+                          </span>
+                        </>
                       )}
                     </div>
                   </>

@@ -346,3 +346,92 @@ export async function createMarketStatesForEvent(
 
   return true;
 }
+
+/**
+ * Sync market_states for all upcoming events when tracked_markets changes
+ * This ensures new markets are added to existing events
+ */
+export async function syncMarketStatesWithTrackedMarkets(
+  newTrackedMarkets: string[]
+): Promise<{ eventsUpdated: number; marketsAdded: number }> {
+  console.log('[SyncMarketStates] Syncing market_states with new tracked_markets...');
+
+  // Get all upcoming events
+  const { data: upcomingEvents, error: eventsError } = await (supabaseAdmin as any)
+    .from('events')
+    .select('id, commence_time')
+    .in('status', ['upcoming', 'live'])
+    .gt('commence_time', new Date().toISOString());
+
+  if (eventsError || !upcomingEvents) {
+    console.error('[SyncMarketStates] Failed to get upcoming events:', eventsError);
+    return { eventsUpdated: 0, marketsAdded: 0 };
+  }
+
+  if (upcomingEvents.length === 0) {
+    console.log('[SyncMarketStates] No upcoming events to sync');
+    return { eventsUpdated: 0, marketsAdded: 0 };
+  }
+
+  console.log(`[SyncMarketStates] Found ${upcomingEvents.length} upcoming events`);
+
+  // Get existing market_states for these events
+  const eventIds = upcomingEvents.map((e: any) => e.id);
+  const { data: existingStates } = await (supabaseAdmin as any)
+    .from('market_states')
+    .select('event_id, market_key')
+    .in('event_id', eventIds);
+
+  // Build a set of existing (event_id, market_key) pairs
+  const existingPairs = new Set(
+    (existingStates || []).map((s: any) => `${s.event_id}:${s.market_key}`)
+  );
+
+  // Find missing market_states
+  const missingStates: any[] = [];
+  for (const event of upcomingEvents) {
+    for (const marketKey of newTrackedMarkets) {
+      const pairKey = `${event.id}:${marketKey}`;
+      if (!existingPairs.has(pairKey)) {
+        missingStates.push({
+          event_id: event.id,
+          market_key: marketKey,
+          status: 'pending',
+          deadline: event.commence_time,
+          attempts: 0,
+        });
+      }
+    }
+  }
+
+  if (missingStates.length === 0) {
+    console.log('[SyncMarketStates] All market_states are already in sync');
+    return { eventsUpdated: 0, marketsAdded: 0 };
+  }
+
+  console.log(`[SyncMarketStates] Adding ${missingStates.length} missing market_states...`);
+
+  // Insert missing market_states in batches
+  const BATCH_SIZE = 500;
+  let totalAdded = 0;
+  const eventsAffected = new Set<string>();
+
+  for (let i = 0; i < missingStates.length; i += BATCH_SIZE) {
+    const batch = missingStates.slice(i, i + BATCH_SIZE);
+
+    const { error } = await (supabaseAdmin as any)
+      .from('market_states')
+      .upsert(batch, { onConflict: 'event_id,market_key' });
+
+    if (error) {
+      console.error('[SyncMarketStates] Failed to insert batch:', error);
+    } else {
+      totalAdded += batch.length;
+      batch.forEach((s: any) => eventsAffected.add(s.event_id));
+    }
+  }
+
+  console.log(`[SyncMarketStates] ✅ Added ${totalAdded} market_states to ${eventsAffected.size} events`);
+
+  return { eventsUpdated: eventsAffected.size, marketsAdded: totalAdded };
+}

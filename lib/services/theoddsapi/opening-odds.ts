@@ -25,6 +25,43 @@ interface ScanResult {
 }
 
 /**
+ * Normalize string for comparison: remove accents, lowercase, trim
+ */
+function normalizeString(str: string): string {
+  return str
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // Remove diacritics/accents
+}
+
+/**
+ * Check if text contains team name (fuzzy match with accent removal)
+ */
+function containsTeamName(text: string, teamName: string): boolean {
+  const normalizedText = normalizeString(text);
+  const normalizedTeam = normalizeString(teamName);
+
+  // Direct match
+  if (normalizedText.includes(normalizedTeam)) {
+    return true;
+  }
+
+  // Try matching first significant word (e.g., "Atlético Madrid" -> "atletico")
+  const teamWords = normalizedTeam.split(/\s+/);
+  if (teamWords.length > 1) {
+    // Match if any significant word (>3 chars) is found
+    for (const word of teamWords) {
+      if (word.length > 3 && normalizedText.includes(word)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Extract odds from API market data
  * For alternate markets (spreads/totals), this returns multiple OpeningOdds (one per point)
  * For team_totals, returns separate entries for home and away teams
@@ -59,16 +96,16 @@ function extractOddsFromMarket(
       const point = outcome.point ?? 0;
       const description = outcome.description?.toLowerCase().trim() || '';
 
-      // Determine which team
+      // Determine which team using fuzzy matching (handles accents, etc.)
       let teamSide: 'home' | 'away' | null = null;
-      if (description.includes(homeTeamLower)) {
-        teamSide = 'home';
-      } else if (description.includes(awayTeamLower)) {
-        teamSide = 'away';
-      } else if (description === homeTeamLower) {
-        teamSide = 'home';
-      } else if (description === awayTeamLower) {
-        teamSide = 'away';
+
+      if (description) {
+        // Use fuzzy matching to handle accents and slight name variations
+        if (containsTeamName(description, homeTeam)) {
+          teamSide = 'home';
+        } else if (containsTeamName(description, awayTeam)) {
+          teamSide = 'away';
+        }
       }
 
       if (!teamSide) continue;
@@ -186,6 +223,35 @@ function extractOddsFromMarket(
 }
 
 /**
+ * Merge variations with the same point value
+ * For spreads: home -3.25 and away +3.25 should be merged into one entry with point=-3.25
+ */
+function mergeVariationsByPoint(variations: OpeningOdds[]): OpeningOdds[] {
+  const byPoint = new Map<number | undefined, OpeningOdds>();
+
+  for (const variation of variations) {
+    const point = variation.point;
+    const existing = byPoint.get(point);
+
+    if (existing) {
+      // Merge: copy non-undefined values from variation to existing
+      if (variation.home !== undefined) existing.home = variation.home;
+      if (variation.away !== undefined) existing.away = variation.away;
+      if (variation.over !== undefined) existing.over = variation.over;
+      if (variation.under !== undefined) existing.under = variation.under;
+      if (variation.draw !== undefined) existing.draw = variation.draw;
+      if (variation.yes !== undefined) existing.yes = variation.yes;
+      if (variation.no !== undefined) existing.no = variation.no;
+    } else {
+      // Clone to avoid mutating original
+      byPoint.set(point, { ...variation });
+    }
+  }
+
+  return Array.from(byPoint.values());
+}
+
+/**
  * Map database market keys to API market keys
  * Use alternate markets to get multiple point variations
  */
@@ -291,10 +357,16 @@ async function scanEventOpeningOdds(
       if (!marketState) continue;
 
       // Extract odds for all variations
-      const oddsVariations: OpeningOdds[] = [];
+      let oddsVariations: OpeningOdds[] = [];
       for (const apiMarket of apiMarkets) {
         const odds = extractOddsFromMarket(apiMarket, event.home_team, event.away_team);
         oddsVariations.push(...odds);
+      }
+
+      // Merge variations with the same point (important for spreads where home -X and away +X should be combined)
+      const isSpreadMarket = dbMarketKey.includes('spread');
+      if (isSpreadMarket) {
+        oddsVariations = mergeVariationsByPoint(oddsVariations);
       }
 
       // Special handling for team_totals: split into home and away

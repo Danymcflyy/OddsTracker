@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSetting, updateSetting, getAllSettings } from '@/lib/db/helpers';
+import { getSetting, updateSetting, getAllSettings, syncMarketStatesWithTrackedMarkets } from '@/lib/db/helpers';
 import { requireAuth } from '@/lib/auth/middleware';
 
 export const dynamic = 'force-dynamic';
@@ -54,8 +54,16 @@ export async function POST(request: Request) {
 
     await updateSetting(key, value);
 
+    // When tracked_markets changes, sync market_states for all upcoming events
+    let syncResult = null;
+    if (key === 'tracked_markets' && Array.isArray(value)) {
+      console.log('[Settings] tracked_markets updated, syncing market_states...');
+      syncResult = await syncMarketStatesWithTrackedMarkets(value);
+    }
+
     return NextResponse.json({
       success: true,
+      syncResult,
     });
   } catch (error) {
     console.error('Error updating settings:', error);

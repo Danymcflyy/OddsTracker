@@ -232,6 +232,8 @@ export default function FootballPage() {
   }, [events, customMarketOrder]);
 
   // Charger visibleMarkets depuis localStorage au montage
+  const [initialLoadDone, setInitialLoadDone] = React.useState(false);
+
   React.useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY_VISIBLE_MARKETS);
     if (stored) {
@@ -242,15 +244,34 @@ export default function FootballPage() {
         // Ignore
       }
     }
+    setInitialLoadDone(true);
   }, []);
 
   // Initialiser visibleMarkets avec toutes les combinaisons au chargement
+  // ET ajouter automatiquement les nouveaux marchés qui n'étaient pas dans localStorage
   React.useEffect(() => {
-    if (marketPointCombinations.length > 0 && visibleMarkets.size === 0) {
+    if (marketPointCombinations.length > 0 && initialLoadDone) {
       const allCombinationKeys = new Set(marketPointCombinations.map((m) => m.key));
-      setVisibleMarkets(allCombinationKeys);
+
+      // Si visibleMarkets est vide, tout afficher
+      if (visibleMarkets.size === 0) {
+        setVisibleMarkets(allCombinationKeys);
+      } else {
+        // Sinon, ajouter les nouveaux marchés qui n'existaient pas avant
+        setVisibleMarkets(prev => {
+          const newSet = new Set(prev);
+          let hasNew = false;
+          for (const key of allCombinationKeys) {
+            if (!prev.has(key)) {
+              newSet.add(key);
+              hasNew = true;
+            }
+          }
+          return hasNew ? newSet : prev;
+        });
+      }
     }
-  }, [marketPointCombinations, visibleMarkets.size]);
+  }, [marketPointCombinations, initialLoadDone]);
 
   // Persister visibleMarkets dans localStorage
   React.useEffect(() => {
@@ -310,6 +331,13 @@ export default function FootballPage() {
     setVisibleMarkets(new Set());
   }, []);
 
+  // Reset columns handler - clear localStorage and show all
+  const handleResetColumns = React.useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY_VISIBLE_MARKETS);
+    const allCombinationKeys = new Set(marketPointCombinations.map((m) => m.key));
+    setVisibleMarkets(allCombinationKeys);
+  }, [marketPointCombinations]);
+
   // Reset filters handler
   const handleResetFilters = React.useCallback(() => {
     setDateRange({ from: null, to: null });
@@ -347,7 +375,7 @@ export default function FootballPage() {
         <p className="text-sm uppercase tracking-[0.3em] text-primary/70">Football</p>
         <h1 className="text-3xl font-semibold text-slate-900">Matchs & Cotes</h1>
         <p className="text-sm text-muted-foreground mt-2">
-          {filteredEvents.length} matchs affichés ({total} total) • {filterOptions.markets.length} marchés actifs • The Odds API v4
+          {filteredEvents.length} matchs affichés ({total} total) • {marketPointCombinations.length} colonnes • {visibleMarkets.size} visibles
         </p>
       </header>
 
@@ -363,6 +391,15 @@ export default function FootballPage() {
               onShowAll={handleShowAllMarkets}
               onHideAll={handleHideAllMarkets}
             />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetColumns}
+              className="text-xs"
+              title="Vider le cache et afficher toutes les colonnes"
+            >
+              Reset colonnes
+            </Button>
             <Button
               variant="outline"
               size="sm"
