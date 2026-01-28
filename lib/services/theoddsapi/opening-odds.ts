@@ -167,12 +167,12 @@ function extractOddsFromMarket(
         odds.under = outcome.price;
         if (outcome.point !== undefined) odds.point = outcome.point;
       }
-      // Double Chance handling
-      else if (name === 'home/draw' || name === '1x') {
+      // Double Chance handling - API returns "{Team} or Draw", "Draw or {Team}", "{Team} or {Team}"
+      else if (name === 'home/draw' || name === '1x' || name.includes(' or draw') || (name.includes(homeTeamLower) && name.includes('draw'))) {
         odds['1x'] = outcome.price;
-      } else if (name === 'draw/away' || name === 'x2') {
+      } else if (name === 'draw/away' || name === 'x2' || name.includes('draw or ') || (name.includes('draw') && name.includes(awayTeamLower))) {
         odds['x2'] = outcome.price;
-      } else if (name === 'home/away' || name === '12') {
+      } else if (name === 'home/away' || name === '12' || (name.includes(homeTeamLower) && name.includes(awayTeamLower) && !name.includes('draw'))) {
         odds['12'] = outcome.price;
       } else if (name === 'yes') {
         odds.yes = outcome.price;

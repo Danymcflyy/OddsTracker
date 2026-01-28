@@ -225,9 +225,10 @@ function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): a
       else if (name.startsWith('under') || name === 'u') type = 'under';
       else if (name === 'home' || name === '1') type = 'home';
       else if (name === 'away' || name === '2') type = 'away';
-      else if (name === 'home/draw' || name === '1x') type = '1x' as any;
-      else if (name === 'draw/away' || name === 'x2') type = 'x2' as any;
-      else if (name === 'home/away' || name === '12') type = '12' as any;
+      // Double Chance - API returns "{Team} or Draw", "Draw or {Team}", "{Team} or {Team}"
+      else if (name === 'home/draw' || name === '1x' || name.includes(' or draw') || (homeLower && name.includes(homeLower) && name.includes('draw'))) type = '1x' as any;
+      else if (name === 'draw/away' || name === 'x2' || name.includes('draw or ') || (awayLower && name.includes('draw') && name.includes(awayLower))) type = 'x2' as any;
+      else if (name === 'home/away' || name === '12' || (homeLower && awayLower && name.includes(homeLower) && name.includes(awayLower) && !name.includes('draw'))) type = '12' as any;
     }
 
     if (!type) continue;
