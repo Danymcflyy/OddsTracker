@@ -329,84 +329,143 @@ export default function FootballPage() {
     });
   }, []);
 
-  // Export CSV function
+  // Export CSV function - replicates exact table structure
   const handleExportCSV = React.useCallback(() => {
     if (filteredEvents.length === 0) return;
 
-    // CSV headers
-    const headers = [
-      'Date',
-      'Championnat',
-      'Domicile',
-      'Extérieur',
-      'Statut',
-      'Score',
-      'Marché',
-      'Ligne',
-      'Open Home',
-      'Open Draw',
-      'Open Away',
-      'Open Over',
-      'Open Under',
-      'Close Home',
-      'Close Draw',
-      'Close Away',
-      'Close Over',
-      'Close Under',
-      'CLV Home %',
-      'CLV Away %',
-    ];
+    // Market short names (same as column-builder)
+    const MARKET_SHORT_NAMES: Record<string, string> = {
+      'h2h': '1X2', 'h2h_h1': '1X2 MT1', 'spreads': 'Handicap', 'spreads_h1': 'Handicap MT1',
+      'totals': 'O/U', 'totals_h1': 'O/U MT1', 'draw_no_bet': 'DNB', 'btts': 'BTTS',
+      'team_totals_home': 'TT Dom', 'team_totals_away': 'TT Ext',
+    };
+    const OUTCOME_SHORT_NAMES: Record<string, string> = {
+      'home': '1', 'draw': 'X', 'away': '2', 'over': '+', 'under': '-', 'yes': 'Oui', 'no': 'Non',
+    };
 
-    const rows: string[][] = [];
+    // Get visible markets from the current table configuration
+    const visibleMarketsArray = Array.from(visibleMarkets).sort();
 
-    filteredEvents.forEach(event => {
-      const baseRow = [
-        new Date(event.commence_time).toLocaleString('fr-FR'),
-        event.sport_title || event.sport_key,
-        event.home_team,
-        event.away_team,
-        event.status,
-        event.home_score !== null && event.away_score !== null
-          ? `${event.home_score}-${event.away_score}`
-          : '',
-      ];
+    // Build headers: static columns + dynamic market columns
+    const headers: string[] = ['Date', 'Ligue', 'Dom.', 'Ext.', 'Snaps', 'Score'];
 
-      // Add rows for each market
-      const markets = new Set<string>();
-      event.opening_odds.forEach(o => markets.add(o.market_key));
-      if (event.closing_odds?.markets) {
-        Object.keys(event.closing_odds.markets).forEach(k => markets.add(k));
+    // For each visible market, add O and C columns for each outcome
+    visibleMarketsArray.forEach(marketKey => {
+      const [baseKey, pointStr] = marketKey.includes(':') ? marketKey.split(':') : [marketKey, undefined];
+      const point = pointStr ? parseFloat(pointStr) : undefined;
+      const marketLabel = MARKET_SHORT_NAMES[baseKey] || baseKey;
+      const pointLabel = point !== undefined ? (point > 0 ? `+${point}` : `${point}`) : '';
+      const prefix = pointLabel ? `${marketLabel} ${pointLabel}` : marketLabel;
+
+      // Determine outcomes for this market
+      let outcomes: string[] = [];
+      if (baseKey === 'h2h' || baseKey === 'h2h_h1' || baseKey === 'draw_no_bet') {
+        outcomes = baseKey === 'draw_no_bet' ? ['home', 'away'] : ['home', 'draw', 'away'];
+      } else if (baseKey.includes('totals') || baseKey.includes('spread')) {
+        outcomes = baseKey.includes('spread') ? ['home', 'away'] : ['over', 'under'];
+      } else if (baseKey === 'btts') {
+        outcomes = ['yes', 'no'];
+      } else {
+        outcomes = ['home', 'draw', 'away'];
       }
 
-      markets.forEach(marketKey => {
-        const opening = event.opening_odds.find(o => o.market_key === marketKey);
-        const closing = event.closing_odds?.markets?.[marketKey];
-        const openOdds = opening?.odds || {};
-        const closeOdds = closing || {};
-
-        const calcCLV = (open: number | undefined, close: number | undefined) => {
-          if (typeof open !== 'number' || typeof close !== 'number' || open === 0) return '';
-          return (((open - close) / open) * 100).toFixed(2);
-        };
-
-        rows.push([
-          ...baseRow,
-          marketKey,
-          openOdds.point?.toString() || closeOdds.point?.toString() || '',
-          openOdds.home?.toFixed(2) || '',
-          openOdds.draw?.toFixed(2) || '',
-          openOdds.away?.toFixed(2) || '',
-          openOdds.over?.toFixed(2) || '',
-          openOdds.under?.toFixed(2) || '',
-          closeOdds.home?.toFixed(2) || '',
-          closeOdds.draw?.toFixed(2) || '',
-          closeOdds.away?.toFixed(2) || '',
-          closeOdds.over?.toFixed(2) || '',
-          closeOdds.under?.toFixed(2) || '',
-          calcCLV(openOdds.home, closeOdds.home),
-          calcCLV(openOdds.away, closeOdds.away),
-        ]);
+      outcomes.forEach(outcome => {
+        const outcomeLabel = OUTCOME_SHORT_NAMES[outcome] || outcome;
+        headers.push(`${prefix} ${outcomeLabel} O`);
+        headers.push(`${prefix} ${outcomeLabel} C`);
       });
+    });
+
+    // Helper to get odds value (simplified version of column-builder logic)
+    const getOddsValue = (event: EventWithOdds, baseKey: string, outcome: string, point: number | undefined, type: 'opening' | 'closing'): string => {
+      const isSpread = baseKey.includes('spread');
+
+      if (type === 'opening') {
+        if (!event.opening_odds || !Array.isArray(event.opening_odds)) return '';
+        let marketData = event.opening_odds.find((m) => {
+          if (m.market_key !== baseKey) return false;
+          if (point !== undefined) return m.odds?.point === point;
+          return true;
+        });
+        if (marketData?.odds?.[outcome]) return marketData.odds[outcome].toFixed(2);
+        // Mirror search for spreads
+        if (isSpread && point !== undefined) {
+          const mirrorPoint = -1 * point;
+          const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
+          marketData = event.opening_odds.find((m) => m.market_key === baseKey && m.odds?.point === mirrorPoint);
+          if (marketData?.odds?.[mirrorOutcome]) return marketData.odds[mirrorOutcome].toFixed(2);
+        }
+        return '';
+      } else {
+        const closingData = event.closing_odds;
+        if (!closingData) return '';
+
+        // Check variations first
+        if (closingData.markets_variations?.[baseKey]) {
+          const variations = closingData.markets_variations[baseKey];
+          if (Array.isArray(variations)) {
+            const found = point !== undefined ? variations.find((v: any) => v.point === point) : variations[0];
+            if (found?.[outcome]) return found[outcome].toFixed(2);
+            // Mirror for spreads
+            if (isSpread && point !== undefined) {
+              const mirrorPoint = -1 * point;
+              const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
+              const mirrorFound = variations.find((v: any) => v.point === mirrorPoint);
+              if (mirrorFound?.[mirrorOutcome]) return mirrorFound[mirrorOutcome].toFixed(2);
+            }
+          }
+        }
+
+        // Fallback to main markets
+        if (closingData.markets?.[baseKey]) {
+          const fallback = closingData.markets[baseKey];
+          if ((point === undefined || fallback.point === point) && fallback[outcome]) {
+            return fallback[outcome].toFixed(2);
+          }
+          if (isSpread && point !== undefined && fallback.point === (-1 * point)) {
+            const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
+            if (fallback[mirrorOutcome]) return fallback[mirrorOutcome].toFixed(2);
+          }
+        }
+        return '';
+      }
+    };
+
+    // Build rows
+    const rows: string[][] = filteredEvents.map(event => {
+      const row: string[] = [
+        new Date(event.commence_time).toLocaleDateString('fr-FR') + ' ' + new Date(event.commence_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        event.sport_title?.split(' - ')[0] || event.sport_key,
+        event.home_team,
+        event.away_team,
+        String(event.snapshot_count || 0),
+        event.status === 'completed' && event.home_score !== null && event.away_score !== null
+          ? `${event.home_score}-${event.away_score}` : '',
+      ];
+
+      // Add odds for each visible market
+      visibleMarketsArray.forEach(marketKey => {
+        const [baseKey, pointStr] = marketKey.includes(':') ? marketKey.split(':') : [marketKey, undefined];
+        const point = pointStr ? parseFloat(pointStr) : undefined;
+
+        let outcomes: string[] = [];
+        if (baseKey === 'h2h' || baseKey === 'h2h_h1' || baseKey === 'draw_no_bet') {
+          outcomes = baseKey === 'draw_no_bet' ? ['home', 'away'] : ['home', 'draw', 'away'];
+        } else if (baseKey.includes('totals') || baseKey.includes('spread')) {
+          outcomes = baseKey.includes('spread') ? ['home', 'away'] : ['over', 'under'];
+        } else if (baseKey === 'btts') {
+          outcomes = ['yes', 'no'];
+        } else {
+          outcomes = ['home', 'draw', 'away'];
+        }
+
+        outcomes.forEach(outcome => {
+          row.push(getOddsValue(event, baseKey, outcome, point, 'opening'));
+          row.push(getOddsValue(event, baseKey, outcome, point, 'closing'));
+        });
+      });
+
+      return row;
     });
 
     // Generate CSV content
@@ -425,7 +484,7 @@ export default function FootballPage() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [filteredEvents]);
+  }, [filteredEvents, visibleMarkets]);
 
   // Calculer le nombre de pages
   const pageCount = Math.ceil(total / pagination.pageSize);
