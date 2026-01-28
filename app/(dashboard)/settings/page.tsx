@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database, Settings as SettingsIcon, Key, Table2, Activity } from "lucide-react";
+import { Database, Settings as SettingsIcon, Key, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function SettingsPage() {
@@ -53,26 +53,6 @@ export default function SettingsPage() {
             <Link href="/settings/columns">
               <Button className="w-full">
                 Personnaliser
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* Logs & Monitoring */}
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5 text-primary" />
-              Logs & Monitoring
-            </CardTitle>
-            <CardDescription>
-              Historique des appels API et erreurs
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/settings/logs">
-              <Button className="w-full">
-                Voir les logs
               </Button>
             </Link>
           </CardContent>
@@ -136,28 +116,6 @@ export default function SettingsPage() {
         </Card>
       </div>
 
-      {/* Additional Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle>À propos de l'authentification</CardTitle>
-          <CardDescription>
-            Gestion du mot de passe de connexion
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Le mot de passe de connexion est défini dans la variable <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">APP_PASSWORD</code> du fichier <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">.env.local</code>.
-          </p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Pour modifier votre mot de passe :
-          </p>
-          <ol className="list-decimal list-inside text-sm text-muted-foreground mt-2 space-y-1">
-            <li>Ouvrez le fichier <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">.env.local</code></li>
-            <li>Modifiez la valeur de <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">APP_PASSWORD</code></li>
-            <li>Redémarrez l'application avec <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">npm run dev</code></li>
-          </ol>
-        </CardContent>
-      </Card>
     </div>
   );
 }

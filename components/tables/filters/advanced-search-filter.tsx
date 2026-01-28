@@ -21,9 +21,7 @@ export interface AdvancedSearchParams {
   outcome?: 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no' | 'all';
   marketType?: 'all' | 'h2h' | 'spreads' | 'totals' | 'h2h_h1' | 'spreads_h1' | 'totals_h1' | 'btts' | 'draw_no_bet' | 'team_totals_home' | 'team_totals_away';
   pointValue?: number;
-  dropMin?: number;
   status?: 'all' | 'upcoming' | 'completed';
-  minSnapshots?: number;
 }
 
 interface AdvancedSearchFilterProps {
@@ -57,9 +55,7 @@ export function AdvancedSearchFilter({
     (value.outcome && value.outcome !== 'all') ||
     (value.marketType && value.marketType !== 'all') ||
     value.pointValue !== undefined ||
-    value.dropMin !== undefined ||
-    (value.status && value.status !== 'all') ||
-    value.minSnapshots !== undefined;
+    (value.status && value.status !== 'all');
 
   return (
     <div className={className}>
@@ -270,27 +266,7 @@ export function AdvancedSearchFilter({
               </Select>
             </div>
 
-            {/* Nombre de snapshots */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Fidélité Closing</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  min="0"
-                  placeholder="Min Snapshots (ex: 3)"
-                  value={value.minSnapshots ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value ? parseInt(e.target.value) : undefined;
-                    onChange({ ...value, minSnapshots: val });
-                  }}
-                  className="h-8 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Valeur du point & Drop */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Valeur du point */}
             <div className="space-y-2">
               <Label className="text-sm font-semibold">Valeur du point</Label>
               <div className="flex gap-2">
@@ -307,29 +283,6 @@ export function AdvancedSearchFilter({
                 />
                 {value.pointValue !== undefined && (
                   <Button type="button" variant="ghost" size="sm" onClick={() => onChange({ ...value, pointValue: undefined })} className="h-8 px-2">
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Drop de cote</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  min="1"
-                  max="100"
-                  placeholder="Drop Min % (ex: 10)"
-                  value={value.dropMin ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value ? parseFloat(e.target.value) : undefined;
-                    onChange({ ...value, dropMin: val });
-                  }}
-                  className="h-8 text-sm"
-                />
-                {value.dropMin !== undefined && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => onChange({ ...value, dropMin: undefined })} className="h-8 px-2">
                     <X className="h-4 w-4" />
                   </Button>
                 )}
@@ -375,14 +328,6 @@ export function AdvancedSearchFilter({
 
                 {value.status && value.status !== 'all' && (
                   <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full border border-purple-100">Statut: {value.status}</span>
-                )}
-
-                {value.minSnapshots !== undefined && (
-                  <span className="text-[10px] bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">Snaps &ge; {value.minSnapshots}</span>
-                )}
-
-                {value.dropMin !== undefined && (
-                  <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-100 font-bold">Drop &gt; {value.dropMin}%</span>
                 )}
               </div>
             </div>

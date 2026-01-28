@@ -142,9 +142,7 @@ export default function FootballPage() {
       if (advancedSearch.outcome && advancedSearch.outcome !== 'all') params.set('outcome', advancedSearch.outcome);
       if (advancedSearch.marketType && advancedSearch.marketType !== 'all') params.set('marketKey', advancedSearch.marketType);
       if (advancedSearch.pointValue !== undefined) params.set('pointValue', advancedSearch.pointValue.toString());
-      if (advancedSearch.dropMin !== undefined) params.set('dropMin', advancedSearch.dropMin.toString());
       if (advancedSearch.status && advancedSearch.status !== 'all') params.set('status', advancedSearch.status);
-      if (advancedSearch.minSnapshots !== undefined) params.set('minSnapshots', advancedSearch.minSnapshots.toString());
 
       // Add cache-busting parameter
       params.set('_t', Date.now().toString());
@@ -323,13 +321,11 @@ export default function FootballPage() {
       marketType: 'all',
       status: 'all',
       movementDirection: 'all',
-      minSnapshots: undefined,
       openingOddsMin: undefined,
       openingOddsMax: undefined,
       closingOddsMin: undefined,
       closingOddsMax: undefined,
-      pointValue: undefined,
-      dropMin: undefined
+      pointValue: undefined
     });
   }, []);
 
