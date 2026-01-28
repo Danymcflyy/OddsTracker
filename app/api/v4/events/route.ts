@@ -20,10 +20,11 @@ export async function GET(request: Request) {
     const cursor = searchParams.get('cursor') || undefined;
     const cursorDirection = (searchParams.get('cursorDirection') as 'next' | 'prev') || undefined;
 
-    // Advanced filters
-    const oddsMin = searchParams.get('oddsMin') ? parseFloat(searchParams.get('oddsMin')!) : undefined;
-    const oddsMax = searchParams.get('oddsMax') ? parseFloat(searchParams.get('oddsMax')!) : undefined;
-    const oddsType = (searchParams.get('oddsType') as 'opening' | 'closing' | 'both') || undefined;
+    // Advanced filters - Separate opening/closing odds ranges
+    const openingOddsMin = searchParams.get('openingOddsMin') ? parseFloat(searchParams.get('openingOddsMin')!) : undefined;
+    const openingOddsMax = searchParams.get('openingOddsMax') ? parseFloat(searchParams.get('openingOddsMax')!) : undefined;
+    const closingOddsMin = searchParams.get('closingOddsMin') ? parseFloat(searchParams.get('closingOddsMin')!) : undefined;
+    const closingOddsMax = searchParams.get('closingOddsMax') ? parseFloat(searchParams.get('closingOddsMax')!) : undefined;
     const outcome = searchParams.get('outcome') || undefined;
     const pointValue = searchParams.get('pointValue') ? parseFloat(searchParams.get('pointValue')!) : undefined;
     const dropMin = searchParams.get('dropMin') ? parseFloat(searchParams.get('dropMin')!) : undefined;
@@ -42,9 +43,10 @@ export async function GET(request: Request) {
       sortDirection,
       cursor,
       cursorDirection,
-      oddsMin,
-      oddsMax,
-      oddsType,
+      openingOddsMin,
+      openingOddsMax,
+      closingOddsMin,
+      closingOddsMax,
       outcome,
       pointValue,
       dropMin,

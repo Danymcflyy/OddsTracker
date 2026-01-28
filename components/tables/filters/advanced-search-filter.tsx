@@ -8,8 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
 
 export interface AdvancedSearchParams {
-  oddsMin?: number;
-  oddsMax?: number;
+  // Separate opening odds range
+  openingOddsMin?: number;
+  openingOddsMax?: number;
+  // Separate closing odds range
+  closingOddsMin?: number;
+  closingOddsMax?: number;
+  // Common filters
   oddsType: 'opening' | 'closing' | 'both';
   outcome?: 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no' | 'all';
   marketType?: 'all' | 'h2h' | 'spreads' | 'totals' | 'h2h_h1' | 'spreads_h1' | 'totals_h1' | 'btts' | 'draw_no_bet' | 'team_totals_home' | 'team_totals_away';
@@ -41,12 +46,14 @@ export function AdvancedSearchFilter({
     });
   };
 
-  const hasActiveFilters = 
-    value.oddsMin !== undefined || 
-    value.oddsMax !== undefined || 
-    (value.outcome && value.outcome !== 'all') || 
-    (value.marketType && value.marketType !== 'all') || 
-    value.pointValue !== undefined || 
+  const hasActiveFilters =
+    value.openingOddsMin !== undefined ||
+    value.openingOddsMax !== undefined ||
+    value.closingOddsMin !== undefined ||
+    value.closingOddsMax !== undefined ||
+    (value.outcome && value.outcome !== 'all') ||
+    (value.marketType && value.marketType !== 'all') ||
+    value.pointValue !== undefined ||
     value.dropMin !== undefined ||
     (value.status && value.status !== 'all') ||
     value.minSnapshots !== undefined;
@@ -85,10 +92,11 @@ export function AdvancedSearchFilter({
 
       {isExpanded && (
         <div className="border rounded-md p-4 bg-background space-y-4 shadow-sm">
+          {/* Opening & Closing Odds Ranges */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Fourchette de cotes */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Fourchette de cotes</Label>
+            {/* Opening Odds Range */}
+            <div className="space-y-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+              <Label className="text-sm font-semibold text-blue-700">Cotes Opening</Label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-[10px] text-muted-foreground mb-1 block uppercase">Min</Label>
@@ -96,13 +104,13 @@ export function AdvancedSearchFilter({
                     type="number"
                     step="0.01"
                     min="1"
-                    placeholder="1.50"
-                    value={value.oddsMin ?? ''}
+                    placeholder="2.10"
+                    value={value.openingOddsMin ?? ''}
                     onChange={(e) => {
                       const val = e.target.value ? parseFloat(e.target.value) : undefined;
-                      onChange({ ...value, oddsMin: val });
+                      onChange({ ...value, openingOddsMin: val });
                     }}
-                    className="h-8 text-sm"
+                    className="h-8 text-sm bg-white"
                   />
                 </div>
                 <div>
@@ -111,35 +119,53 @@ export function AdvancedSearchFilter({
                     type="number"
                     step="0.01"
                     min="1"
-                    placeholder="3.00"
-                    value={value.oddsMax ?? ''}
+                    placeholder="2.30"
+                    value={value.openingOddsMax ?? ''}
                     onChange={(e) => {
                       const val = e.target.value ? parseFloat(e.target.value) : undefined;
-                      onChange({ ...value, oddsMax: val });
+                      onChange({ ...value, openingOddsMax: val });
                     }}
-                    className="h-8 text-sm"
+                    className="h-8 text-sm bg-white"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Type de cotes */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Type de cotes</Label>
-              <Label className="text-[10px] text-muted-foreground mb-1 block uppercase">Application du filtre</Label>
-              <Select
-                value={value.oddsType}
-                onValueChange={(val) => onChange({ ...value, oddsType: val as any })}
-              >
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="opening">Ouverture uniquement</SelectItem>
-                  <SelectItem value="closing">Clôture uniquement</SelectItem>
-                  <SelectItem value="both">Ouverture OU Clôture</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Closing Odds Range */}
+            <div className="space-y-2 p-3 bg-green-50/50 rounded-lg border border-green-100">
+              <Label className="text-sm font-semibold text-green-700">Cotes Closing</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground mb-1 block uppercase">Min</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    placeholder="2.50"
+                    value={value.closingOddsMin ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                      onChange({ ...value, closingOddsMin: val });
+                    }}
+                    className="h-8 text-sm bg-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground mb-1 block uppercase">Max</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    placeholder="2.60"
+                    value={value.closingOddsMax ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                      onChange({ ...value, closingOddsMax: val });
+                    }}
+                    className="h-8 text-sm bg-white"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -285,15 +311,19 @@ export function AdvancedSearchFilter({
             <div className="pt-2 border-t mt-2">
               <div className="flex flex-wrap gap-2 items-center">
                 <span className="text-xs font-bold text-primary">Filtres actifs :</span>
-                
-                {value.oddsMin !== undefined && (
-                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">Min: {value.oddsMin}</span>
+
+                {(value.openingOddsMin !== undefined || value.openingOddsMax !== undefined) && (
+                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">
+                    Open: {value.openingOddsMin ?? '?'} - {value.openingOddsMax ?? '?'}
+                  </span>
                 )}
-                
-                {value.oddsMax !== undefined && (
-                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">Max: {value.oddsMax}</span>
+
+                {(value.closingOddsMin !== undefined || value.closingOddsMax !== undefined) && (
+                  <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-100">
+                    Close: {value.closingOddsMin ?? '?'} - {value.closingOddsMax ?? '?'}
+                  </span>
                 )}
-                
+
                 {value.outcome && value.outcome !== 'all' && (
                   <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-200">Choix: {value.outcome}</span>
                 )}

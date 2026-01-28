@@ -74,10 +74,11 @@ export async function fetchEventsForTable(params: {
   sortDirection?: 'asc' | 'desc';
   cursor?: string; // ISO timestamp for cursor-based pagination
   cursorDirection?: 'next' | 'prev';
-  // Advanced filters
-  oddsMin?: number;
-  oddsMax?: number;
-  oddsType?: 'opening' | 'closing' | 'both';
+  // Advanced filters - Separate opening/closing odds ranges
+  openingOddsMin?: number;
+  openingOddsMax?: number;
+  closingOddsMin?: number;
+  closingOddsMax?: number;
   outcome?: string; // 'home', 'away', 'draw', 'over', 'under'
   pointValue?: number;
   dropMin?: number;
@@ -96,8 +97,10 @@ export async function fetchEventsForTable(params: {
     sortDirection = 'asc',
     cursor,
     pointValue,
-    oddsMin,
-    oddsMax,
+    openingOddsMin,
+    openingOddsMax,
+    closingOddsMin,
+    closingOddsMax,
     outcome,
     dropMin,
     status,
@@ -120,9 +123,10 @@ export async function fetchEventsForTable(params: {
         p_date_to: dateTo || null,
         p_search: search || null,
         p_market_key: marketKey && marketKey !== 'all' ? marketKey : null,
-        p_odds_min: oddsMin || null,
-        p_odds_max: oddsMax || null,
-        p_odds_type: params.oddsType && params.oddsType !== 'both' ? params.oddsType : null,
+        p_opening_odds_min: openingOddsMin || null,
+        p_opening_odds_max: openingOddsMax || null,
+        p_closing_odds_min: closingOddsMin || null,
+        p_closing_odds_max: closingOddsMax || null,
         p_outcome: outcome && outcome !== 'all' ? outcome : null,
         p_point_value: pointValue || null,
         p_drop_min: dropMin || null,
@@ -210,8 +214,10 @@ export async function fetchEventsForTable(params: {
   }
 
   // STRATEGY B: HYBRID (Standard Query + JS Filter) - Fallback or Default
-  const hasAdvancedFilters = oddsMin !== undefined ||
-                             oddsMax !== undefined ||
+  const hasAdvancedFilters = openingOddsMin !== undefined ||
+                             openingOddsMax !== undefined ||
+                             closingOddsMin !== undefined ||
+                             closingOddsMax !== undefined ||
                              (outcome && outcome !== 'all') ||
                              pointValue !== undefined ||
                              dropMin !== undefined ||
@@ -340,48 +346,41 @@ export async function fetchEventsForTable(params: {
       } as EventWithOdds;
     });
 
-    // Apply Advanced Filtering (JS Post-Fetch)
+    // Apply Advanced Filtering (JS Post-Fetch) with separate opening/closing odds ranges
     if (hasAdvancedFilters) {
-      // Get oddsType from params (it was destructured but we reference it here for clarity)
-      const effectiveOddsType = params.oddsType;
+      const hasOpeningFilter = openingOddsMin !== undefined || openingOddsMax !== undefined;
+      const hasClosingFilter = closingOddsMin !== undefined || closingOddsMax !== undefined;
 
       data = data.filter(event => {
         // Status & Snapshots (already filtered in SQL but double check)
         if (status && status !== 'all' && event.status !== status) return false;
         if (minSnapshots !== undefined && (event.snapshot_count || 0) < minSnapshots) return false;
 
-        // Helper: Check if a market matches the filters
-        const checkMarket = (marketOdds: any, mktKey?: string) => {
+        // Helper: Check if opening odds match the filter
+        const checkOpeningOdds = (marketOdds: any, mktKey?: string): boolean => {
           if (!marketOdds) return false;
-
-          // Market Key filter
           if (marketKey && mktKey && mktKey !== marketKey) return false;
 
-          // Point Check
           if (pointValue !== undefined) {
-             const p = marketOdds.point ?? marketOdds.odds?.point;
-             if (p !== pointValue) return false;
+            const p = marketOdds.point ?? marketOdds.odds?.point;
+            if (p !== pointValue) return false;
           }
 
-          // Get odds object (handle both opening_odds structure and closing_odds structure)
           const oddsObj = marketOdds.odds || marketOdds;
 
-          // Outcome specific filter
           if (outcome && outcome !== 'all') {
-             const val = oddsObj[outcome];
-             if (val === undefined || val === null) return false;
-             if (typeof val !== 'number') return false;
-             if (oddsMin !== undefined && val < oddsMin) return false;
-             if (oddsMax !== undefined && val > oddsMax) return false;
-             return true;
+            const val = oddsObj[outcome];
+            if (typeof val !== 'number') return false;
+            if (openingOddsMin !== undefined && val < openingOddsMin) return false;
+            if (openingOddsMax !== undefined && val > openingOddsMax) return false;
+            return true;
           }
 
-          // Any numeric value check (no specific outcome)
-          if (oddsMin !== undefined || oddsMax !== undefined) {
+          if (hasOpeningFilter) {
             const values = Object.values(oddsObj).filter(v => typeof v === 'number') as number[];
             return values.some(val => {
-              if (oddsMin !== undefined && val < oddsMin) return false;
-              if (oddsMax !== undefined && val > oddsMax) return false;
+              if (openingOddsMin !== undefined && val < openingOddsMin) return false;
+              if (openingOddsMax !== undefined && val > openingOddsMax) return false;
               return true;
             });
           }
@@ -389,38 +388,64 @@ export async function fetchEventsForTable(params: {
           return true;
         };
 
-        // Check opening odds
-        let hasOpening = false;
-        if (!effectiveOddsType || effectiveOddsType === 'opening' || effectiveOddsType === 'both') {
-          hasOpening = event.opening_odds.some(m => checkMarket(m, m.market_key));
-        }
+        // Helper: Check if closing odds match the filter
+        const checkClosingOdds = (marketOdds: any, mktKey?: string): boolean => {
+          if (!marketOdds) return false;
+          if (marketKey && mktKey && mktKey !== marketKey) return false;
 
-        // Check closing odds
-        let hasClosing = false;
-        if (!effectiveOddsType || effectiveOddsType === 'closing' || effectiveOddsType === 'both') {
-          if (event.closing_odds && event.closing_odds.markets) {
-            const marketEntries = Object.entries(event.closing_odds.markets);
-            hasClosing = marketEntries.some(([key, mkt]) => checkMarket(mkt, key));
+          if (pointValue !== undefined) {
+            const p = marketOdds.point;
+            if (p !== pointValue) return false;
           }
+
+          if (outcome && outcome !== 'all') {
+            const val = marketOdds[outcome];
+            if (typeof val !== 'number') return false;
+            if (closingOddsMin !== undefined && val < closingOddsMin) return false;
+            if (closingOddsMax !== undefined && val > closingOddsMax) return false;
+            return true;
+          }
+
+          if (hasClosingFilter) {
+            const values = Object.values(marketOdds).filter(v => typeof v === 'number') as number[];
+            return values.some(val => {
+              if (closingOddsMin !== undefined && val < closingOddsMin) return false;
+              if (closingOddsMax !== undefined && val > closingOddsMax) return false;
+              return true;
+            });
+          }
+
+          return true;
+        };
+
+        // Check opening odds filter
+        let openingMatches = !hasOpeningFilter;
+        if (hasOpeningFilter) {
+          openingMatches = event.opening_odds.some(m => checkOpeningOdds(m, m.market_key));
         }
 
-        // Drop Logic - only applies when dropMin is set
+        // Check closing odds filter
+        let closingMatches = !hasClosingFilter;
+        if (hasClosingFilter && event.closing_odds?.markets) {
+          const marketEntries = Object.entries(event.closing_odds.markets);
+          closingMatches = marketEntries.some(([key, mkt]) => checkClosingOdds(mkt, key));
+        }
+
+        // Both filters must match (AND logic for separate ranges)
+        if (!openingMatches || !closingMatches) return false;
+
+        // Drop Logic
         if (dropMin !== undefined) {
           let hasDrop = false;
-          if (event.closing_odds && event.closing_odds.markets) {
+          if (event.closing_odds?.markets) {
             hasDrop = event.opening_odds.some(openMkt => {
-              // Market key filter for drop
               if (marketKey && openMkt.market_key !== marketKey) return false;
-
               const closeMkt = event.closing_odds!.markets[openMkt.market_key];
               if (!closeMkt) return false;
 
-              // Check all outcome types for drops
               const outcomeTypes = ['home', 'away', 'draw', 'over', 'under', 'yes', 'no'];
               return outcomeTypes.some(o => {
-                // Filter by specific outcome if set
                 if (outcome && outcome !== 'all' && o !== outcome) return false;
-
                 const openVal = openMkt.odds?.[o];
                 const closeVal = closeMkt[o];
                 if (typeof openVal === 'number' && typeof closeVal === 'number' && openVal > 0) {
@@ -434,15 +459,8 @@ export async function fetchEventsForTable(params: {
           if (!hasDrop) return false;
         }
 
-        // Odds range filter logic - at least one odds type must match
-        if (oddsMin !== undefined || oddsMax !== undefined || (outcome && outcome !== 'all') || pointValue !== undefined) {
-          if (effectiveOddsType === 'opening' && !hasOpening) return false;
-          if (effectiveOddsType === 'closing' && !hasClosing) return false;
-          if ((!effectiveOddsType || effectiveOddsType === 'both') && !hasOpening && !hasClosing) return false;
-        }
-
-        // Market key filter without odds range - check if event has this market
-        if (marketKey && !oddsMin && !oddsMax && !outcome && !pointValue && !dropMin) {
+        // Market key filter without odds range
+        if (marketKey && !hasOpeningFilter && !hasClosingFilter && !outcome && !pointValue && !dropMin) {
           const hasMarketOpening = event.opening_odds.some(m => m.market_key === marketKey);
           const hasMarketClosing = event.closing_odds?.markets?.[marketKey] !== undefined;
           if (!hasMarketOpening && !hasMarketClosing) return false;

@@ -133,10 +133,11 @@ export default function FootballPage() {
         params.set('sportKey', selectedSport);
       }
 
-      // Filtres avancés
-      if (advancedSearch.oddsMin !== undefined) params.set('oddsMin', advancedSearch.oddsMin.toString());
-      if (advancedSearch.oddsMax !== undefined) params.set('oddsMax', advancedSearch.oddsMax.toString());
-      if (advancedSearch.oddsType && advancedSearch.oddsType !== 'both') params.set('oddsType', advancedSearch.oddsType);
+      // Filtres avancés - Fourchettes séparées opening/closing
+      if (advancedSearch.openingOddsMin !== undefined) params.set('openingOddsMin', advancedSearch.openingOddsMin.toString());
+      if (advancedSearch.openingOddsMax !== undefined) params.set('openingOddsMax', advancedSearch.openingOddsMax.toString());
+      if (advancedSearch.closingOddsMin !== undefined) params.set('closingOddsMin', advancedSearch.closingOddsMin.toString());
+      if (advancedSearch.closingOddsMax !== undefined) params.set('closingOddsMax', advancedSearch.closingOddsMax.toString());
       if (advancedSearch.outcome && advancedSearch.outcome !== 'all') params.set('outcome', advancedSearch.outcome);
       if (advancedSearch.marketType && advancedSearch.marketType !== 'all') params.set('marketKey', advancedSearch.marketType);
       if (advancedSearch.pointValue !== undefined) params.set('pointValue', advancedSearch.pointValue.toString());
@@ -315,14 +316,16 @@ export default function FootballPage() {
     setDateRange({ from: null, to: null });
     setTeamSearch('');
     setSelectedSport(null);
-    setAdvancedSearch({ 
-      oddsType: 'both', 
-      outcome: 'all', 
+    setAdvancedSearch({
+      oddsType: 'both',
+      outcome: 'all',
       marketType: 'all',
       status: 'all',
       minSnapshots: undefined,
-      oddsMin: undefined,
-      oddsMax: undefined,
+      openingOddsMin: undefined,
+      openingOddsMax: undefined,
+      closingOddsMin: undefined,
+      closingOddsMax: undefined,
       pointValue: undefined,
       dropMin: undefined
     });
