@@ -14,6 +14,8 @@ export interface AdvancedSearchParams {
   // Separate closing odds range
   closingOddsMin?: number;
   closingOddsMax?: number;
+  // Movement direction filter
+  movementDirection?: 'all' | 'up' | 'down' | 'stable';
   // Common filters
   oddsType: 'opening' | 'closing' | 'both';
   outcome?: 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no' | 'all';
@@ -51,6 +53,7 @@ export function AdvancedSearchFilter({
     value.openingOddsMax !== undefined ||
     value.closingOddsMin !== undefined ||
     value.closingOddsMax !== undefined ||
+    (value.movementDirection && value.movementDirection !== 'all') ||
     (value.outcome && value.outcome !== 'all') ||
     (value.marketType && value.marketType !== 'all') ||
     value.pointValue !== undefined ||
@@ -167,6 +170,34 @@ export function AdvancedSearchFilter({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Movement Direction */}
+          <div className="space-y-2 p-3 bg-amber-50/50 rounded-lg border border-amber-100">
+            <Label className="text-sm font-semibold text-amber-700">Direction du mouvement</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { value: 'all', label: 'Tous', icon: '↔️' },
+                { value: 'down', label: 'Baisse', icon: '⬇️' },
+                { value: 'up', label: 'Hausse', icon: '⬆️' },
+                { value: 'stable', label: 'Stable', icon: '➡️' },
+              ].map((opt) => (
+                <Button
+                  key={opt.value}
+                  type="button"
+                  variant={value.movementDirection === opt.value || (!value.movementDirection && opt.value === 'all') ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => onChange({ ...value, movementDirection: opt.value as any })}
+                  className="h-8 text-xs"
+                >
+                  <span className="mr-1">{opt.icon}</span>
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Baisse = closing &lt; opening (steam move) | Hausse = closing &gt; opening (reverse steam)
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -321,6 +352,12 @@ export function AdvancedSearchFilter({
                 {(value.closingOddsMin !== undefined || value.closingOddsMax !== undefined) && (
                   <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-100">
                     Close: {value.closingOddsMin ?? '?'} - {value.closingOddsMax ?? '?'}
+                  </span>
+                )}
+
+                {value.movementDirection && value.movementDirection !== 'all' && (
+                  <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-100">
+                    {value.movementDirection === 'down' ? '⬇️ Baisse' : value.movementDirection === 'up' ? '⬆️ Hausse' : '➡️ Stable'}
                   </span>
                 )}
 

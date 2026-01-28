@@ -79,6 +79,7 @@ export async function fetchEventsForTable(params: {
   openingOddsMax?: number;
   closingOddsMin?: number;
   closingOddsMax?: number;
+  movementDirection?: 'all' | 'up' | 'down' | 'stable';
   outcome?: string; // 'home', 'away', 'draw', 'over', 'under'
   pointValue?: number;
   dropMin?: number;
@@ -101,6 +102,7 @@ export async function fetchEventsForTable(params: {
     openingOddsMax,
     closingOddsMin,
     closingOddsMax,
+    movementDirection,
     outcome,
     dropMin,
     status,
@@ -127,6 +129,7 @@ export async function fetchEventsForTable(params: {
         p_opening_odds_max: openingOddsMax || null,
         p_closing_odds_min: closingOddsMin || null,
         p_closing_odds_max: closingOddsMax || null,
+        p_movement_direction: movementDirection && movementDirection !== 'all' ? movementDirection : null,
         p_outcome: outcome && outcome !== 'all' ? outcome : null,
         p_point_value: pointValue || null,
         p_drop_min: dropMin || null,
@@ -218,6 +221,7 @@ export async function fetchEventsForTable(params: {
                              openingOddsMax !== undefined ||
                              closingOddsMin !== undefined ||
                              closingOddsMax !== undefined ||
+                             (movementDirection && movementDirection !== 'all') ||
                              (outcome && outcome !== 'all') ||
                              pointValue !== undefined ||
                              dropMin !== undefined ||
@@ -433,6 +437,32 @@ export async function fetchEventsForTable(params: {
 
         // Both filters must match (AND logic for separate ranges)
         if (!openingMatches || !closingMatches) return false;
+
+        // Movement Direction Filter
+        if (movementDirection && movementDirection !== 'all') {
+          if (!event.closing_odds?.markets) return false;
+
+          let hasMatchingMovement = false;
+          event.opening_odds.forEach(openMkt => {
+            if (marketKey && openMkt.market_key !== marketKey) return;
+            const closeMkt = event.closing_odds!.markets[openMkt.market_key];
+            if (!closeMkt) return;
+
+            const outcomeTypes = ['home', 'away', 'draw', 'over', 'under', 'yes', 'no'];
+            outcomeTypes.forEach(o => {
+              if (outcome && outcome !== 'all' && o !== outcome) return;
+              const openVal = openMkt.odds?.[o];
+              const closeVal = closeMkt[o];
+              if (typeof openVal === 'number' && typeof closeVal === 'number' && openVal > 0) {
+                const changePercent = ((closeVal - openVal) / openVal) * 100;
+                if (movementDirection === 'down' && closeVal < openVal) hasMatchingMovement = true;
+                if (movementDirection === 'up' && closeVal > openVal) hasMatchingMovement = true;
+                if (movementDirection === 'stable' && Math.abs(changePercent) < 3) hasMatchingMovement = true;
+              }
+            });
+          });
+          if (!hasMatchingMovement) return false;
+        }
 
         // Drop Logic
         if (dropMin !== undefined) {

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download } from "lucide-react";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
 import { buildFootballColumns, type ColumnConfig, type OutcomeType } from "@/components/tables/v4/column-builder";
 import { DataTable } from "@/components/tables/data-table";
@@ -138,6 +138,7 @@ export default function FootballPage() {
       if (advancedSearch.openingOddsMax !== undefined) params.set('openingOddsMax', advancedSearch.openingOddsMax.toString());
       if (advancedSearch.closingOddsMin !== undefined) params.set('closingOddsMin', advancedSearch.closingOddsMin.toString());
       if (advancedSearch.closingOddsMax !== undefined) params.set('closingOddsMax', advancedSearch.closingOddsMax.toString());
+      if (advancedSearch.movementDirection && advancedSearch.movementDirection !== 'all') params.set('movementDirection', advancedSearch.movementDirection);
       if (advancedSearch.outcome && advancedSearch.outcome !== 'all') params.set('outcome', advancedSearch.outcome);
       if (advancedSearch.marketType && advancedSearch.marketType !== 'all') params.set('marketKey', advancedSearch.marketType);
       if (advancedSearch.pointValue !== undefined) params.set('pointValue', advancedSearch.pointValue.toString());
@@ -321,6 +322,7 @@ export default function FootballPage() {
       outcome: 'all',
       marketType: 'all',
       status: 'all',
+      movementDirection: 'all',
       minSnapshots: undefined,
       openingOddsMin: undefined,
       openingOddsMax: undefined,
@@ -330,6 +332,104 @@ export default function FootballPage() {
       dropMin: undefined
     });
   }, []);
+
+  // Export CSV function
+  const handleExportCSV = React.useCallback(() => {
+    if (filteredEvents.length === 0) return;
+
+    // CSV headers
+    const headers = [
+      'Date',
+      'Championnat',
+      'Domicile',
+      'Extérieur',
+      'Statut',
+      'Score',
+      'Marché',
+      'Ligne',
+      'Open Home',
+      'Open Draw',
+      'Open Away',
+      'Open Over',
+      'Open Under',
+      'Close Home',
+      'Close Draw',
+      'Close Away',
+      'Close Over',
+      'Close Under',
+      'CLV Home %',
+      'CLV Away %',
+    ];
+
+    const rows: string[][] = [];
+
+    filteredEvents.forEach(event => {
+      const baseRow = [
+        new Date(event.commence_time).toLocaleString('fr-FR'),
+        event.sport_title || event.sport_key,
+        event.home_team,
+        event.away_team,
+        event.status,
+        event.home_score !== null && event.away_score !== null
+          ? `${event.home_score}-${event.away_score}`
+          : '',
+      ];
+
+      // Add rows for each market
+      const markets = new Set<string>();
+      event.opening_odds.forEach(o => markets.add(o.market_key));
+      if (event.closing_odds?.markets) {
+        Object.keys(event.closing_odds.markets).forEach(k => markets.add(k));
+      }
+
+      markets.forEach(marketKey => {
+        const opening = event.opening_odds.find(o => o.market_key === marketKey);
+        const closing = event.closing_odds?.markets?.[marketKey];
+        const openOdds = opening?.odds || {};
+        const closeOdds = closing || {};
+
+        const calcCLV = (open: number | undefined, close: number | undefined) => {
+          if (typeof open !== 'number' || typeof close !== 'number' || open === 0) return '';
+          return (((open - close) / open) * 100).toFixed(2);
+        };
+
+        rows.push([
+          ...baseRow,
+          marketKey,
+          openOdds.point?.toString() || closeOdds.point?.toString() || '',
+          openOdds.home?.toFixed(2) || '',
+          openOdds.draw?.toFixed(2) || '',
+          openOdds.away?.toFixed(2) || '',
+          openOdds.over?.toFixed(2) || '',
+          openOdds.under?.toFixed(2) || '',
+          closeOdds.home?.toFixed(2) || '',
+          closeOdds.draw?.toFixed(2) || '',
+          closeOdds.away?.toFixed(2) || '',
+          closeOdds.over?.toFixed(2) || '',
+          closeOdds.under?.toFixed(2) || '',
+          calcCLV(openOdds.home, closeOdds.home),
+          calcCLV(openOdds.away, closeOdds.away),
+        ]);
+      });
+    });
+
+    // Generate CSV content
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
+    ].join('\n');
+
+    // Download
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `oddstracker_export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [filteredEvents]);
 
   // Calculer le nombre de pages
   const pageCount = Math.ceil(total / pagination.pageSize);
@@ -365,6 +465,15 @@ export default function FootballPage() {
               onShowAll={handleShowAllMarkets}
               onHideAll={handleHideAllMarkets}
             />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCSV}
+              className="text-xs"
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Export CSV
+            </Button>
             <Button
               variant="outline"
               size="sm"

@@ -25,6 +25,7 @@ export async function GET(request: Request) {
     const openingOddsMax = searchParams.get('openingOddsMax') ? parseFloat(searchParams.get('openingOddsMax')!) : undefined;
     const closingOddsMin = searchParams.get('closingOddsMin') ? parseFloat(searchParams.get('closingOddsMin')!) : undefined;
     const closingOddsMax = searchParams.get('closingOddsMax') ? parseFloat(searchParams.get('closingOddsMax')!) : undefined;
+    const movementDirection = (searchParams.get('movementDirection') as 'all' | 'up' | 'down' | 'stable') || undefined;
     const outcome = searchParams.get('outcome') || undefined;
     const pointValue = searchParams.get('pointValue') ? parseFloat(searchParams.get('pointValue')!) : undefined;
     const dropMin = searchParams.get('dropMin') ? parseFloat(searchParams.get('dropMin')!) : undefined;
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
       openingOddsMax,
       closingOddsMin,
       closingOddsMax,
+      movementDirection,
       outcome,
       pointValue,
       dropMin,

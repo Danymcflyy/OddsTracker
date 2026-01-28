@@ -1,23 +1,27 @@
--- Migration: Add separate opening/closing odds ranges to search_events
--- This allows searching for events where opening odds are in one range
--- AND closing odds are in a different range (useful for steam moves analysis)
+-- Migration: Add separate opening/closing odds ranges and movement direction filter
+-- This allows searching for events where:
+-- - Opening odds are in one range AND closing odds are in a different range
+-- - Movement direction: up (closing > opening), down (closing < opening), stable
 
--- Drop existing function
+-- Drop existing function (try different signatures)
 DROP FUNCTION IF EXISTS search_events(text, timestamptz, timestamptz, text, text, numeric, numeric, text, text, numeric, numeric, text, integer, integer, integer);
+DROP FUNCTION IF EXISTS search_events(text, timestamptz, timestamptz, text, text, numeric, numeric, numeric, numeric, text, numeric, numeric, text, integer, integer, integer);
 
--- Create new search function with separate opening/closing odds ranges
+-- Create new search function with separate opening/closing odds ranges + movement direction
 CREATE OR REPLACE FUNCTION search_events(
   p_sport_key TEXT DEFAULT NULL,
   p_date_from TIMESTAMPTZ DEFAULT NULL,
   p_date_to TIMESTAMPTZ DEFAULT NULL,
   p_search TEXT DEFAULT NULL,
   p_market_key TEXT DEFAULT NULL,
-  -- NEW: Separate opening odds range
+  -- Separate opening odds range
   p_opening_odds_min NUMERIC DEFAULT NULL,
   p_opening_odds_max NUMERIC DEFAULT NULL,
-  -- NEW: Separate closing odds range
+  -- Separate closing odds range
   p_closing_odds_min NUMERIC DEFAULT NULL,
   p_closing_odds_max NUMERIC DEFAULT NULL,
+  -- Movement direction: 'up', 'down', 'stable', or NULL for all
+  p_movement_direction TEXT DEFAULT NULL,
   p_outcome TEXT DEFAULT NULL,
   p_point_value NUMERIC DEFAULT NULL,
   p_drop_min NUMERIC DEFAULT NULL,
@@ -98,7 +102,7 @@ BEGIN
     FROM events_with_markets ewm
     WHERE
       -- If no odds filters, include all
-      (NOT v_has_opening_filter AND NOT v_has_closing_filter AND p_point_value IS NULL AND p_drop_min IS NULL AND p_outcome IS NULL)
+      (NOT v_has_opening_filter AND NOT v_has_closing_filter AND p_point_value IS NULL AND p_drop_min IS NULL AND p_outcome IS NULL AND p_movement_direction IS NULL)
       OR (
         -- Opening odds filter (if specified)
         (
@@ -107,11 +111,8 @@ BEGIN
             SELECT 1
             FROM jsonb_array_elements(ewm.market_states_json) as ms
             WHERE
-              -- Market key filter
               (p_market_key IS NULL OR ms->>'market_key' = p_market_key)
-              -- Point value filter
               AND (p_point_value IS NULL OR (ms->'opening_odds'->>'point')::numeric = p_point_value)
-              -- Opening odds value filter
               AND EXISTS (
                 SELECT 1
                 FROM jsonb_each(ms->'opening_odds') as odds(key, value)
@@ -143,6 +144,38 @@ BEGIN
                     AND (p_closing_odds_max IS NULL OR odds.value::numeric <= p_closing_odds_max)
                 )
             )
+          )
+        )
+      )
+      -- Movement direction filter
+      AND (
+        p_movement_direction IS NULL
+        OR (
+          ewm.closing_odds_json IS NOT NULL
+          AND ewm.closing_odds_json->'markets' IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(ewm.market_states_json) as ms
+            CROSS JOIN LATERAL jsonb_each(ms->'opening_odds') as o_odds(okey, oval)
+            WHERE
+              jsonb_typeof(o_odds.oval) = 'number'
+              AND o_odds.oval::numeric > 0
+              AND (p_market_key IS NULL OR ms->>'market_key' = p_market_key)
+              AND (p_outcome IS NULL OR o_odds.okey = p_outcome)
+              AND EXISTS (
+                SELECT 1
+                FROM jsonb_each(ewm.closing_odds_json->'markets'->(ms->>'market_key')) as c_odds(ckey, cval)
+                WHERE c_odds.ckey = o_odds.okey
+                  AND jsonb_typeof(c_odds.cval) = 'number'
+                  AND (
+                    -- down: closing < opening (steam move)
+                    (p_movement_direction = 'down' AND c_odds.cval::numeric < o_odds.oval::numeric)
+                    -- up: closing > opening (reverse steam)
+                    OR (p_movement_direction = 'up' AND c_odds.cval::numeric > o_odds.oval::numeric)
+                    -- stable: change < 3%
+                    OR (p_movement_direction = 'stable' AND ABS((c_odds.cval::numeric - o_odds.oval::numeric) / o_odds.oval::numeric) * 100 < 3)
+                  )
+              )
           )
         )
       )
@@ -188,4 +221,4 @@ $$;
 GRANT EXECUTE ON FUNCTION search_events TO authenticated;
 GRANT EXECUTE ON FUNCTION search_events TO service_role;
 
-COMMENT ON FUNCTION search_events IS 'Advanced search function with separate opening/closing odds ranges. Allows filtering events where opening odds are in one range AND closing odds are in a different range - useful for steam moves and CLV analysis.';
+COMMENT ON FUNCTION search_events IS 'Advanced search with separate opening/closing odds ranges and movement direction filter. down=steam move, up=reverse steam, stable=<3% change.';
