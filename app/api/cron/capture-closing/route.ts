@@ -100,23 +100,35 @@ export async function POST(request: Request) {
       console.log(`   Kick-off: ${new Date(dbEvent.commence_time).toLocaleTimeString('fr-FR')}`);
       console.log(`   Position: M${minutesBeforeKickoff > 0 ? '+' : ''}${minutesBeforeKickoff}`);
 
-      // Vérifier fenêtre stricte (M-15 à M+15)
-      if (minutesBeforeKickoff < -15 || minutesBeforeKickoff > 15) {
-        console.log(`   ⏭️ Hors fenêtre de capture stricte\n`);
+      // Snapshots cibles: M-10, M-5, M-0 (3 snapshots max)
+      // On capture si on est à ±1 minute d'un slot cible
+      const TARGET_SLOTS = [-10, -5, 0];
+      const isNearTargetSlot = TARGET_SLOTS.some(slot =>
+        Math.abs(minutesBeforeKickoff - slot) <= 1
+      );
+
+      if (!isNearTargetSlot) {
+        console.log(`   ⏭️ Pas un slot cible (M-10, M-5, M-0)\n`);
         totalSkipped++;
         continue;
       }
 
-      // Vérifier si déjà capturé à ce moment (déduplication)
+      // Trouver le slot cible le plus proche
+      const targetSlot = TARGET_SLOTS.reduce((prev, curr) =>
+        Math.abs(curr - minutesBeforeKickoff) < Math.abs(prev - minutesBeforeKickoff) ? curr : prev
+      );
+
+      // Vérifier si déjà capturé pour ce slot cible
       const { data: existing } = await supabase
         .from('closing_odds_snapshots')
-        .select('id')
+        .select('id, minutes_before_kickoff')
         .eq('event_id', dbEvent.id)
-        .eq('minutes_before_kickoff', minutesBeforeKickoff)
+        .gte('minutes_before_kickoff', targetSlot - 1)
+        .lte('minutes_before_kickoff', targetSlot + 1)
         .limit(1);
 
       if (existing && existing.length > 0) {
-        console.log(`   ✓ Déjà capturé à ce moment\n`);
+        console.log(`   ✓ Slot M${targetSlot} déjà capturé\n`);
         totalSkipped++;
         continue;
       }
