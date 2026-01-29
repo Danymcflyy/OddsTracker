@@ -201,10 +201,12 @@ export function buildFootballColumns(
     const isSpread = baseKey.includes('spread');
     
     // Normalize point for Spreads to merge mirrors (e.g. +0.5 and -0.5 -> -0.5)
+    // FIX: Do NOT normalize anymore. Users want to see both sides (-0.5 and +0.5) if they select them.
+    // The previous logic was hiding positive handicaps.
     let normalizedPoint = market.point;
-    if (isSpread && normalizedPoint !== undefined && normalizedPoint > 0) {
-        normalizedPoint = -1 * normalizedPoint;
-    }
+    // if (isSpread && normalizedPoint !== undefined && normalizedPoint > 0) {
+    //    normalizedPoint = -1 * normalizedPoint;
+    // }
 
     if (!marketsByBase.has(baseKey)) {
       marketsByBase.set(baseKey, new Map());
@@ -270,9 +272,9 @@ export function buildFootballColumns(
               
               let resultClass = "";
               if (val !== '-') {
-                if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
-                if (res === 'loss') resultClass = "!bg-red-500 !text-white";
-                if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
+                if (res === 'win') resultClass = "!bg-emerald-100 !text-emerald-700 font-bold border-emerald-200";
+                if (res === 'loss') resultClass = "!bg-rose-50 !text-rose-700 border-rose-100";
+                if (res === 'push') resultClass = "!bg-amber-50 !text-amber-700 border-amber-100";
               }
 
               return (
@@ -292,9 +294,9 @@ export function buildFootballColumns(
               
               let resultClass = "";
               if (val !== '-') {
-                if (res === 'win') resultClass = "!bg-green-600 !text-white font-bold";
-                if (res === 'loss') resultClass = "!bg-red-500 !text-white";
-                if (res === 'push') resultClass = "!bg-yellow-400 !text-black";
+                if (res === 'win') resultClass = "!bg-emerald-100 !text-emerald-700 font-bold border-emerald-200";
+                if (res === 'loss') resultClass = "!bg-rose-50 !text-rose-700 border-rose-100";
+                if (res === 'push') resultClass = "!bg-amber-50 !text-amber-700 border-amber-100";
               }
 
               return (
@@ -357,19 +359,10 @@ function getOddsValue(
 
     if (marketData?.odds?.[outcome]) return formatOddsValue(marketData.odds[outcome]);
 
-    // 2. Mirror search for spreads (if point is -0.5, check +0.5 and swap home/away)
-    if (isSpread && point !== undefined) {
-        const mirrorPoint = -1 * point;
-        const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
-
-        marketData = event.opening_odds.find((m) => {
-            if (m.market_key !== marketKey) return false;
-            return m.odds?.point === mirrorPoint;
-        });
-
-        if (marketData?.odds?.[mirrorOutcome]) return formatOddsValue(marketData.odds[mirrorOutcome]);
-    }
-
+    // FIX: Remove dangerous mirror search.
+    // If we are looking for Home +2.0, we cannot use the odds from Away +2.0 (found in -2.0 market).
+    // The table will now properly show the sparse data (checkerboard) which is correct.
+    
     return '-';
   } else {
     const closingData = event.closing_odds;
@@ -391,24 +384,13 @@ function getOddsValue(
     let val = findInVariations(point, outcome);
     if (val) return formatOddsValue(val as number);
 
-    // 2. Mirror search for spreads
-    if (isSpread && point !== undefined) {
-        const mirrorPoint = -1 * point;
-        const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
-        val = findInVariations(mirrorPoint, mirrorOutcome);
-        if (val) return formatOddsValue(val as number);
-    }
+    // FIX: Remove dangerous mirror search for closing odds as well.
 
-    // 3. Fallback to main markets object
+    // 2. Fallback to main markets object
     if (closingData.markets && closingData.markets[marketKey]) {
       const fallback = closingData.markets[marketKey];
       if (point === undefined || fallback.point === point) {
         if (fallback[outcome]) return formatOddsValue(fallback[outcome] as number);
-      }
-      // Mirror fallback
-      if (isSpread && point !== undefined && fallback.point === (-1 * point)) {
-          const mirrorOutcome = outcome === 'home' ? 'away' : outcome === 'away' ? 'home' : outcome;
-          if (fallback[mirrorOutcome]) return formatOddsValue(fallback[mirrorOutcome] as number);
       }
     }
 
