@@ -165,30 +165,7 @@ function calculateMinutesBeforeKickoff(commenceTime: string, now: Date): number 
   return Math.floor(diffMs / (60 * 1000));
 }
 
-async function getMarketsForCapture(supabase: any, _sportEvents: any[]): Promise<string> {
-  // Récupérer tous les marchés trackés depuis les settings
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('value')
-    .eq('key', 'tracked_markets')
-    .single();
-
-  const SAFE_MARKETS = ['h2h', 'spreads', 'totals'];
-  
-  if (settings?.value && Array.isArray(settings.value) && settings.value.length > 0) {
-    // Filtrer pour ne garder que les marchés supportés par l'endpoint /odds (éviter 422)
-    // L'API est stricte: h2h, spreads, totals. (draw_no_bet, etc. font planter)
-    const safeList = settings.value.filter((m: string) => SAFE_MARKETS.includes(m));
-    
-    // Si la liste filtrée est vide (ex: on ne tracke que des trucs exotiques), on force les bases
-    if (safeList.length === 0) return 'h2h,spreads,totals';
-    
-    return safeList.join(',');
-  }
-
-  // Fallback: marchés par défaut
-  return 'h2h,spreads,totals';
-}
+// REMOVED: Unused getMarketsForCapture function that had stale SAFE_MARKETS list
 
 async function getOddsWithCache(
   client: any,
@@ -291,10 +268,10 @@ function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): a
 
     if (!type) continue;
 
-    // Normalize point for Spreads
-    if (isSpread && point !== undefined && type === 'away') {
-        point = -1 * point;
-    }
+    // Normalize point for Spreads - DISABLED to allow full range (+ and -) display
+    // if (isSpread && point !== undefined && type === 'away') {
+    //    point = -1 * point;
+    // }
 
     // Build composite key
     let compositeKey: string;

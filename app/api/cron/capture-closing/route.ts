@@ -280,9 +280,10 @@ function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): a
 
     if (!type) continue;
 
-    if (isSpread && point !== undefined && type === 'away') {
-        point = -1 * point;
-    }
+    // Normalize point for Spreads - DISABLED to allow full range (+ and -) display
+    // if (isSpread && point !== undefined && type === 'away') {
+    //    point = -1 * point;
+    // }
 
     let compositeKey: string;
     if (isTeamTotals && teamSide) {

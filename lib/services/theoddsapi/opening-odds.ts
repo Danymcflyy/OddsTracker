@@ -145,13 +145,13 @@ function extractOddsFromMarket(
     for (const outcome of market.outcomes as any[]) {
       let point = outcome.point ?? 0;
 
-      // Normalize Spread points: Away +X is equivalent to Home -X
-      if (isSpread) {
-        const name = outcome.name.toLowerCase();
-        if (name === awayTeamLower) {
-           point = -1 * point;
-        }
-      }
+      // Normalize Spread points - DISABLED to allow full range (+ and -) display
+      // if (isSpread) {
+      //  const name = outcome.name.toLowerCase();
+      //  if (name === awayTeamLower) {
+      //     point = -1 * point;
+      //  }
+      // }
 
       if (!byPoint.has(point)) {
         byPoint.set(point, []);
