@@ -19,7 +19,7 @@ interface MarketOption {
   point?: number;
 }
 
-export type OutcomeType = 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no';
+export type OutcomeType = 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no' | '1x' | 'x2' | '12';
 
 export interface ColumnConfig {
   marketLabels?: Record<string, string>;
@@ -39,6 +39,7 @@ const MARKET_SHORT_NAMES: Record<string, string> = {
   'totals_h2': 'O/U MT2',
   'draw_no_bet': 'DNB',
   'btts': 'BTTS',
+  'double_chance': 'DC',
   'team_totals': 'TT',
   'team_totals_home': 'TT Dom',
   'team_totals_away': 'TT Ext',
@@ -46,7 +47,7 @@ const MARKET_SHORT_NAMES: Record<string, string> = {
   'alternate_team_totals_away': 'Alt TT Ext',
 };
 
-const OUTCOME_SHORT_NAMES: Record<OutcomeType, string> = {
+const OUTCOME_SHORT_NAMES: Record<string, string> = {
   'home': '1',
   'draw': 'X',
   'away': '2',
@@ -54,6 +55,9 @@ const OUTCOME_SHORT_NAMES: Record<OutcomeType, string> = {
   'under': '-',
   'yes': 'Oui',
   'no': 'Non',
+  '1x': '1X',
+  'x2': 'X2',
+  '12': '12',
 };
 
 function getMarketOutcomes(marketKey: string): OutcomeType[] {
@@ -78,7 +82,7 @@ function getMarketOutcomes(marketKey: string): OutcomeType[] {
   }
   // Double Chance
   if (marketKey === 'double_chance') {
-    return ['home', 'draw', 'away'];
+    return ['1x', 'x2', '12'];
   }
   // Both Teams To Score
   if (marketKey === 'btts') {

@@ -116,6 +116,20 @@ export function getMarketResult(
      return 'pending';
   }
 
+  // Double Chance
+  if (marketKey === 'double_chance') {
+    if (outcome === '1x') {
+      return (score.home >= score.away) ? 'win' : 'loss';
+    }
+    if (outcome === 'x2') {
+      return (score.away >= score.home) ? 'win' : 'loss';
+    }
+    if (outcome === '12') {
+      return (score.home !== score.away) ? 'win' : 'loss';
+    }
+    return 'pending';
+  }
+
   // 1X2 markets (no point)
   if (marketKey === 'h2h' || marketKey === 'h2h_h1' || marketKey === 'h2h_h2') {
     if (outcome === 'over' || outcome === 'under' || outcome === 'yes' || outcome === 'no') return 'pending';
