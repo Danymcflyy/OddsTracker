@@ -28,13 +28,19 @@ async function run() {
   console.log(`🕐 CAPTURE CLOSING ODDS - ${now.toLocaleString('fr-FR')}`);
   console.log('═══════════════════════════════════════════════════════\n');
 
-  // 1. RÉCUPÉRER LES ÉVÉNEMENTS DANS LA FENÊTRE DE CAPTURE
+  // 1. RÉCUPÉRER LES ÉVÉNEMENTS DANS LA FENÊTRE DE CAPTURE (Strictement avant le match)
+  // On cherche les matchs qui vont commencer dans 5 à 20 minutes (pour capturer à M-15, M-10, M-5)
+  // On ne capture PLUS rien après M-5 pour éviter le risque de Live Odds
+  
+  const windowStart = new Date(now.getTime() + 4 * 60 * 1000).toISOString(); // Dans 4 min (M-4) -> Trop tard
+  const windowEnd = new Date(now.getTime() + 20 * 60 * 1000).toISOString(); // Dans 20 min (M-20)
+
   const { data: events, error } = await supabase
     .from('events')
     .select('*')
     .eq('status', 'upcoming')
-    .gte('commence_time', new Date(now.getTime() - 15 * 60 * 1000).toISOString())
-    .lte('commence_time', new Date(now.getTime() + 15 * 60 * 1000).toISOString())
+    .gte('commence_time', windowStart) // On veut commence_time >= now + 4min (donc pas encore commencé)
+    .lte('commence_time', windowEnd)   // On veut commence_time <= now + 20min
     .order('commence_time', { ascending: true });
 
   if (error) {
@@ -43,39 +49,15 @@ async function run() {
   }
 
   if (!events || events.length === 0) {
-    console.log('ℹ️ Aucun événement dans la fenêtre de capture (M-15 à M+15)');
+    console.log('ℹ️ Aucun événement dans la fenêtre de capture (M-20 à M-5)');
     return;
   }
 
-  console.log(`📊 ${events.length} événement(s) dans la fenêtre\n`);
+  console.log(`📊 ${events.length} événement(s) dans la fenêtre M-20 à M-5\n`);
+  
+  // ... (suite du code)
 
-  // 2. RÉCUPÉRER TOUS LES MARCHÉS TRACKÉS
-  // On ne filtre plus, on prend tout ce qui est demandé car l'endpoint par événement est plus souple
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('value')
-    .eq('key', 'tracked_markets')
-    .single();
-
-  let marketsToCapture = 'h2h,spreads,totals'; // Default
-  if (settings?.value && Array.isArray(settings.value) && settings.value.length > 0) {
-    const requested = [...settings.value];
-    
-    // Auto-include alternate markets for full coverage
-    if (requested.includes('team_totals') && !requested.includes('alternate_team_totals')) {
-        requested.push('alternate_team_totals');
-    }
-    // Note: spreads and totals usually include alternates in single-event endpoint but explicit doesn't hurt if quota allows
-    
-    marketsToCapture = requested.join(',');
-  }
-  console.log(`   Marchés cibles: ${marketsToCapture}\n`);
-
-  let totalCaptured = 0;
-  let totalSkipped = 0;
-  let totalCredits = 0;
-
-  // 3. TRAITER CHAQUE ÉVÉNEMENT INDIVIDUELLEMENT (Stratégie "Qualité")
+  // 3. TRAITER CHAQUE ÉVÉNEMENT
   for (const dbEvent of events) {
     const minutesBeforeKickoff = calculateMinutesBeforeKickoff(dbEvent.commence_time, now);
 
@@ -83,12 +65,18 @@ async function run() {
     console.log(`   Kick-off: ${new Date(dbEvent.commence_time).toLocaleTimeString('fr-FR')}`);
     console.log(`   Position: M${minutesBeforeKickoff > 0 ? '+' : ''}${minutesBeforeKickoff}`);
 
-    // Vérifier fenêtre stricte (M-15 à M+15)
-    if (minutesBeforeKickoff < -15 || minutesBeforeKickoff > 15) {
-      console.log(`   ⏭️ Hors fenêtre de capture stricte\n`);
-      totalSkipped++;
-      continue;
+    // Sécurité supplémentaire : Si on est trop proche du coup d'envoi (< 5 min), on ne touche pas
+    // minutesBeforeKickoff est positif si on est AVANT le match (ex: 10 pour M-10)
+    // On veut capturer à 15, 10, 5.
+    
+    if (minutesBeforeKickoff < 5) {
+        console.log(`   🛑 Trop proche du match (ou match commencé). Arrêt capture pour éviter Live Odds.\n`);
+        totalSkipped++;
+        continue;
     }
+    
+    // ... (suite du code)
+
 
     // Vérifier si déjà capturé à ce moment (déduplication)
     const { data: existing } = await supabase
@@ -448,14 +436,34 @@ async function captureSnapshot(
 }
 
 async function finalizeClosingOdds(supabase: any, eventId: string) {
-  // Sélectionner le snapshot avec last_update le plus récent
-  const { data: bestSnapshot } = await supabase
+  // Sélectionner le MEILLEUR snapshot pour le Closing
+  // Critère : Le plus proche du coup d'envoi (minutes_before_kickoff le plus petit mais >= 0)
+  // On accepte une tolérance de -2 min (légèrement après) si rien d'autre, mais on privilégie l'avant-match.
+  
+  const { data: snapshots } = await supabase
     .from('closing_odds_snapshots')
     .select('*')
     .eq('event_id', eventId)
-    .order('bookmaker_last_update', { ascending: false })
-    .limit(1)
-    .single();
+    .gte('minutes_before_kickoff', -2) // Tolérance 2 min après
+    .order('minutes_before_kickoff', { ascending: true }); // Le plus petit d'abord (ex: 2 min avant > 10 min avant)
+
+  let bestSnapshot = null;
+
+  if (snapshots && snapshots.length > 0) {
+      // Le premier est le plus proche de 0 (car tri ascendant et filtré >= -2)
+      // Ex: 5, 10, 15 -> Le 5 est le meilleur
+      bestSnapshot = snapshots[0];
+  } else {
+      // Fallback: Si aucun snapshot proche, on prend le plus récent disponible (même si vieux)
+      const { data: fallback } = await supabase
+        .from('closing_odds_snapshots')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('bookmaker_last_update', { ascending: false })
+        .limit(1)
+        .single();
+      bestSnapshot = fallback;
+  }
 
   if (!bestSnapshot) {
     console.log('      ⚠️ Aucun snapshot à finaliser');
@@ -498,20 +506,20 @@ async function finalizeClosingOdds(supabase: any, eventId: string) {
     }
   }
 
-  console.log('      ✅ Closing odds finalisées');
+  console.log(`      ✅ Closing odds finalisées (Snapshot à M${bestSnapshot.minutes_before_kickoff})`);
 }
 
 async function finalizeOldEvents(supabase: any, now: Date): Promise<number> {
-  // Trouver les événements dont le kick-off est passé depuis > 10 minutes
-  // et qui n'ont pas encore de closing_odds finalisés
-
-  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+  // Trouver les événements qui VIENNENT de commencer (ou passés)
+  // On finalise dès que le coup d'envoi est passé, car on ne capture plus rien après M-5.
+  
+  const justStarted = now.toISOString();
 
   const { data: events } = await supabase
     .from('events')
     .select('id, home_team, away_team, commence_time')
     .eq('status', 'upcoming')
-    .lt('commence_time', tenMinutesAgo);
+    .lt('commence_time', justStarted); // Dès que commence_time < maintenant
 
   if (!events || events.length === 0) {
     console.log('ℹ️ Aucun événement à finaliser');
