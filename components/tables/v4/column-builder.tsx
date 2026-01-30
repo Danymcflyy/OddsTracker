@@ -9,6 +9,7 @@ import { toZonedTime } from 'date-fns-tz';
 import { fr } from 'date-fns/locale';
 import type { EventWithOdds } from '@/lib/db/queries-frontend';
 import { getMarketResult, getResultColorClass } from '@/lib/utils/bet-results';
+import { ColumnOddsFilter, type OddsFilterValue } from './column-odds-filter';
 
 const PARIS_TZ = 'Europe/Paris';
 const columnHelper = createColumnHelper<EventWithOdds>();
@@ -25,6 +26,15 @@ export interface ColumnConfig {
   marketLabels?: Record<string, string>;
   outcomeLabels?: Record<string, string>;
   variationTemplate?: string;
+}
+
+export type ColumnFiltersState = Record<string, OddsFilterValue>;
+
+// Helper to generate filter key
+export function getColumnFilterKey(marketKey: string, point: number | undefined, outcome: string, type: 'opening' | 'closing'): string {
+  // Use a stable key format: market:point:outcome:type
+  // If point is undefined, use 'null' string
+  return `${marketKey}:${point ?? 'null'}:${outcome}:${type}`;
 }
 
 const MARKET_SHORT_NAMES: Record<string, string> = {
@@ -103,7 +113,9 @@ function getOutcomeLabel(outcome: OutcomeType, config?: ColumnConfig): string {
 export function buildFootballColumns(
   markets: MarketOption[],
   visibleOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under'],
-  config?: ColumnConfig
+  config?: ColumnConfig,
+  filters?: ColumnFiltersState,
+  onFilterChange?: (key: string, value: OddsFilterValue | undefined) => void
 ): ColumnDef<EventWithOdds>[] {
   const columns: ColumnDef<EventWithOdds>[] = [];
 
@@ -269,7 +281,24 @@ export function buildFootballColumns(
         const dataColumns: ColumnDef<EventWithOdds>[] = [
           columnHelper.display({
             id: `${marketOption.key}_${outcome}_opening`,
-            header: 'O',
+            header: ({ header }) => {
+              const filterKey = getColumnFilterKey(baseKey, point, outcome, 'opening');
+              const filterValue = filters?.[filterKey];
+              const title = `${marketLabel} ${variationLabel !== 'Std' ? variationLabel : ''} (${outcomeLabel}) - Opening`;
+              
+              return (
+                <div className="flex items-center justify-center">
+                  <span>O</span>
+                  {onFilterChange && (
+                    <ColumnOddsFilter 
+                      title={title}
+                      value={filterValue}
+                      onChange={(val) => onFilterChange(filterKey, val)}
+                    />
+                  )}
+                </div>
+              );
+            },
             cell: ({ row }) => {
               const val = getOddsValue(row.original, baseKey, outcome, point, 'opening');
               const res = getResult(row.original, baseKey, outcome, point);
@@ -287,11 +316,28 @@ export function buildFootballColumns(
                 </div>
               );
             },
-            size: 45,
+            size: 60, // Increased size to fit filter icon
           }) as any,
           columnHelper.display({
             id: `${marketOption.key}_${outcome}_closing`,
-            header: 'C',
+            header: ({ header }) => {
+              const filterKey = getColumnFilterKey(baseKey, point, outcome, 'closing');
+              const filterValue = filters?.[filterKey];
+              const title = `${marketLabel} ${variationLabel !== 'Std' ? variationLabel : ''} (${outcomeLabel}) - Closing`;
+
+              return (
+                <div className="flex items-center justify-center">
+                  <span>C</span>
+                  {onFilterChange && (
+                    <ColumnOddsFilter 
+                      title={title}
+                      value={filterValue}
+                      onChange={(val) => onFilterChange(filterKey, val)}
+                    />
+                  )}
+                </div>
+              );
+            },
             cell: ({ row }) => {
               const val = getOddsValue(row.original, baseKey, outcome, point, 'closing');
               const res = getResult(row.original, baseKey, outcome, point);
@@ -309,7 +355,7 @@ export function buildFootballColumns(
                 </div>
               );
             },
-            size: 45,
+            size: 60, // Increased size
           }) as any
         ];
 

@@ -3,7 +3,8 @@
 import * as React from "react";
 import { Loader2 } from "lucide-react";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
-import { buildFootballColumns, type ColumnConfig, type OutcomeType } from "@/components/tables/v4/column-builder";
+import { buildFootballColumns, type ColumnConfig, type OutcomeType, type ColumnFiltersState } from "@/components/tables/v4/column-builder";
+import type { OddsFilterValue } from "@/components/tables/v4/column-odds-filter";
 import { DataTable } from "@/components/tables/data-table";
 import type { EventWithOdds, FilterOptions } from "@/lib/db/queries-frontend";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
@@ -40,9 +41,12 @@ export default function FootballPage() {
     outcome: 'all',
     marketType: 'all',
   });
+  
+  // Nouveaux filtres par colonne (spécifiques)
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>({});
 
   // Outcomes toujours tous affichés
-  const selectedOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under', 'yes', 'no'];
+  const selectedOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under', 'yes', 'no', '1x', 'x2', '12'];
 
   // TanStack Table states
   const [pagination, setPagination] = React.useState<PaginationState>({
@@ -143,6 +147,29 @@ export default function FootballPage() {
       if (advancedSearch.marketType && advancedSearch.marketType !== 'all') params.set('marketKey', advancedSearch.marketType);
       if (advancedSearch.pointValue !== undefined) params.set('pointValue', advancedSearch.pointValue.toString());
       if (advancedSearch.status && advancedSearch.status !== 'all') params.set('status', advancedSearch.status);
+
+      // Ajouter les filtres spécifiques par colonne (JSON)
+      if (Object.keys(columnFilters).length > 0) {
+        const specificFilters = Object.entries(columnFilters).map(([key, value]) => {
+          if (!value.min && !value.max) return null;
+          
+          const [marketKey, pointStr, outcome, type] = key.split(':');
+          const point = pointStr === 'null' ? null : parseFloat(pointStr);
+          
+          return {
+            market_key: marketKey,
+            point: point,
+            outcome: outcome,
+            type: type, // 'opening' or 'closing'
+            min: value.min,
+            max: value.max
+          };
+        }).filter(Boolean);
+
+        if (specificFilters.length > 0) {
+          params.set('oddsFilters', JSON.stringify(specificFilters));
+        }
+      }
 
       // Add cache-busting parameter
       params.set('_t', Date.now().toString());
@@ -297,17 +324,36 @@ export default function FootballPage() {
   // Reset pagination to page 1 when filters change
   React.useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
-  }, [teamSearch, selectedSport, dateRange, advancedSearch]);
+  }, [teamSearch, selectedSport, dateRange, advancedSearch, columnFilters]);
 
   // Les événements sont directement utilisés (filtrage côté serveur)
   const filteredEvents = events;
 
   // Générer les colonnes dynamiquement et filtrer par visibleMarkets
   // Note: Toujours appeler buildFootballColumns même sans marchés pour avoir les colonnes statiques (Score, Équipes, etc.)
+  
+  const handleColumnFilterChange = React.useCallback((key: string, value: OddsFilterValue | undefined) => {
+    setColumnFilters(prev => {
+      const next = { ...prev };
+      if (value === undefined || (value.min === undefined && value.max === undefined)) {
+        delete next[key];
+      } else {
+        next[key] = value;
+      }
+      return next;
+    });
+  }, []);
+
   const columns = React.useMemo(() => {
     const visibleCombinations = marketPointCombinations.filter((m) => visibleMarkets.has(m.key));
-    return buildFootballColumns(visibleCombinations, selectedOutcomes, columnConfig);
-  }, [marketPointCombinations, visibleMarkets, selectedOutcomes, columnConfig]);
+    return buildFootballColumns(
+      visibleCombinations, 
+      selectedOutcomes, 
+      columnConfig, 
+      columnFilters, 
+      handleColumnFilterChange
+    );
+  }, [marketPointCombinations, visibleMarkets, selectedOutcomes, columnConfig, columnFilters, handleColumnFilterChange]);
 
   // Handlers pour la visibilité des colonnes
   const handleToggleMarket = React.useCallback((marketKey: string) => {
@@ -355,6 +401,7 @@ export default function FootballPage() {
       closingOddsMax: undefined,
       pointValue: undefined
     });
+    setColumnFilters({});
   }, []);
 
   // Calculer le nombre de pages
