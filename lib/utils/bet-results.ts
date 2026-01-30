@@ -89,7 +89,7 @@ export function calculateTeamTotalsResult(
  */
 export function getMarketResult(
   marketKey: string,
-  outcome: 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no',
+  outcome: 'home' | 'away' | 'draw' | 'over' | 'under' | 'yes' | 'no' | '1x' | 'x2' | '12',
   point: number | undefined,
   score: MatchScore | null
 ): BetResult {

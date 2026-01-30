@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/button"; // Using button styles for badge-like trigger if needed
 
 export interface OddsFilterValue {
   min?: number;
