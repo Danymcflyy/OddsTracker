@@ -85,6 +85,7 @@ export async function fetchEventsForTable(params: {
   dropMin?: number;
   status?: string;
   minSnapshots?: number;
+  oddsFilters?: any[]; // Specific column filters
 }): Promise<{ data: EventWithOdds[]; total: number; nextCursor?: string; prevCursor?: string }> {
   const {
     sportKey,
@@ -106,7 +107,8 @@ export async function fetchEventsForTable(params: {
     outcome,
     dropMin,
     status,
-    minSnapshots
+    minSnapshots,
+    oddsFilters
   } = params;
 
   // ALWAYS use RPC for reliable pagination
@@ -137,6 +139,7 @@ export async function fetchEventsForTable(params: {
         p_min_snapshots: minSnapshots || null,
         p_page: page,
         p_page_size: pageSize,
+        p_odds_filters: oddsFilters || null, // Pass specific column filters to RPC
       };
 
       const { data: rawData, error } = await (freshClient as any).rpc('search_events', rpcParams);

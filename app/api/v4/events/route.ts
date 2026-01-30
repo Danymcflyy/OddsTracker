@@ -31,6 +31,17 @@ export async function GET(request: Request) {
     const dropMin = searchParams.get('dropMin') ? parseFloat(searchParams.get('dropMin')!) : undefined;
     const status = searchParams.get('status') || undefined;
     const minSnapshots = searchParams.get('minSnapshots') ? parseInt(searchParams.get('minSnapshots')!) : undefined;
+    
+    // Parse specific odds filters (JSON array)
+    let oddsFilters: any[] | undefined = undefined;
+    const oddsFiltersParam = searchParams.get('oddsFilters');
+    if (oddsFiltersParam) {
+      try {
+        oddsFilters = JSON.parse(oddsFiltersParam);
+      } catch (e) {
+        console.warn('Failed to parse oddsFilters JSON:', e);
+      }
+    }
 
     const result = await fetchEventsForTable({
       sportKey,
@@ -53,7 +64,8 @@ export async function GET(request: Request) {
       pointValue,
       dropMin,
       status,
-      minSnapshots
+      minSnapshots,
+      oddsFilters
     });
 
     return NextResponse.json({
