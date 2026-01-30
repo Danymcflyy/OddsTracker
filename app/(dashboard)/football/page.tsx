@@ -191,7 +191,7 @@ export default function FootballPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.pageIndex, pagination.pageSize, dateRange, teamSearch, selectedSport, sorting, advancedSearch]);
+  }, [pagination.pageIndex, pagination.pageSize, dateRange, teamSearch, selectedSport, sorting, advancedSearch, columnFilters]);
 
   // Découvrir toutes les combinaisons uniques (market, point) depuis les events
   const marketPointCombinations = React.useMemo(() => {
