@@ -97,6 +97,13 @@ export function getMarketResult(
     return 'pending';
   }
 
+  // SAFETY: We do NOT have Half-Time scores, only Full-Time.
+  // Calculating H1/H2 results using FT score is WRONG.
+  // We must return 'pending' for all half-time markets to avoid false positives/negatives.
+  if (marketKey.includes('_h1') || marketKey.includes('_h2')) {
+    return 'pending';
+  }
+
   // BTTS
   if (marketKey === 'btts') {
     if (outcome === 'yes') {
