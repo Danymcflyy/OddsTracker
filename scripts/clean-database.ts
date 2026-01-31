@@ -35,9 +35,25 @@ async function cleanDatabase() {
       .from('market_states')
       .select('*', { count: 'exact', head: true });
 
+    const { count: closingOddsBefore } = await supabase
+      .from('closing_odds')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: snapshotsBefore } = await supabase
+      .from('closing_odds_snapshots')
+      .select('*', { count: 'exact', head: true });
+
     console.log('📊 Avant nettoyage:');
     console.log(`  - Events: ${eventsBefore}`);
-    console.log(`  - Market States: ${marketStatesBefore}\n`);
+    console.log(`  - Market States: ${marketStatesBefore}`);
+    console.log(`  - Closing Odds: ${closingOddsBefore}`);
+    console.log(`  - Snapshots: ${snapshotsBefore}\n`);
+
+    // 1.5 Supprimer closing_odds et snapshots
+    console.log('🗑️  Suppression des closing odds & snapshots...');
+    await supabase.from('closing_odds').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('closing_odds_snapshots').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    console.log('✅ Closing data supprimées\n');
 
     // 2. Supprimer market_states (dépend de events)
     console.log('🗑️  Suppression des market_states...');

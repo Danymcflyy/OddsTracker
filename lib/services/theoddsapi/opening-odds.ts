@@ -350,6 +350,12 @@ async function scanEventOpeningOdds(
       marketsByDbKey.get(dbMarketKey)!.push(apiMarket);
     }
 
+    // Check if capture is late (< 72h before kickoff)
+    const commenceTime = new Date(event.commence_time);
+    const now = new Date();
+    const hoursBeforeKickoff = (commenceTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    const isLateCapture = hoursBeforeKickoff < 72; // 3 days
+
     // Process each market type (may have multiple variations)
     for (const [dbMarketKey, apiMarkets] of marketsByDbKey.entries()) {
       const marketState = pendingMarkets.find(m => m.market_key === dbMarketKey);
@@ -363,10 +369,18 @@ async function scanEventOpeningOdds(
         oddsVariations.push(...odds);
       }
 
-      // Merge variations with the same point (important for spreads where home -X and away +X should be combined)
+      // Merge variations with the same point
       const isSpreadMarket = dbMarketKey.includes('spread');
       if (isSpreadMarket) {
         oddsVariations = mergeVariationsByPoint(oddsVariations);
+      }
+      
+      // Inject metadata if late capture
+      if (isLateCapture) {
+          oddsVariations = oddsVariations.map(ov => ({
+              ...ov,
+              _metadata: { is_late: true, days_before: Math.round(hoursBeforeKickoff * 10) / 10 }
+          }));
       }
 
       // Special handling for team_totals: split into home and away

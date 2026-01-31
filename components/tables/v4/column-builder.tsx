@@ -300,7 +300,7 @@ export function buildFootballColumns(
               );
             },
             cell: ({ row }) => {
-              const val = getOddsValue(row.original, baseKey, outcome, point, 'opening');
+              const { value: val, isLate } = getOddsValue(row.original, baseKey, outcome, point, 'opening');
               const res = getResult(row.original, baseKey, outcome, point);
               
               let resultClass = "";
@@ -311,8 +311,11 @@ export function buildFootballColumns(
               }
 
               return (
-                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 border-r border-r-slate-100 ${resultClass}`}>
-                  <span className="text-xs font-mono">{val}</span>
+                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 border-r border-r-slate-100 ${resultClass} ${isLate ? 'bg-amber-50/50' : ''}`} title={isLate ? "Opening capturé tardivement (< 3j)" : undefined}>
+                  <span className={`text-xs font-mono ${isLate ? 'text-amber-600 font-medium' : ''}`}>
+                    {val}
+                    {isLate && <span className="text-[10px] ml-0.5">⚠️</span>}
+                  </span>
                 </div>
               );
             },
@@ -339,7 +342,7 @@ export function buildFootballColumns(
               );
             },
             cell: ({ row }) => {
-              const val = getOddsValue(row.original, baseKey, outcome, point, 'closing');
+              const { value: val } = getOddsValue(row.original, baseKey, outcome, point, 'closing');
               const res = getResult(row.original, baseKey, outcome, point);
               
               let resultClass = "";
@@ -393,12 +396,12 @@ function getOddsValue(
   outcome: string,
   point: number | undefined,
   type: 'opening' | 'closing'
-): string {
+): { value: string, isLate: boolean } {
   const isSpread = marketKey.includes('spread');
 
   if (type === 'opening') {
     // Safety check: ensure opening_odds exists and is an array
-    if (!event.opening_odds || !Array.isArray(event.opening_odds)) return '-';
+    if (!event.opening_odds || !Array.isArray(event.opening_odds)) return { value: '-', isLate: false };
 
     // 1. Direct search
     let marketData = event.opening_odds.find((m) => {
@@ -407,16 +410,19 @@ function getOddsValue(
       return true;
     });
 
-    if (marketData?.odds?.[outcome]) return formatOddsValue(marketData.odds[outcome]);
+    if (marketData?.odds?.[outcome]) {
+        return { 
+            value: formatOddsValue(marketData.odds[outcome]),
+            isLate: !!(marketData.odds._metadata?.is_late)
+        };
+    }
 
     // FIX: Remove dangerous mirror search.
-    // If we are looking for Home +2.0, we cannot use the odds from Away +2.0 (found in -2.0 market).
-    // The table will now properly show the sparse data (checkerboard) which is correct.
     
-    return '-';
+    return { value: '-', isLate: false };
   } else {
     const closingData = event.closing_odds;
-    if (!closingData) return '-';
+    if (!closingData) return { value: '-', isLate: false };
 
     const findInVariations = (targetPoint: number | undefined, targetOutcome: string) => {
         if (!closingData.markets_variations || !closingData.markets_variations[marketKey]) return null;
@@ -432,7 +438,7 @@ function getOddsValue(
 
     // 1. Direct search in variations
     let val = findInVariations(point, outcome);
-    if (val) return formatOddsValue(val as number);
+    if (val) return { value: formatOddsValue(val as number), isLate: false };
 
     // FIX: Remove dangerous mirror search for closing odds as well.
 
@@ -440,11 +446,11 @@ function getOddsValue(
     if (closingData.markets && closingData.markets[marketKey]) {
       const fallback = closingData.markets[marketKey];
       if (point === undefined || fallback.point === point) {
-        if (fallback[outcome]) return formatOddsValue(fallback[outcome] as number);
+        if (fallback[outcome]) return { value: formatOddsValue(fallback[outcome] as number), isLate: false };
       }
     }
 
-    return '-';
+    return { value: '-', isLate: false };
   }
 }
 
