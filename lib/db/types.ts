@@ -58,8 +58,13 @@ export interface OpeningOdds {
   no?: number;     // BTTS
   point?: number;
   team?: 'home' | 'away';  // Team Totals: identifies which team
+  _metadata?: {            // NEW: Metadata for late capture, etc.
+    is_late?: boolean;
+    days_before?: number;
+    [key: string]: any;
+  };
   // Flexible structure for different market types
-  [key: string]: number | string | undefined;
+  [key: string]: number | string | object | undefined;
 }
 
 export interface ClosingOdds {
