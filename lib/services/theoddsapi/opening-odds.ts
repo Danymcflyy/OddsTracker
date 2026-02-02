@@ -285,7 +285,7 @@ function mapToDbMarketKey(apiMarketKey: string): string {
 /**
  * Scan opening odds for a single event
  */
-async function scanEventOpeningOdds(
+export async function scanEventOpeningOdds(
   eventApiId: string,
   eventDbId: string,
   sportKey: string,
@@ -570,14 +570,8 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
       return result;
     }
 
-    // LIMIT: Process max 200 events per run to avoid timeout
-    // With ~1.3s per event, 200 events = ~260s (well under 300s maxDuration)
-    // Capacity: 200 events × 30 runs/hour = 6000 events/hour
-    const MAX_EVENTS_PER_RUN = 200;
-    if (eventsWithPending.length > MAX_EVENTS_PER_RUN) {
-      console.log(`[OpeningOdds] Limiting to ${MAX_EVENTS_PER_RUN} events to avoid timeout`);
-      eventsWithPending = eventsWithPending.slice(0, MAX_EVENTS_PER_RUN);
-    }
+    // NO LIMIT: Process as many events as possible until timeout
+    console.log(`[OpeningOdds] Processing all ${eventsWithPending.length} pending events...`);
 
     // Optimize: Fetch all pending markets in one query (avoid N+1)
     const eventIds = eventsWithPending.map(e => e.id);
