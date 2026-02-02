@@ -28,7 +28,7 @@ interface LogEntry {
 export default function LogsPage() {
   const [logs, setLogs] = React.useState<LogEntry[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [filter, setFilter] = React.useState<'all' | 'error' | 'success' | 'odds'>('all');
+  const [filter, setFilter] = React.useState<'all' | 'error' | 'success' | 'odds'>('error');
 
   React.useEffect(() => {
     fetchLogs();
