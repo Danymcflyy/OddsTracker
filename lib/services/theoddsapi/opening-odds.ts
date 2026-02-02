@@ -583,12 +583,36 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
 
     // Group markets by event_id for fast lookup
     const marketsByEvent = new Map<string, any[]>();
+    // Also track min attempts per event for fair scheduling
+    const attemptsByEvent = new Map<string, number>();
+
     (allPendingMarkets || []).forEach((market: any) => {
       if (!marketsByEvent.has(market.event_id)) {
         marketsByEvent.set(market.event_id, []);
+        attemptsByEvent.set(market.event_id, 9999);
       }
       marketsByEvent.get(market.event_id)!.push(market);
+      
+      const currentMin = attemptsByEvent.get(market.event_id)!;
+      if (market.attempts < currentMin) {
+          attemptsByEvent.set(market.event_id, market.attempts);
+      }
     });
+
+    // RE-SORT EVENTS: Prioritize events with FEWER attempts (Round Robin)
+    // This prevents "stuck" events (no odds yet) from blocking the queue forever
+    eventsWithPending.sort((a, b) => {
+        const attemptsA = attemptsByEvent.get(a.id) ?? 0;
+        const attemptsB = attemptsByEvent.get(b.id) ?? 0;
+        
+        if (attemptsA !== attemptsB) {
+            return attemptsA - attemptsB; // Ascending: 0 attempts first
+        }
+        // If same attempts, prioritize imminent games
+        return new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime();
+    });
+
+    console.log(`[OpeningOdds] Re-sorted events by attempts. First event has ${attemptsByEvent.get(eventsWithPending[0]?.id)} attempts.`);
 
     // Process each event
     for (const event of eventsWithPending) {
