@@ -20,6 +20,7 @@ interface ScanResult {
   eventsScanned: number;
   marketsChecked: number;
   marketsCaptured: number;
+  attemptsUpdated: number;
   creditsUsed: number;
   errors: string[];
 }
@@ -290,9 +291,9 @@ export async function scanEventOpeningOdds(
   eventDbId: string,
   sportKey: string,
   pendingMarkets: MarketState[]
-): Promise<{ captured: number; creditsUsed: number }> {
+): Promise<{ captured: number; attemptsUpdated: number; creditsUsed: number }> {
   if (pendingMarkets.length === 0) {
-    return { captured: 0, creditsUsed: 0 };
+    return { captured: 0, attemptsUpdated: 0, creditsUsed: 0 };
   }
 
   const client = getTheOddsApiClient();
@@ -324,9 +325,9 @@ export async function scanEventOpeningOdds(
       console.log(`[OpeningOdds] No data from ${bookmaker} for event ${eventApiId}. Updating ${pendingMarkets.length} markets attempts.`);
 
       // Update attempts for all pending markets
-      let updatedCount = 0;
+      let attemptsUpdated = 0;
       for (const marketState of pendingMarkets) {
-        const { error, count } = await (supabaseAdmin as any)
+        const { error } = await (supabaseAdmin as any)
           .from('market_states')
           .update({
             attempts: marketState.attempts + 1,
@@ -337,16 +338,17 @@ export async function scanEventOpeningOdds(
         if (error) {
             console.error(`[OpeningOdds] ❌ Failed to update attempts for market ${marketState.id}:`, error.message);
         } else {
-            updatedCount++;
+            attemptsUpdated++;
         }
       }
 
-      console.log(`[OpeningOdds] ✅ Updated attempts for ${updatedCount}/${pendingMarkets.length} markets`);
+      console.log(`[OpeningOdds] ✅ Updated attempts for ${attemptsUpdated}/${pendingMarkets.length} markets`);
 
-      return { captured: 0, creditsUsed };
+      return { captured: 0, attemptsUpdated, creditsUsed };
     }
 
     let capturedCount = 0;
+    let attemptsUpdated = 0;
 
     // Group markets by market_key to handle multiple point variations
     // Map API market keys back to DB keys (e.g., alternate_spreads -> spreads)
@@ -449,6 +451,7 @@ export async function scanEventOpeningOdds(
         });
 
         capturedCount++;
+        attemptsUpdated++; // Original market_state attempts incremented
       } else if (oddsVariations.length > 0) {
         // Standard processing for other markets
         const res = await upsertMarketState({
@@ -467,6 +470,7 @@ export async function scanEventOpeningOdds(
         if (!res) console.error(`[OpeningOdds] ❌ Failed to save ${dbMarketKey} for ${eventApiId}`);
         else {
             capturedCount++;
+            attemptsUpdated++;
             console.log(`[OpeningOdds] ✅ Captured ${dbMarketKey} (${oddsVariations.length} variation(s)) for ${eventApiId}`);
         }
       } else {
@@ -478,8 +482,9 @@ export async function scanEventOpeningOdds(
             last_attempt_at: new Date().toISOString(),
           } as any)
           .eq('id', marketState.id);
-          
+
         if (error) console.error(`[OpeningOdds] ❌ Failed to increment attempts for ${dbMarketKey} (event ${eventApiId}):`, error.message);
+        else attemptsUpdated++;
       }
     }
 
@@ -495,7 +500,7 @@ export async function scanEventOpeningOdds(
 
       if (isPastDeadline) {
         // Mark as not offered
-        await upsertMarketState({
+        const res = await upsertMarketState({
           event_id: eventDbId,
           market_key: marketState.market_key,
           status: 'not_offered',
@@ -507,38 +512,42 @@ export async function scanEventOpeningOdds(
           attempts: marketState.attempts + 1,
           last_attempt_at: new Date().toISOString(),
         });
+        if (res) attemptsUpdated++;
         console.log(`[OpeningOdds] ⚠️ Marked ${marketState.market_key} as not_offered for ${eventApiId}`);
       } else {
         // Just update attempts
-        await (supabaseAdmin as any)
+        const { error } = await (supabaseAdmin as any)
           .from('market_states')
           .update({
             attempts: marketState.attempts + 1,
             last_attempt_at: new Date().toISOString(),
           } as any)
           .eq('id', marketState.id);
+        if (!error) attemptsUpdated++;
       }
     }
 
-    return { captured: capturedCount, creditsUsed };
+    return { captured: capturedCount, attemptsUpdated, creditsUsed };
   } catch (error: any) {
     // Handle 404 (Event not found / Expired) gracefully
     if (error.message?.includes('404') || error.status === 404) {
       console.warn(`[OpeningOdds] Event ${eventApiId} not found (404). Marking markets as not offered.`);
-      
+
       // Mark all pending markets as not_offered to stop retrying
+      let attemptsUpdated = 0;
       for (const marketState of pendingMarkets) {
-        await (supabaseAdmin as any)
+        const { error: updateError } = await (supabaseAdmin as any)
           .from('market_states')
           .update({
             status: 'not_offered',
             last_attempt_at: new Date().toISOString(),
           } as any)
           .eq('id', marketState.id);
+        if (!updateError) attemptsUpdated++;
       }
-      
+
       // Return success with 0 captured to continue scan
-      return { captured: 0, creditsUsed: 0 };
+      return { captured: 0, attemptsUpdated, creditsUsed: 0 };
     }
 
     console.error(`[OpeningOdds] Error scanning event ${eventApiId}:`, error);
@@ -578,6 +587,7 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
     eventsScanned: 0,
     marketsChecked: 0,
     marketsCaptured: 0,
+    attemptsUpdated: 0,
     creditsUsed: 0,
     errors: [],
   };
@@ -691,6 +701,7 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
         );
 
         result.marketsCaptured += scanResult.captured;
+        result.attemptsUpdated += scanResult.attemptsUpdated;
         result.creditsUsed += scanResult.creditsUsed;
 
         // Log this API call
@@ -701,6 +712,7 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
           request_params: {
             event_id: event.api_event_id,
             markets: pendingMarkets.map(m => m.market_key),
+            attemptsUpdated: scanResult.attemptsUpdated,
           },
           credits_used: scanResult.creditsUsed,
           credits_remaining: null,
@@ -742,8 +754,30 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
     console.log(`  - Events scanned: ${result.eventsScanned}`);
     console.log(`  - Markets checked: ${result.marketsChecked}`);
     console.log(`  - Markets captured: ${result.marketsCaptured}`);
+    console.log(`  - Attempts updated: ${result.attemptsUpdated}`);
     console.log(`  - Credits used: ${result.creditsUsed}`);
     console.log(`  - Errors: ${result.errors.length}`);
+
+    // Log final summary for persistence (helps bypass Vercel 2-min log limit)
+    await logApiUsage({
+      job_name: 'scan_opening_odds_summary',
+      endpoint: 'scan_all_opening_odds',
+      sport_key: null,
+      request_params: {
+        eventsScanned: result.eventsScanned,
+        marketsChecked: result.marketsChecked,
+        marketsCaptured: result.marketsCaptured,
+        attemptsUpdated: result.attemptsUpdated,
+        errorsCount: result.errors.length,
+      },
+      credits_used: result.creditsUsed,
+      credits_remaining: null,
+      events_processed: result.eventsScanned,
+      markets_captured: result.marketsCaptured,
+      success: result.success,
+      error_message: result.errors.length > 0 ? result.errors.slice(0, 3).join('; ') : null,
+      duration_ms: duration,
+    });
 
     return result;
   } catch (error) {

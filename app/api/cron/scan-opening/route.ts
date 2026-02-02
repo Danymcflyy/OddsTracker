@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       eventsScanned: result.eventsScanned,
       marketsChecked: result.marketsChecked,
       marketsCaptured: result.marketsCaptured,
+      attemptsUpdated: result.attemptsUpdated,
       creditsUsed: result.creditsUsed,
       errorsCount: result.errors.length,
       errors: result.errors.slice(0, 5), // Include first 5 errors only
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
     console.log('  - Événements scannés:', summary.eventsScanned);
     console.log('  - Marchés vérifiés:', summary.marketsChecked);
     console.log('  - Marchés capturés:', summary.marketsCaptured);
+    console.log('  - Tentatives mises à jour:', summary.attemptsUpdated);
     console.log('  - Crédits utilisés:', summary.creditsUsed);
     console.log('  - Erreurs:', summary.errorsCount);
 
