@@ -325,13 +325,17 @@ export async function scanEventOpeningOdds(
 
       // Update attempts for all pending markets
       for (const marketState of pendingMarkets) {
-        await (supabaseAdmin as any)
+        const { error } = await (supabaseAdmin as any)
           .from('market_states')
           .update({
             attempts: marketState.attempts + 1,
             last_attempt_at: new Date().toISOString(),
           } as any)
           .eq('id', marketState.id);
+          
+        if (error) {
+            console.error(`[OpeningOdds] ❌ Failed to update attempts for market ${marketState.id}:`, error.message);
+        }
       }
 
       return { captured: 0, creditsUsed };
@@ -393,7 +397,7 @@ export async function scanEventOpeningOdds(
 
         // Store as separate market keys
         if (homeVariations.length > 0) {
-          await upsertMarketState({
+          const res = await upsertMarketState({
             event_id: eventDbId,
             market_key: 'team_totals_home',
             status: 'captured',
@@ -405,10 +409,11 @@ export async function scanEventOpeningOdds(
             attempts: marketState.attempts + 1,
             last_attempt_at: new Date().toISOString(),
           });
-          console.log(`[OpeningOdds] ✅ Captured team_totals_home (${homeVariations.length} variation(s)) for ${eventApiId}`);
+          if (!res) console.error(`[OpeningOdds] ❌ Failed to save team_totals_home for ${eventApiId}`);
+          else console.log(`[OpeningOdds] ✅ Captured team_totals_home (${homeVariations.length} variation(s)) for ${eventApiId}`);
         }
         if (awayVariations.length > 0) {
-          await upsertMarketState({
+          const res = await upsertMarketState({
             event_id: eventDbId,
             market_key: 'team_totals_away',
             status: 'captured',
@@ -420,7 +425,8 @@ export async function scanEventOpeningOdds(
             attempts: marketState.attempts + 1,
             last_attempt_at: new Date().toISOString(),
           });
-          console.log(`[OpeningOdds] ✅ Captured team_totals_away (${awayVariations.length} variation(s)) for ${eventApiId}`);
+          if (!res) console.error(`[OpeningOdds] ❌ Failed to save team_totals_away for ${eventApiId}`);
+          else console.log(`[OpeningOdds] ✅ Captured team_totals_away (${awayVariations.length} variation(s)) for ${eventApiId}`);
         }
 
         // Mark original market_state as captured
@@ -440,7 +446,7 @@ export async function scanEventOpeningOdds(
         capturedCount++;
       } else if (oddsVariations.length > 0) {
         // Standard processing for other markets
-        await upsertMarketState({
+        const res = await upsertMarketState({
           event_id: eventDbId,
           market_key: dbMarketKey,
           status: 'captured',
@@ -453,17 +459,22 @@ export async function scanEventOpeningOdds(
           last_attempt_at: new Date().toISOString(),
         });
 
-        capturedCount++;
-        console.log(`[OpeningOdds] ✅ Captured ${dbMarketKey} (${oddsVariations.length} variation(s)) for ${eventApiId}`);
+        if (!res) console.error(`[OpeningOdds] ❌ Failed to save ${dbMarketKey} for ${eventApiId}`);
+        else {
+            capturedCount++;
+            console.log(`[OpeningOdds] ✅ Captured ${dbMarketKey} (${oddsVariations.length} variation(s)) for ${eventApiId}`);
+        }
       } else {
         // Market exists but no odds yet
-        await (supabaseAdmin as any)
+        const { error } = await (supabaseAdmin as any)
           .from('market_states')
           .update({
             attempts: marketState.attempts + 1,
             last_attempt_at: new Date().toISOString(),
           } as any)
           .eq('id', marketState.id);
+          
+        if (error) console.error(`[OpeningOdds] ❌ Failed to increment attempts for ${dbMarketKey} (event ${eventApiId}):`, error.message);
       }
     }
 
