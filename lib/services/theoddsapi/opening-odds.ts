@@ -588,23 +588,52 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
       return result;
     }
 
-    // NO LIMIT: Process as many events as possible until timeout
-    console.log(`[OpeningOdds] Processing all ${eventsWithPending.length} pending events...`);
+    // Limit events per run to avoid Vercel timeout (5 min)
+    const MAX_EVENTS_PER_RUN = 200;
+    if (eventsWithPending.length > MAX_EVENTS_PER_RUN) {
+      console.log(`[OpeningOdds] Limiting to ${MAX_EVENTS_PER_RUN} events (${eventsWithPending.length} total pending)`);
+      eventsWithPending = eventsWithPending.slice(0, MAX_EVENTS_PER_RUN);
+    }
 
-    // Optimize: Fetch all pending markets in one query (avoid N+1)
+    console.log(`[OpeningOdds] Processing ${eventsWithPending.length} pending events...`);
+
+    // Optimize: Fetch all pending markets in BATCHED queries (avoid URL size limits on Vercel)
     const eventIds = eventsWithPending.map(e => e.id);
-    const { data: allPendingMarkets } = await (supabaseAdmin as any)
-      .from('market_states')
-      .select('*')
-      .in('event_id', eventIds)
-      .eq('status', 'pending');
+    const BATCH_SIZE = 50;
+    const allPendingMarkets: any[] = [];
+
+    console.log(`[OpeningOdds] Fetching market_states in batches of ${BATCH_SIZE}...`);
+
+    for (let i = 0; i < eventIds.length; i += BATCH_SIZE) {
+      const batchIds = eventIds.slice(i, i + BATCH_SIZE);
+      const { data: batchMarkets, error: batchError } = await (supabaseAdmin as any)
+        .from('market_states')
+        .select('*')
+        .in('event_id', batchIds)
+        .eq('status', 'pending');
+
+      if (batchError) {
+        console.error(`[OpeningOdds] ❌ Batch ${Math.floor(i / BATCH_SIZE) + 1} FAILED:`, batchError.message);
+        continue;
+      }
+
+      if (batchMarkets) {
+        allPendingMarkets.push(...batchMarkets);
+      }
+    }
+
+    console.log(`[OpeningOdds] ✅ CHECKPOINT 1: ${allPendingMarkets.length} market_states loaded`);
+
+    if (allPendingMarkets.length === 0) {
+      console.error(`[OpeningOdds] ❌ CRITICAL: No market_states found for ${eventIds.length} events!`);
+    }
 
     // Group markets by event_id for fast lookup
     const marketsByEvent = new Map<string, any[]>();
     // Also track min attempts per event for fair scheduling
     const attemptsByEvent = new Map<string, number>();
 
-    console.log(`[OpeningOdds] Mapping ${allPendingMarkets?.length || 0} markets to ${eventsWithPending.length} events...`);
+    console.log(`[OpeningOdds] Mapping ${allPendingMarkets.length} markets to ${eventsWithPending.length} events...`);
 
     (allPendingMarkets || []).forEach((market: any) => {
       if (!marketsByEvent.has(market.event_id)) {
@@ -634,7 +663,8 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
         return new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime();
     });
 
-    console.log(`[OpeningOdds] Re-sorted events by attempts. First event has ${attemptsByEvent.get(eventsWithPending[0]?.id)} attempts.`);
+    console.log(`[OpeningOdds] ✅ CHECKPOINT 2: Processing ${eventsWithPending.length} events with ${marketsByEvent.size} having markets`);
+    console.log(`[OpeningOdds] ✅ CHECKPOINT 3: First event attempts = ${attemptsByEvent.get(eventsWithPending[0]?.id)}`);
 
     // Process each event
     for (const event of eventsWithPending) {
