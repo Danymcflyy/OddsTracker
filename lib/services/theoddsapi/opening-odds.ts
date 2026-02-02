@@ -321,22 +321,27 @@ export async function scanEventOpeningOdds(
     const bookmakerData = event.bookmakers?.find((b: Bookmaker) => b.key === bookmaker);
 
     if (!bookmakerData) {
-      console.log(`[OpeningOdds] No data from ${bookmaker} for event ${eventApiId}`);
+      console.log(`[OpeningOdds] No data from ${bookmaker} for event ${eventApiId}. Updating ${pendingMarkets.length} markets attempts.`);
 
       // Update attempts for all pending markets
+      let updatedCount = 0;
       for (const marketState of pendingMarkets) {
-        const { error } = await (supabaseAdmin as any)
+        const { error, count } = await (supabaseAdmin as any)
           .from('market_states')
           .update({
             attempts: marketState.attempts + 1,
             last_attempt_at: new Date().toISOString(),
           } as any)
           .eq('id', marketState.id);
-          
+
         if (error) {
             console.error(`[OpeningOdds] ❌ Failed to update attempts for market ${marketState.id}:`, error.message);
+        } else {
+            updatedCount++;
         }
       }
+
+      console.log(`[OpeningOdds] ✅ Updated attempts for ${updatedCount}/${pendingMarkets.length} markets`);
 
       return { captured: 0, creditsUsed };
     }
