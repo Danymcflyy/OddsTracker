@@ -561,6 +561,13 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
 
   console.log('[OpeningOdds] Starting opening odds scan...');
 
+  // SAFETY CHECK: Ensure Service Role Key is present
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const errorMsg = '❌ CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing in environment variables. Cannot write to DB.';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+  }
+
   const result: ScanResult = {
     success: true,
     eventsScanned: 0,
@@ -597,6 +604,8 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
     // Also track min attempts per event for fair scheduling
     const attemptsByEvent = new Map<string, number>();
 
+    console.log(`[OpeningOdds] Mapping ${allPendingMarkets?.length || 0} markets to ${eventsWithPending.length} events...`);
+
     (allPendingMarkets || []).forEach((market: any) => {
       if (!marketsByEvent.has(market.event_id)) {
         marketsByEvent.set(market.event_id, []);
@@ -609,6 +618,8 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
           attemptsByEvent.set(market.event_id, market.attempts);
       }
     });
+
+    console.log(`[OpeningOdds] Map size: ${marketsByEvent.size} events have actual pending markets in market_states table.`);
 
     // RE-SORT EVENTS: Prioritize events with FEWER attempts (Round Robin)
     // This prevents "stuck" events (no odds yet) from blocking the queue forever
