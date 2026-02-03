@@ -759,7 +759,9 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
 
     // Assemble final batch
     const normalSlice = normalEvents.slice(0, MAX_EVENTS_PER_RUN - RESCUE_QUOTA);
-    const rescueSlice = highAttemptsEvents.slice(0, RESCUE_QUOTA);
+    // If few normal events, give remaining slots to rescue (minimum RESCUE_QUOTA guaranteed)
+    const rescueSlots = MAX_EVENTS_PER_RUN - normalSlice.length;
+    const rescueSlice = highAttemptsEvents.slice(0, rescueSlots);
     eventsWithPending = [...normalSlice, ...rescueSlice];
 
     console.log(`[OpeningOdds] Batch: ${normalSlice.length} normal + ${rescueSlice.length} rescue = ${eventsWithPending.length} total`);
