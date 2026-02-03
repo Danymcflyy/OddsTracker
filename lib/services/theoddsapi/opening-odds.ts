@@ -593,7 +593,32 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
   };
 
   try {
-    // Get all events with pending markets
+    // === CLEANUP: Mark pending markets on COMPLETED events as not_offered ===
+    // This must run BEFORE getEventsWithPendingMarkets() because that function
+    // only returns upcoming/live events, so completed events would be missed
+    const { data: completedWithPending, error: cleanupQueryError } = await (supabaseAdmin as any)
+      .from('market_states')
+      .select('id, event_id, events!inner(status)')
+      .eq('status', 'pending')
+      .eq('events.status', 'completed');
+
+    if (!cleanupQueryError && completedWithPending && completedWithPending.length > 0) {
+      const completedIds = completedWithPending.map((m: any) => m.id);
+      console.log(`[OpeningOdds] Cleaning up ${completedIds.length} pending markets on completed events...`);
+
+      const { error: cleanupError } = await (supabaseAdmin as any)
+        .from('market_states')
+        .update({ status: 'not_offered' })
+        .in('id', completedIds);
+
+      if (cleanupError) {
+        console.error('[OpeningOdds] Cleanup error:', cleanupError.message);
+      } else {
+        console.log(`[OpeningOdds] ✅ Cleaned up ${completedIds.length} markets`);
+      }
+    }
+
+    // Get all events with pending markets (only upcoming/live)
     let eventsWithPending = await getEventsWithPendingMarkets();
 
     console.log(`[OpeningOdds] Found ${eventsWithPending.length} events with pending markets`);
@@ -603,7 +628,7 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
       return result;
     }
 
-    // === CLEANUP: Mark past events as not_offered ===
+    // === CLEANUP: Mark events with commence_time in the past as not_offered ===
     const now = new Date();
     const pastEvents = eventsWithPending.filter(e => new Date(e.commence_time) < now);
 
