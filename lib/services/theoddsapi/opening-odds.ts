@@ -603,6 +603,31 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
       return result;
     }
 
+    // === CLEANUP: Mark past events as not_offered ===
+    const now = new Date();
+    const pastEvents = eventsWithPending.filter(e => new Date(e.commence_time) < now);
+
+    if (pastEvents.length > 0) {
+      console.log(`[OpeningOdds] Cleaning up ${pastEvents.length} past events...`);
+
+      for (const event of pastEvents) {
+        await (supabaseAdmin as any)
+          .from('market_states')
+          .update({ status: 'not_offered' })
+          .eq('event_id', event.id)
+          .eq('status', 'pending');
+      }
+
+      // Remove from processing list
+      eventsWithPending = eventsWithPending.filter(e => new Date(e.commence_time) >= now);
+      console.log(`[OpeningOdds] ${eventsWithPending.length} events remaining after cleanup`);
+
+      if (eventsWithPending.length === 0) {
+        console.log('[OpeningOdds] No future events to scan');
+        return result;
+      }
+    }
+
     // Fetch market_states for ALL events FIRST (before limiting)
     // This ensures we can sort by attempts correctly and prioritize new events
     const allEventIds = eventsWithPending.map(e => e.id);
@@ -656,28 +681,64 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
 
     console.log(`[OpeningOdds] Map size: ${marketsByEvent.size} events have actual pending markets.`);
 
-    // SORT ALL EVENTS by attempts BEFORE limiting
-    // This ensures events with 0 attempts (new) are processed first
-    eventsWithPending.sort((a, b) => {
-        const attemptsA = attemptsByEvent.get(a.id) ?? 9999;
-        const attemptsB = attemptsByEvent.get(b.id) ?? 9999;
+    // === RESCUE QUOTA SYSTEM ===
+    // Reserve slots for high-attempt events that might have odds available now
+    const MAX_EVENTS_PER_RUN = 200;
+    const RESCUE_QUOTA = 20;
+    const HIGH_ATTEMPTS_THRESHOLD = 100;
 
-        if (attemptsA !== attemptsB) {
-            return attemptsA - attemptsB; // Ascending: 0 attempts first
-        }
-        // If same attempts, prioritize imminent games
-        return new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime();
+    // Track last_attempt_at for rotation (to avoid always processing the same 20 events)
+    const lastAttemptByEvent = new Map<string, number>();
+    (allPendingMarkets || []).forEach((market: any) => {
+      const lastAttempt = market.last_attempt_at ? new Date(market.last_attempt_at).getTime() : 0;
+      const current = lastAttemptByEvent.get(market.event_id) ?? Infinity;
+      if (lastAttempt < current) {
+        lastAttemptByEvent.set(market.event_id, lastAttempt);
+      }
     });
 
-    // NOW limit to 200 events after sorting
-    const MAX_EVENTS_PER_RUN = 200;
-    if (eventsWithPending.length > MAX_EVENTS_PER_RUN) {
-      console.log(`[OpeningOdds] Limiting to ${MAX_EVENTS_PER_RUN} events (${eventsWithPending.length} total, sorted by attempts)`);
-      eventsWithPending = eventsWithPending.slice(0, MAX_EVENTS_PER_RUN);
-    }
+    // Separate normal and high-attempt events
+    const normalEvents = eventsWithPending.filter(e => {
+      const attempts = attemptsByEvent.get(e.id) ?? 0;
+      return attempts < HIGH_ATTEMPTS_THRESHOLD;
+    });
 
-    console.log(`[OpeningOdds] ✅ CHECKPOINT 2: Processing ${eventsWithPending.length} events`);
-    console.log(`[OpeningOdds] ✅ CHECKPOINT 3: First event attempts = ${attemptsByEvent.get(eventsWithPending[0]?.id)}, Last event attempts = ${attemptsByEvent.get(eventsWithPending[eventsWithPending.length - 1]?.id)}`);
+    const highAttemptsEvents = eventsWithPending.filter(e => {
+      const attempts = attemptsByEvent.get(e.id) ?? 0;
+      return attempts >= HIGH_ATTEMPTS_THRESHOLD;
+    });
+
+    // Sort normal: by attempts ASC, then by commence_time
+    normalEvents.sort((a, b) => {
+      const attemptsA = attemptsByEvent.get(a.id) ?? 0;
+      const attemptsB = attemptsByEvent.get(b.id) ?? 0;
+      if (attemptsA !== attemptsB) return attemptsA - attemptsB;
+      return new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime();
+    });
+
+    // Sort rescue: urgent first (<48h), then oldest last_attempt (rotation)
+    const nowMs = Date.now();
+    highAttemptsEvents.sort((a, b) => {
+      const hoursA = (new Date(a.commence_time).getTime() - nowMs) / 3600000;
+      const hoursB = (new Date(b.commence_time).getTime() - nowMs) / 3600000;
+
+      // Urgent events first (<48h to kickoff)
+      if (hoursA < 48 && hoursB >= 48) return -1;
+      if (hoursB < 48 && hoursA >= 48) return 1;
+
+      // Same urgency: oldest last_attempt first (rotation)
+      const lastA = lastAttemptByEvent.get(a.id) ?? 0;
+      const lastB = lastAttemptByEvent.get(b.id) ?? 0;
+      return lastA - lastB;
+    });
+
+    // Assemble final batch
+    const normalSlice = normalEvents.slice(0, MAX_EVENTS_PER_RUN - RESCUE_QUOTA);
+    const rescueSlice = highAttemptsEvents.slice(0, RESCUE_QUOTA);
+    eventsWithPending = [...normalSlice, ...rescueSlice];
+
+    console.log(`[OpeningOdds] Batch: ${normalSlice.length} normal + ${rescueSlice.length} rescue = ${eventsWithPending.length} total`);
+    console.log(`[OpeningOdds] High-attempts events waiting: ${highAttemptsEvents.length} (threshold: ${HIGH_ATTEMPTS_THRESHOLD}+ attempts)`);
 
     // Process each event
     for (const event of eventsWithPending) {
