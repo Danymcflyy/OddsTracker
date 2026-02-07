@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -88,6 +89,9 @@ export function H1ScoreModal({
       <DialogContent className="sm:max-w-[350px]">
         <DialogHeader>
           <DialogTitle>Score Mi-Temps (MT1)</DialogTitle>
+          <DialogDescription>
+            Saisissez le score a la mi-temps pour calculer les resultats des paris H1/H2.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="py-4 space-y-4">
