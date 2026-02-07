@@ -70,6 +70,24 @@ const OUTCOME_SHORT_NAMES: Record<string, string> = {
   '12': '12',
 };
 
+// === ASIAN HANDICAP HELPER FUNCTIONS ===
+
+/** Format point avec signe (+/-) */
+function formatPoint(point: number): string {
+  if (point === 0) return '0';
+  return point > 0 ? `+${point}` : `${point}`;
+}
+
+/** Calculer le point miroir pour Away (inverse du Home) */
+function getMirroredPoint(point: number): number {
+  return -1 * point;
+}
+
+/** Vérifier si c'est un marché spreads/handicap */
+function isSpreadsMarket(marketKey: string): boolean {
+  return marketKey.includes('spread');
+}
+
 function getMarketOutcomes(marketKey: string): OutcomeType[] {
   // 1X2 markets
   if (marketKey === 'h2h' || marketKey === 'h2h_h1' || marketKey === 'h2h_h2' || marketKey === 'h2h_3_way') {
@@ -247,10 +265,17 @@ export function buildFootballColumns(
 
     sortedPoints.forEach(point => {
       const marketOption = variationsMap.get(point)!;
-      let variationLabel = ''; 
-      
+      let variationLabel = '';
+
       if (point !== undefined) {
-        variationLabel = point > 0 ? `+${point}` : `${point}`;
+        // Pour les spreads/handicaps, afficher le format miroir: "-0.5/+0.5"
+        if (isSpreadsMarket(baseKey)) {
+          const homePoint = formatPoint(point);
+          const awayPoint = formatPoint(getMirroredPoint(point));
+          variationLabel = `${homePoint}/${awayPoint}`;
+        } else {
+          variationLabel = formatPoint(point);
+        }
       } else if (sortedPoints.length > 1) {
         variationLabel = 'Std';
       }
@@ -259,8 +284,16 @@ export function buildFootballColumns(
       const outcomeColumns: ColumnDef<EventWithOdds>[] = [];
 
       activeOutcomes.forEach(outcome => {
-        const outcomeLabel = getOutcomeLabel(outcome, config);
-        
+        const baseOutcomeLabel = getOutcomeLabel(outcome, config);
+
+        // Pour spreads, ajouter le handicap spécifique à chaque outcome
+        // Home a le point stocké, Away a le point miroir
+        let outcomeLabel = baseOutcomeLabel;
+        if (isSpreadsMarket(baseKey) && point !== undefined) {
+          const specificPoint = outcome === 'home' ? point : getMirroredPoint(point);
+          outcomeLabel = `${baseOutcomeLabel} (${formatPoint(specificPoint)})`;
+        }
+
         // Re-calculate borders inside loop as we iterate outcomes
         const isLastOutcomeInLoop = activeOutcomes.indexOf(outcome) === activeOutcomes.length - 1;
         
