@@ -24,12 +24,30 @@ export interface Event {
   home_team: string;
   away_team: string;
   status: 'upcoming' | 'live' | 'completed';
+  // Full-time scores
   home_score: number | null;
   away_score: number | null;
+  // Half-time scores (H1) - Optional, defaults in DB
+  home_score_h1?: number | null;
+  away_score_h1?: number | null;
+  h1_score_source?: 'none' | 'manual' | 'api';
+  h1_updated_at?: string | null;
+  h1_updated_by?: string | null;
+  // Other fields
   completed: boolean;
   last_api_update: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Score object for bet result calculations
+ */
+export interface ScoreForBetting {
+  home: number;
+  away: number;
+  home_h1?: number | null;
+  away_h1?: number | null;
 }
 
 export interface MarketState {

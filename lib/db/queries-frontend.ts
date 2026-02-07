@@ -49,8 +49,13 @@ export interface EventWithOdds extends Event {
   capture_percentage: number;
   home_score: number | null;
   away_score: number | null;
-  last_snapshot_at?: string | null; // NEW
-  snapshot_count?: number; // NEW
+  // Half-time scores - Optional
+  home_score_h1?: number | null;
+  away_score_h1?: number | null;
+  h1_score_source?: 'none' | 'manual' | 'api';
+  h1_updated_at?: string | null;
+  last_snapshot_at?: string | null;
+  snapshot_count?: number;
 }
 
 export interface FilterOptions {
@@ -196,6 +201,11 @@ export async function fetchEventsForTable(params: {
                 status: event.status,
                 home_score: event.home_score,
                 away_score: event.away_score,
+                // Half-time scores
+                home_score_h1: event.home_score_h1 ?? null,
+                away_score_h1: event.away_score_h1 ?? null,
+                h1_score_source: event.h1_score_source ?? 'none',
+                h1_updated_at: event.h1_updated_at ?? null,
                 completed: event.status === 'completed',
                 last_api_update: null,
                 created_at: '',

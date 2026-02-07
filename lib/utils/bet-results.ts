@@ -8,6 +8,9 @@ export type BetResult = 'win' | 'loss' | 'push' | 'pending';
 export interface MatchScore {
   home: number;
   away: number;
+  // Half-time scores (optional - for H1/H2 market calculations)
+  home_h1?: number | null;
+  away_h1?: number | null;
 }
 
 /**
@@ -97,82 +100,98 @@ export function getMarketResult(
     return 'pending';
   }
 
-  // SAFETY: We do NOT have Half-Time scores, only Full-Time.
-  // Calculating H1/H2 results using FT score is WRONG.
-  // We must return 'pending' for all half-time markets to avoid false positives/negatives.
-  if (marketKey.includes('_h1') || marketKey.includes('_h2')) {
-    return 'pending';
+  // Determine effective score based on market type (FT, H1, or H2)
+  let effectiveScore: { home: number; away: number };
+
+  if (marketKey.includes('_h1')) {
+    // Half-time market: use H1 scores
+    if (score.home_h1 == null || score.away_h1 == null) {
+      return 'pending'; // No H1 scores available
+    }
+    effectiveScore = { home: score.home_h1, away: score.away_h1 };
+  } else if (marketKey.includes('_h2')) {
+    // Second-half market: calculate H2 = FT - H1
+    if (score.home_h1 == null || score.away_h1 == null) {
+      return 'pending'; // Need H1 to calculate H2
+    }
+    effectiveScore = {
+      home: score.home - score.home_h1,
+      away: score.away - score.away_h1
+    };
+  } else {
+    // Full-time market: use FT scores
+    effectiveScore = { home: score.home, away: score.away };
   }
 
-  // BTTS
+  // BTTS (uses FT score always)
   if (marketKey === 'btts') {
     if (outcome === 'yes') {
-      return (score.home > 0 && score.away > 0) ? 'win' : 'loss';
+      return (effectiveScore.home > 0 && effectiveScore.away > 0) ? 'win' : 'loss';
     }
     if (outcome === 'no') {
-      return (score.home === 0 || score.away === 0) ? 'win' : 'loss';
+      return (effectiveScore.home === 0 || effectiveScore.away === 0) ? 'win' : 'loss';
     }
     return 'pending';
   }
 
   // Draw No Bet
   if (marketKey === 'draw_no_bet') {
-     if (score.home === score.away) return 'push';
-     if (outcome === 'home') return score.home > score.away ? 'win' : 'loss';
-     if (outcome === 'away') return score.away > score.home ? 'win' : 'loss';
+     if (effectiveScore.home === effectiveScore.away) return 'push';
+     if (outcome === 'home') return effectiveScore.home > effectiveScore.away ? 'win' : 'loss';
+     if (outcome === 'away') return effectiveScore.away > effectiveScore.home ? 'win' : 'loss';
      return 'pending';
   }
 
   // Double Chance
   if (marketKey === 'double_chance') {
     if (outcome === '1x') {
-      return (score.home >= score.away) ? 'win' : 'loss';
+      return (effectiveScore.home >= effectiveScore.away) ? 'win' : 'loss';
     }
     if (outcome === 'x2') {
-      return (score.away >= score.home) ? 'win' : 'loss';
+      return (effectiveScore.away >= effectiveScore.home) ? 'win' : 'loss';
     }
     if (outcome === '12') {
-      return (score.home !== score.away) ? 'win' : 'loss';
+      return (effectiveScore.home !== effectiveScore.away) ? 'win' : 'loss';
     }
     return 'pending';
   }
 
-  // 1X2 markets (no point)
+  // 1X2 markets (no point) - uses effectiveScore for H1/H2 variants
   if (marketKey === 'h2h' || marketKey === 'h2h_h1' || marketKey === 'h2h_h2') {
     if (outcome === 'over' || outcome === 'under' || outcome === 'yes' || outcome === 'no') return 'pending';
-    return calculate1X2Result(outcome as 'home' | 'draw' | 'away', score);
+    return calculate1X2Result(outcome as 'home' | 'draw' | 'away', effectiveScore);
   }
 
-  // Handicap markets
+  // Handicap markets - uses effectiveScore for H1/H2 variants
   if (marketKey === 'spreads' || marketKey === 'spreads_h1' || marketKey === 'spreads_h2' ||
       marketKey === 'alternate_spreads' || marketKey === 'alternate_spreads_h1') {
     if (point === undefined || outcome === 'draw' || outcome === 'over' || outcome === 'under' || outcome === 'yes' || outcome === 'no') {
       return 'pending';
     }
-    return calculateHandicapResult(outcome as 'home' | 'away', point, score);
+    return calculateHandicapResult(outcome as 'home' | 'away', point, effectiveScore);
   }
 
-  // Totals markets
+  // Totals markets - uses effectiveScore for H1/H2 variants
   if (marketKey === 'totals' || marketKey === 'totals_h1' || marketKey === 'totals_h2' ||
       marketKey === 'alternate_totals' || marketKey === 'alternate_totals_h1') {
     if (point === undefined || outcome === 'home' || outcome === 'away' || outcome === 'draw' || outcome === 'yes' || outcome === 'no') {
       return 'pending';
     }
-    return calculateTotalsResult(outcome as 'over' | 'under', point, score);
+    return calculateTotalsResult(outcome as 'over' | 'under', point, effectiveScore);
   }
 
   // Team totals - Home team
   if (marketKey === 'team_totals_home' || marketKey === 'alternate_team_totals_home') {
     if (point === undefined || outcome === 'draw' || outcome === 'yes' || outcome === 'no') return 'pending';
     if (outcome !== 'over' && outcome !== 'under') return 'pending';
-    return calculateTeamTotalsResult(outcome as 'over' | 'under', point, score.home);
+    return calculateTeamTotalsResult(outcome as 'over' | 'under', point, effectiveScore.home);
   }
 
   // Team totals - Away team
   if (marketKey === 'team_totals_away' || marketKey === 'alternate_team_totals_away') {
     if (point === undefined || outcome === 'draw' || outcome === 'yes' || outcome === 'no') return 'pending';
     if (outcome !== 'over' && outcome !== 'under') return 'pending';
-    return calculateTeamTotalsResult(outcome as 'over' | 'under', point, score.away);
+    return calculateTeamTotalsResult(outcome as 'over' | 'under', point, effectiveScore.away);
   }
 
   // Legacy team_totals (without home/away suffix) - return pending since we can't determine team

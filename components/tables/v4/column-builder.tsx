@@ -133,7 +133,8 @@ export function buildFootballColumns(
   visibleOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under'],
   config?: ColumnConfig,
   filters?: ColumnFiltersState,
-  onFilterChange?: (key: string, value: OddsFilterValue | undefined) => void
+  onFilterChange?: (key: string, value: OddsFilterValue | undefined) => void,
+  onOpenH1Modal?: (eventId: string, homeTeam: string, awayTeam: string, homeFT: number | null | undefined, awayFT: number | null | undefined, homeH1: number | null | undefined, awayH1: number | null | undefined) => void
 ): ColumnDef<EventWithOdds>[] {
   const columns: ColumnDef<EventWithOdds>[] = [];
 
@@ -224,6 +225,80 @@ export function buildFootballColumns(
       return <div className="px-2 py-1 text-muted-foreground text-xs">-</div>;
     },
     size: 50,
+    enableSorting: false,
+  }) as any);
+
+  // Colonne MT1 (Mi-Temps 1) - Éditable
+  columns.push(columnHelper.display({
+    id: 'score_h1',
+    header: 'MT1',
+    cell: ({ row }) => {
+      const { id, status, home_score, away_score, home_score_h1, away_score_h1, home_team, away_team } = row.original;
+
+      // Seulement pour les matchs terminés
+      if (status !== 'completed') {
+        return <div className="px-2 py-1 text-muted-foreground text-xs text-center">-</div>;
+      }
+
+      // Check for both null and undefined
+      if (home_score_h1 != null && away_score_h1 != null) {
+        // Afficher le score H1 existant avec possibilité d'éditer
+        return (
+          <div
+            className="px-2 py-1 text-xs text-center cursor-pointer hover:bg-blue-50 rounded"
+            onClick={() => onOpenH1Modal?.(id, home_team, away_team, home_score, away_score, home_score_h1, away_score_h1)}
+            title="Cliquer pour modifier"
+          >
+            <span className="font-medium">{home_score_h1}-{away_score_h1}</span>
+          </div>
+        );
+      }
+
+      // Pas de score H1 - afficher bouton pour ajouter
+      return (
+        <div
+          className="px-2 py-1 text-center cursor-pointer hover:bg-amber-50 rounded"
+          onClick={() => onOpenH1Modal?.(id, home_team, away_team, home_score, away_score, null, null)}
+          title="Ajouter score mi-temps"
+        >
+          <span className="text-amber-600 text-xs">+ MT1</span>
+        </div>
+      );
+    },
+    size: 55,
+    enableSorting: false,
+  }) as any);
+
+  // Colonne MT2 (Mi-Temps 2) - Calculée automatiquement
+  columns.push(columnHelper.display({
+    id: 'score_h2',
+    header: 'MT2',
+    cell: ({ row }) => {
+      const { status, home_score, away_score, home_score_h1, away_score_h1 } = row.original;
+
+      if (status !== 'completed') {
+        return <div className="px-2 py-1 text-muted-foreground text-xs text-center">-</div>;
+      }
+
+      // Check for both null and undefined
+      if (
+        home_score_h1 != null &&
+        away_score_h1 != null &&
+        home_score != null &&
+        away_score != null
+      ) {
+        const h2Home = home_score - home_score_h1;
+        const h2Away = away_score - away_score_h1;
+        return (
+          <div className="px-2 py-1 text-xs text-center text-muted-foreground">
+            {h2Home}-{h2Away}
+          </div>
+        );
+      }
+
+      return <div className="px-2 py-1 text-muted-foreground text-xs text-center">-</div>;
+    },
+    size: 55,
     enableSorting: false,
   }) as any);
 
@@ -491,11 +566,13 @@ function getResult(event: EventWithOdds, marketKey: string, outcome: OutcomeType
   // Ensure scores are numbers
   const homeScore = event.home_score !== null ? Number(event.home_score) : null;
   const awayScore = event.away_score !== null ? Number(event.away_score) : null;
+  const homeH1 = event.home_score_h1 !== null ? Number(event.home_score_h1) : null;
+  const awayH1 = event.away_score_h1 !== null ? Number(event.away_score_h1) : null;
 
   const score = event.status === 'completed' && homeScore !== null && awayScore !== null
-    ? { home: homeScore, away: awayScore }
+    ? { home: homeScore, away: awayScore, home_h1: homeH1, away_h1: awayH1 }
     : null;
-    
+
   return getMarketResult(marketKey, outcome, point, score);
 }
 

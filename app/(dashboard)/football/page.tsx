@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
 import { buildFootballColumns, type ColumnConfig, type OutcomeType, type ColumnFiltersState } from "@/components/tables/v4/column-builder";
 import type { OddsFilterValue } from "@/components/tables/v4/column-odds-filter";
+import { H1ScoreModal } from "@/components/tables/v4/h1-score-modal";
 import { DataTable } from "@/components/tables/data-table";
 import type { EventWithOdds, FilterOptions } from "@/lib/db/queries-frontend";
 import { DateRangeFilter } from "@/components/tables/filters/date-range-filter";
@@ -44,6 +45,18 @@ export default function FootballPage() {
   
   // Nouveaux filtres par colonne (spécifiques)
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>({});
+
+  // Modal H1 Score state
+  const [h1ModalOpen, setH1ModalOpen] = React.useState(false);
+  const [h1ModalData, setH1ModalData] = React.useState<{
+    eventId: string;
+    homeTeam: string;
+    awayTeam: string;
+    homeFT: number | null;
+    awayFT: number | null;
+    homeH1: number | null;
+    awayH1: number | null;
+  } | null>(null);
 
   // Outcomes toujours tous affichés
   const selectedOutcomes: OutcomeType[] = ['home', 'away', 'draw', 'over', 'under', 'yes', 'no', '1x', 'x2', '12'];
@@ -344,16 +357,59 @@ export default function FootballPage() {
     });
   }, []);
 
+  // H1 Modal handlers - MUST be before columns useMemo
+  const handleOpenH1Modal = React.useCallback((
+    eventId: string,
+    homeTeam: string,
+    awayTeam: string,
+    homeFT: number | null | undefined,
+    awayFT: number | null | undefined,
+    homeH1: number | null | undefined,
+    awayH1: number | null | undefined
+  ) => {
+    setH1ModalData({
+      eventId,
+      homeTeam,
+      awayTeam,
+      homeFT: homeFT ?? null,
+      awayFT: awayFT ?? null,
+      homeH1: homeH1 ?? null,
+      awayH1: awayH1 ?? null,
+    });
+    setH1ModalOpen(true);
+  }, []);
+
+  const handleSaveH1Score = React.useCallback(async (eventId: string, homeH1: number, awayH1: number) => {
+    try {
+      const response = await fetch(`/api/v4/events/${eventId}/scores`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home_score_h1: homeH1, away_score_h1: awayH1 }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save H1 score');
+      }
+
+      // Refresh events to show updated H1 scores
+      await loadEvents();
+    } catch (error) {
+      console.error('Error saving H1 score:', error);
+      throw error;
+    }
+  }, [loadEvents]);
+
   const columns = React.useMemo(() => {
     const visibleCombinations = marketPointCombinations.filter((m) => visibleMarkets.has(m.key));
     return buildFootballColumns(
-      visibleCombinations, 
-      selectedOutcomes, 
-      columnConfig, 
-      columnFilters, 
-      handleColumnFilterChange
+      visibleCombinations,
+      selectedOutcomes,
+      columnConfig,
+      columnFilters,
+      handleColumnFilterChange,
+      handleOpenH1Modal
     );
-  }, [marketPointCombinations, visibleMarkets, selectedOutcomes, columnConfig, columnFilters, handleColumnFilterChange]);
+  }, [marketPointCombinations, visibleMarkets, selectedOutcomes, columnConfig, columnFilters, handleColumnFilterChange, handleOpenH1Modal]);
 
   // Handlers pour la visibilité des colonnes
   const handleToggleMarket = React.useCallback((marketKey: string) => {
@@ -516,6 +572,22 @@ export default function FootballPage() {
         isLoading={loading}
         pageSizeOptions={[25, 50, 100]}
       />
+
+      {/* Modal H1 Score */}
+      {h1ModalData && (
+        <H1ScoreModal
+          isOpen={h1ModalOpen}
+          onClose={() => setH1ModalOpen(false)}
+          eventId={h1ModalData.eventId}
+          homeTeam={h1ModalData.homeTeam}
+          awayTeam={h1ModalData.awayTeam}
+          homeFT={h1ModalData.homeFT}
+          awayFT={h1ModalData.awayFT}
+          initialHomeH1={h1ModalData.homeH1 ?? 0}
+          initialAwayH1={h1ModalData.awayH1 ?? 0}
+          onSave={handleSaveH1Score}
+        />
+      )}
     </div>
   );
 }
