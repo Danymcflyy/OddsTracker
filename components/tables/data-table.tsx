@@ -102,8 +102,9 @@ export function DataTable<TData, TValue>({
   return (
     <div className={cn("space-y-4", className)}>
       {renderToolbar ? <div className="flex flex-col gap-3">{renderToolbar(table)}</div> : null}
-      <div className="rounded-lg border bg-white overflow-x-auto">
-        <Table>
+      {/* Container avec scrollbar en haut via CSS transform */}
+      <div className="rounded-lg border bg-white overflow-x-auto [transform:rotateX(180deg)]">
+        <Table className="[transform:rotateX(180deg)]">
           <TableHeader className="bg-white border-b">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
