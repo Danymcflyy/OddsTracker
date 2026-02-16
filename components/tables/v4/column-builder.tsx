@@ -307,8 +307,7 @@ export function buildFootballColumns(
 
   markets.forEach(market => {
     const baseKey = market.key.includes(':') ? market.key.split(':')[0] : market.key;
-    const isSpread = baseKey.includes('spread');
-    
+
     // Normalize point for Spreads to merge mirrors (e.g. +0.5 and -0.5 -> -0.5)
     // FIX: Do NOT normalize anymore. Users want to see both sides (-0.5 and +0.5) if they select them.
     // The previous logic was hiding positive handicaps.
@@ -505,56 +504,82 @@ function getOddsValue(
   point: number | undefined,
   type: 'opening' | 'closing'
 ): { value: string, isLate: boolean } {
-  const isSpread = marketKey.includes('spread');
+  const isSpread = isSpreadsMarket(marketKey);
+  const mirrorPoint = (isSpread && point !== undefined) ? getMirroredPoint(point) : undefined;
+
+  // For spreads, the column "-0.5/+0.5" means:
+  //   1(-0.5): home odds from variation point=-0.5
+  //   2(+0.5): away odds from variation point=+0.5 (the mirror)
+  // So for 'away' outcome, we must search the MIRROR point first.
+  // For 'home' outcome, we search the exact point first.
+  const primaryPoint = (isSpread && outcome === 'away' && mirrorPoint !== undefined) ? mirrorPoint : point;
+  const fallbackPoint = (isSpread && outcome === 'away' && mirrorPoint !== undefined) ? point : mirrorPoint;
 
   if (type === 'opening') {
-    // Safety check: ensure opening_odds exists and is an array
     if (!event.opening_odds || !Array.isArray(event.opening_odds)) return { value: '-', isLate: false };
 
-    // 1. Direct search
-    let marketData = event.opening_odds.find((m) => {
-      if (m.market_key !== marketKey) return false;
-      if (point !== undefined) return m.odds?.point === point;
-      return true;
-    });
+    const findOpening = (searchPt: number | undefined) => {
+      return event.opening_odds.find((m) => {
+        if (m.market_key !== marketKey) return false;
+        if (searchPt !== undefined) return m.odds?.point === searchPt;
+        return true;
+      });
+    };
 
+    // 1. Try the primary point
+    let marketData = findOpening(primaryPoint);
     if (marketData?.odds?.[outcome]) {
-        return { 
-            value: formatOddsValue(marketData.odds[outcome]),
-            isLate: !!(marketData.odds._metadata?.is_late)
-        };
+      return {
+        value: formatOddsValue(marketData.odds[outcome]),
+        isLate: !!(marketData.odds._metadata?.is_late)
+      };
     }
 
-    // FIX: Remove dangerous mirror search.
-    
+    // 2. Try the fallback point
+    if (isSpread && fallbackPoint !== undefined) {
+      marketData = findOpening(fallbackPoint);
+      if (marketData?.odds?.[outcome]) {
+        return {
+          value: formatOddsValue(marketData.odds[outcome]),
+          isLate: !!(marketData.odds._metadata?.is_late)
+        };
+      }
+    }
+
     return { value: '-', isLate: false };
   } else {
     const closingData = event.closing_odds;
     if (!closingData) return { value: '-', isLate: false };
 
     const findInVariations = (targetPoint: number | undefined, targetOutcome: string) => {
-        if (!closingData.markets_variations || !closingData.markets_variations[marketKey]) return null;
-        const variations = closingData.markets_variations[marketKey];
-        if (!Array.isArray(variations)) return null;
-        
-        const found = targetPoint !== undefined 
-          ? variations.find((v: any) => v.point === targetPoint)
-          : variations[0];
-          
-        return found?.[targetOutcome];
+      if (!closingData.markets_variations || !closingData.markets_variations[marketKey]) return null;
+      const variations = closingData.markets_variations[marketKey];
+      if (!Array.isArray(variations)) return null;
+
+      const found = targetPoint !== undefined
+        ? variations.find((v: any) => v.point === targetPoint)
+        : variations[0];
+
+      return found?.[targetOutcome];
     };
 
-    // 1. Direct search in variations
-    let val = findInVariations(point, outcome);
+    // 1. Try the primary point
+    let val = findInVariations(primaryPoint, outcome);
     if (val) return { value: formatOddsValue(val as number), isLate: false };
 
-    // FIX: Remove dangerous mirror search for closing odds as well.
+    // 2. Try the fallback point
+    if (isSpread && fallbackPoint !== undefined) {
+      val = findInVariations(fallbackPoint, outcome);
+      if (val) return { value: formatOddsValue(val as number), isLate: false };
+    }
 
-    // 2. Fallback to main markets object
+    // 3. Fallback to main markets object
     if (closingData.markets && closingData.markets[marketKey]) {
       const fallback = closingData.markets[marketKey];
-      if (point === undefined || fallback.point === point) {
-        if (fallback[outcome]) return { value: formatOddsValue(fallback[outcome] as number), isLate: false };
+      const matchesPoint = point === undefined || fallback.point === primaryPoint ||
+        (fallbackPoint !== undefined && fallback.point === fallbackPoint);
+      if (matchesPoint && fallback[outcome]) {
+        return { value: formatOddsValue(fallback[outcome] as number), isLate: false };
       }
     }
 
@@ -573,7 +598,13 @@ function getResult(event: EventWithOdds, marketKey: string, outcome: OutcomeType
     ? { home: homeScore, away: awayScore, home_h1: homeH1, away_h1: awayH1 }
     : null;
 
-  return getMarketResult(marketKey, outcome, point, score);
+  // For spreads, the away outcome uses the mirrored point for result calculation
+  // Column "-0.5/+0.5": Home uses -0.5, Away uses +0.5
+  const effectivePoint = (isSpreadsMarket(marketKey) && point !== undefined && outcome === 'away')
+    ? getMirroredPoint(point)
+    : point;
+
+  return getMarketResult(marketKey, outcome, effectivePoint, score);
 }
 
 function formatOddsValue(value: number | undefined | null): string {
