@@ -308,13 +308,14 @@ export function buildFootballColumns(
   markets.forEach(market => {
     const baseKey = market.key.includes(':') ? market.key.split(':')[0] : market.key;
 
-    // Normalize point for Spreads to merge mirrors (e.g. +0.5 and -0.5 -> -0.5)
-    // FIX: Do NOT normalize anymore. Users want to see both sides (-0.5 and +0.5) if they select them.
-    // The previous logic was hiding positive handicaps.
+    // Normalize spread points: always use the negative side as the column key.
+    // e.g. +1.75 → -1.75 so we don't create duplicate mirrored columns.
+    // Column "-1.75/+1.75" already shows both sides (home at -1.75, away at +1.75).
     let normalizedPoint = market.point;
-    // if (isSpread && normalizedPoint !== undefined && normalizedPoint > 0) {
-    //    normalizedPoint = -1 * normalizedPoint;
-    // }
+    const isSpreadMarket = isSpreadsMarket(baseKey);
+    if (isSpreadMarket && normalizedPoint !== undefined && normalizedPoint > 0) {
+      normalizedPoint = -1 * normalizedPoint;
+    }
 
     if (!marketsByBase.has(baseKey)) {
       marketsByBase.set(baseKey, new Map());
