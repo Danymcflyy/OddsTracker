@@ -308,14 +308,10 @@ export function buildFootballColumns(
   markets.forEach(market => {
     const baseKey = market.key.includes(':') ? market.key.split(':')[0] : market.key;
 
-    // Normalize spread points: always use the negative side as the column key.
-    // e.g. +1.75 → -1.75 so we don't create duplicate mirrored columns.
-    // Column "-1.75/+1.75" already shows both sides (home at -1.75, away at +1.75).
-    let normalizedPoint = market.point;
-    const isSpreadMarket = isSpreadsMarket(baseKey);
-    if (isSpreadMarket && normalizedPoint !== undefined && normalizedPoint > 0) {
-      normalizedPoint = -1 * normalizedPoint;
-    }
+    // No normalization for spread points: each variation is a distinct bet.
+    // Bournemouth -1.0 (gives goal) ≠ Bournemouth +1.0 (receives goal) → separate columns.
+    // Deduplication is guaranteed at capture time by the home-perspective pairing algorithm.
+    const normalizedPoint = market.point;
 
     if (!marketsByBase.has(baseKey)) {
       marketsByBase.set(baseKey, new Map());
@@ -508,13 +504,11 @@ function getOddsValue(
   const isSpread = isSpreadsMarket(marketKey);
   const mirrorPoint = (isSpread && point !== undefined) ? getMirroredPoint(point) : undefined;
 
-  // For spreads, the column "-0.5/+0.5" means:
-  //   1(-0.5): home odds from variation point=-0.5
-  //   2(+0.5): away odds from variation point=+0.5 (the mirror)
-  // So for 'away' outcome, we must search the MIRROR point first.
-  // For 'home' outcome, we search the exact point first.
-  const primaryPoint = (isSpread && outcome === 'away' && mirrorPoint !== undefined) ? mirrorPoint : point;
-  const fallbackPoint = (isSpread && outcome === 'away' && mirrorPoint !== undefined) ? point : mirrorPoint;
+  // For spreads: always search the exact point first, then mirror as fallback.
+  // New data: each variation has both home+away → exact search finds both directly.
+  // Old split data: variation may have only one side → fallback to mirror finds the other.
+  const primaryPoint = point;
+  const fallbackPoint = isSpread ? mirrorPoint : undefined;
 
   if (type === 'opening') {
     if (!event.opening_odds || !Array.isArray(event.opening_odds)) return { value: '-', isLate: false };
