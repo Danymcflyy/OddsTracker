@@ -140,20 +140,42 @@ function extractOddsFromMarket(
   }
 
   if (isAlternateMarket) {
-    // Group outcomes by point, normalizing spreads to Home perspective
+    // For SPREAD markets: pair by home perspective.
+    // Each home outcome at point P is paired with the away outcome at mirror point -P.
+    // This is critical for balanced matches where both teams have ± lines
+    // (e.g., Bournemouth -1.0 should pair with Brentford +1.0, NOT Brentford -1.0).
+    if (isSpread) {
+      const homeByPoint = new Map<number, number>(); // homePoint → homePrice
+      const awayByPoint = new Map<number, number>(); // awayPoint → awayPrice
+
+      for (const outcome of market.outcomes as any[]) {
+        const point = outcome.point ?? 0;
+        const name = outcome.name.toLowerCase();
+
+        if (name === homeTeamLower || containsTeamName(name, homeTeam)) {
+          homeByPoint.set(point, outcome.price);
+        } else if (name === awayTeamLower || containsTeamName(name, awayTeam)) {
+          awayByPoint.set(point, outcome.price);
+        }
+      }
+
+      const results: OpeningOdds[] = [];
+      for (const [homePoint, homePrice] of homeByPoint.entries()) {
+        // Away mirror: if home is -1.5, look for away at +1.5
+        const awayMirrorPoint = -1 * homePoint;
+        const variation: OpeningOdds = { point: homePoint, home: homePrice };
+        const awayPrice = awayByPoint.get(awayMirrorPoint);
+        if (awayPrice !== undefined) variation.away = awayPrice;
+        results.push(variation);
+      }
+      return results;
+    }
+
+    // For TOTALS and other alternate markets: group by raw point (over+under share same point)
     const byPoint = new Map<number, any[]>();
 
     for (const outcome of market.outcomes as any[]) {
-      let point = outcome.point ?? 0;
-
-      // Normalize Spread points - DISABLED to allow full range (+ and -) display
-      // if (isSpread) {
-      //  const name = outcome.name.toLowerCase();
-      //  if (name === awayTeamLower) {
-      //     point = -1 * point;
-      //  }
-      // }
-
+      const point = outcome.point ?? 0;
       if (!byPoint.has(point)) {
         byPoint.set(point, []);
       }

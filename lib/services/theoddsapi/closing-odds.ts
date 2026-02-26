@@ -49,7 +49,8 @@ function extractMarketOdds(market: ApiMarket, homeTeam?: string, awayTeam?: stri
     
     if (awayLower && name === awayLower) {
       odds.away = outcome.price;
-      if (outcome.point !== undefined) odds.point = outcome.point;
+      // Don't overwrite odds.point from away outcome — keep home perspective
+      // (away point is the mirror of home point, e.g. home=-1.25, away=+1.25)
       continue;
     }
 
