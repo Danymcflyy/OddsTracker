@@ -40,8 +40,7 @@ export async function scanEventOpeningOdds(
   eventApiId: string,
   eventDbId: string,
   sportKey: string,
-  pendingMarkets: MarketState[],
-  eventCreatedAt?: string
+  pendingMarkets: MarketState[]
 ): Promise<{ captured: number; attemptsUpdated: number; creditsUsed: number }> {
   if (pendingMarkets.length === 0) {
     return { captured: 0, attemptsUpdated: 0, creditsUsed: 0 };
@@ -116,12 +115,7 @@ export async function scanEventOpeningOdds(
     const commenceTime = new Date(event.commence_time);
     const now = new Date();
     const hoursBeforeKickoff = (commenceTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-    
-    // An event capture is only "late" if it's close to kickoff AND we've known about the event for a while (> 2 hours)
-    // If we just discovered it (e.g. 1 hour ago), it's a late discovery by the API, not a late capture by our system.
-    const createdAtTime = eventCreatedAt ? new Date(eventCreatedAt).getTime() : now.getTime();
-    const hoursSinceDiscovery = (now.getTime() - createdAtTime) / (1000 * 60 * 60);
-    const isLateCapture = hoursBeforeKickoff < 72 && hoursSinceDiscovery > 2;
+    const isLateCapture = hoursBeforeKickoff < 72; // 3 days
 
     // Process each market type (may have multiple variations)
     for (const [dbMarketKey, apiMarkets] of marketsByDbKey.entries()) {
@@ -146,11 +140,7 @@ export async function scanEventOpeningOdds(
       if (isLateCapture) {
           oddsVariations = oddsVariations.map(ov => ({
               ...ov,
-              _metadata: { 
-                is_late: true, 
-                hours_before: Math.round(hoursBeforeKickoff * 10) / 10,
-                hours_since_discovery: Math.round(hoursSinceDiscovery * 10) / 10
-              }
+              _metadata: { is_late: true, days_before: Math.round(hoursBeforeKickoff * 10) / 10 }
           }));
       }
 
@@ -543,8 +533,7 @@ export async function scanAllOpeningOdds(): Promise<ScanResult> {
           event.api_event_id,
           event.id,
           event.sport_key,
-          pendingMarkets,
-          event.created_at
+          pendingMarkets
         );
 
         result.marketsCaptured += scanResult.captured;

@@ -404,7 +404,7 @@ export function buildFootballColumns(
               );
             },
             cell: ({ row }) => {
-              const { value: val, isLate, hoursBefore } = getOddsValue(row.original, baseKey, outcome, point, 'opening');
+              const { value: val, isLate } = getOddsValue(row.original, baseKey, outcome, point, 'opening');
               const res = getResult(row.original, baseKey, outcome, point);
               
               let resultClass = "";
@@ -414,12 +414,8 @@ export function buildFootballColumns(
                 if (res === 'push') resultClass = "!bg-amber-50 !text-amber-700 border-amber-100";
               }
 
-              const tooltipText = isLate 
-                ? `Opening capturé tardivement (${hoursBefore ? Math.round(hoursBefore) + 'h avant le match' : '< 3j'})` 
-                : undefined;
-
               return (
-                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 border-r border-r-slate-100 ${resultClass} ${isLate ? 'bg-amber-50/50' : ''}`} title={tooltipText}>
+                <div className={`flex items-center justify-center w-full h-10 px-2 py-1 border-r border-r-slate-100 ${resultClass} ${isLate ? 'bg-amber-50/50' : ''}`} title={isLate ? "Opening capturé tardivement (< 3j)" : undefined}>
                   <span className={`text-xs font-mono ${isLate ? 'text-amber-600 font-medium' : ''}`}>
                     {val}
                     {isLate && <span className="text-[10px] ml-0.5">⚠️</span>}
@@ -504,7 +500,7 @@ function getOddsValue(
   outcome: string,
   point: number | undefined,
   type: 'opening' | 'closing'
-): { value: string, isLate: boolean, hoursBefore?: number } {
+): { value: string, isLate: boolean } {
   const isSpread = isSpreadsMarket(marketKey);
   const mirrorPoint = (isSpread && point !== undefined) ? getMirroredPoint(point) : undefined;
 
@@ -530,8 +526,7 @@ function getOddsValue(
     if (marketData?.odds?.[outcome]) {
       return {
         value: formatOddsValue(marketData.odds[outcome]),
-        isLate: !!(marketData.odds._metadata?.is_late),
-        hoursBefore: marketData.odds._metadata?.hours_before
+        isLate: !!(marketData.odds._metadata?.is_late)
       };
     }
 
@@ -541,8 +536,7 @@ function getOddsValue(
       if (marketData?.odds?.[outcome]) {
         return {
           value: formatOddsValue(marketData.odds[outcome]),
-          isLate: !!(marketData.odds._metadata?.is_late),
-          hoursBefore: marketData.odds._metadata?.hours_before
+          isLate: !!(marketData.odds._metadata?.is_late)
         };
       }
     }
