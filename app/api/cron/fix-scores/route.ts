@@ -7,7 +7,11 @@ export const maxDuration = 300;
 export async function GET(request: Request) {
   // SECURITY CHECK
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.SUPABASE_CRON_SECRET}`) {
+  const expectedAuth1 = `Bearer ${process.env.SUPABASE_CRON_SECRET}`;
+  const expectedAuth2 = `Bearer ${process.env.CRON_SECRET}`;
+
+  if (authHeader !== expectedAuth1 && authHeader !== expectedAuth2) {
+    console.warn('Unauthorized cron access attempt');
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
