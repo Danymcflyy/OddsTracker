@@ -131,14 +131,17 @@ export async function fixOdds() {
     .from('events')
     .select(`
       *,
-      market_states(id)
+      market_states(id, status)
     `)
     .gte('commence_time', now.toISOString())
     .lte('commence_time', seventyThreeHoursFromNow.toISOString());
 
   if (queryError) throw queryError;
 
-  const listA = (matches || []).filter((m: any) => !m.market_states || m.market_states.length === 0);
+  const listA = (matches || []).filter((m: any) => {
+    if (!m.market_states || m.market_states.length === 0) return true;
+    return m.market_states.some((ms: any) => ms.status !== 'captured');
+  });
 
   if (listA.length === 0) {
     console.log('[fix-odds] No matches without odds found.');
@@ -199,7 +202,11 @@ export async function fixOdds() {
               const dbMarketKey = mapToDbMarketKey(apiMarket.key);
               if (!trackedMarkets.includes(dbMarketKey)) continue;
 
-              const oddsVariations = extractOddsFromMarket(apiMarket, matchB.home_team, matchB.away_team);
+              let oddsVariations = extractOddsFromMarket(apiMarket, matchB.home_team, matchB.away_team);
+              if (dbMarketKey.includes('spread')) {
+                oddsVariations = mergeVariationsByPoint(oddsVariations);
+              }
+              
               if (oddsVariations.length > 0) {
                 await upsertMarketState({
                   event_id: matchA.id,
