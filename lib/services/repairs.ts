@@ -116,129 +116,69 @@ export async function fixScores() {
 
 /**
  * SCRIPT 2: fix-odds
- * Finds matches in the next 73h without odds and fetches them
+ * Réveille les matchs bloqués en 'not_offered' pour la semaine à venir
+ * et réinitialise leurs tentatives pour permettre au scanner standard de réessayer.
  */
 export async function fixOdds() {
   const startTime = Date.now();
   const now = new Date();
-  const seventyThreeHoursFromNow = new Date(now.getTime() + 73 * 60 * 60 * 1000);
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  console.log(`[fix-odds] Starting repair at ${now.toISOString()}`);
+  console.log(`[fix-odds] Démarrage de la réinitialisation des matchs not_offered à ${now.toISOString()}`);
 
-  // 1. Find matches without odds in the next 73h
-  // We check events that have no entries in market_states
-  const { data: matches, error: queryError } = await (supabaseAdmin as any)
+  // 1. Trouver les IDs des événements qui ont lieu dans les 7 prochains jours
+  const { data: upcomingEvents, error: eventsError } = await (supabaseAdmin as any)
     .from('events')
-    .select(`
-      *,
-      market_states(id, status)
-    `)
+    .select('id')
     .gte('commence_time', now.toISOString())
-    .lte('commence_time', seventyThreeHoursFromNow.toISOString());
+    .lte('commence_time', sevenDaysFromNow.toISOString());
 
-  if (queryError) throw queryError;
-
-  const listA = (matches || []).filter((m: any) => {
-    if (!m.market_states || m.market_states.length === 0) return true;
-    return m.market_states.some((ms: any) => ms.status !== 'captured');
-  });
-
-  if (listA.length === 0) {
-    console.log('[fix-odds] No matches without odds found.');
-    return { matchesFound: 0, inserted: 0, quotaRemaining: 0, durationMs: Date.now() - startTime, log: '[fix-odds] No matches without odds found.' };
+  if (eventsError) throw eventsError;
+  if (!upcomingEvents || upcomingEvents.length === 0) {
+    console.log('[fix-odds] Aucun match à venir dans les 7 prochains jours.');
+    return { eventsChecked: 0, resetCount: 0, durationMs: Date.now() - startTime };
   }
 
-  console.log(`[fix-odds] Found ${listA.length} matches without odds`);
+  const eventIds = upcomingEvents.map((e: any) => e.id);
 
-  // 2. Get odds from API
-  const client = getTheOddsApiClient();
-  const bookmaker = await getSetting('bookmaker') || 'pinnacle';
-  const region = await getSetting('region') || 'eu';
-  const trackedMarkets = await getSetting('tracked_markets') || ['h2h', 'spreads', 'totals'];
-  
-  const sportKeys = [...new Set(listA.map((m: any) => m.sport_key as string))];
-  let insertedCount = 0;
-  let totalCredits = 0;
-  let lastQuota = 0;
+  // 2. Identifier les marchés en 'not_offered' pour ces événements
+  const { data: blockedMarkets, error: marketsError } = await (supabaseAdmin as any)
+    .from('market_states')
+    .select('id')
+    .in('event_id', eventIds)
+    .eq('status', 'not_offered');
 
-  for (const sportKey of sportKeys as string[]) {
-    try {
-      // We fetch odds for the whole sport for the next 3 days to be efficient
-      const response = await client.getOdds(sportKey, {
-        regions: region,
-        markets: trackedMarkets.map(m => mapToApiMarketKey(m)).join(','),
-        bookmakers: bookmaker,
-        commenceTimeFrom: now.toISOString(),
-        commenceTimeTo: seventyThreeHoursFromNow.toISOString()
-      });
+  if (marketsError) throw marketsError;
+  if (!blockedMarkets || blockedMarkets.length === 0) {
+    console.log('[fix-odds] Aucun marché bloqué en "not_offered" trouvé.');
+    return { eventsChecked: eventIds.length, resetCount: 0, durationMs: Date.now() - startTime };
+  }
 
-      const listB = response.data;
-      const creditsUsed = response.headers.requestsLast;
-      totalCredits += creditsUsed;
-      lastQuota = response.headers.requestsRemaining;
+  const marketIdsToReset = blockedMarkets.map((m: any) => m.id);
+  console.log(`[fix-odds] Tentative de réinitialisation de ${marketIdsToReset.length} marchés...`);
 
-      await logApiUsage({
-        job_name: 'fix-odds',
-        endpoint: `/sports/${sportKey}/odds`,
-        sport_key: sportKey,
-        request_params: { markets: trackedMarkets.join(',') },
-        credits_used: creditsUsed,
-        credits_remaining: lastQuota,
-        events_processed: listB.length,
-        markets_captured: 0,
-        success: true,
-        error_message: null,
-        duration_ms: null,
-      });
+  // 3. Reset : repasser en 'pending' et remettre les attempts à 0
+  const { error: updateError } = await (supabaseAdmin as any)
+    .from('market_states')
+    .update({
+      status: 'pending',
+      attempts: 0,
+      last_attempt_at: null
+    } as any)
+    .in('id', marketIdsToReset);
 
-      // 3. Matching and Insertion
-      for (const matchA of listA.filter((m: any) => m.sport_key === sportKey)) {
-        const matchB = listB.find(m => matchTeams(matchA.home_team, matchA.away_team, m.home_team, m.away_team));
-
-        if (matchB && matchB.bookmakers) {
-          const bookmakerData = matchB.bookmakers.find(b => b.key === bookmaker);
-          if (bookmakerData && bookmakerData.markets) {
-            for (const apiMarket of bookmakerData.markets) {
-              const dbMarketKey = mapToDbMarketKey(apiMarket.key);
-              if (!trackedMarkets.includes(dbMarketKey)) continue;
-
-              let oddsVariations = extractOddsFromMarket(apiMarket, matchB.home_team, matchB.away_team);
-              if (dbMarketKey.includes('spread')) {
-                oddsVariations = mergeVariationsByPoint(oddsVariations);
-              }
-              
-              if (oddsVariations.length > 0) {
-                await upsertMarketState({
-                  event_id: matchA.id,
-                  market_key: dbMarketKey,
-                  status: 'captured',
-                  opening_odds: oddsVariations[0],
-                  opening_odds_variations: oddsVariations,
-                  opening_captured_at: new Date().toISOString(),
-                  opening_bookmaker_update: bookmakerData.last_update,
-                  deadline: matchA.commence_time,
-                  attempts: 1,
-                  last_attempt_at: new Date().toISOString(),
-                });
-                insertedCount++;
-              }
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`[fix-odds] Error for sport ${sportKey}:`, err);
-    }
+  if (updateError) {
+    console.error('[fix-odds] Erreur lors du reset des marchés :', updateError.message);
+    throw updateError;
   }
 
   const duration = Date.now() - startTime;
-  const resultLog = `[fix-odds] Sans cotes : ${listA.length} | Insérées : ${insertedCount} | Quota restant : ${lastQuota} | ${duration}ms`;
+  const resultLog = `[fix-odds] Reset terminé : ${marketIdsToReset.length} marchés réactivés sur ${eventIds.length} matchs vérifiés | ${duration}ms`;
   console.log(resultLog);
 
   return {
-    matchesFound: listA.length,
-    inserted: insertedCount,
-    quotaRemaining: lastQuota,
+    eventsChecked: eventIds.length,
+    resetCount: marketIdsToReset.length,
     durationMs: duration,
     log: resultLog
   };
