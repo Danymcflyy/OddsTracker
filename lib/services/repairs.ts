@@ -141,14 +141,22 @@ export async function fixOdds() {
 
   const eventIds = upcomingEvents.map((e: any) => e.id);
 
-  // 2. Identifier les marchés en 'not_offered' pour ces événements
-  const { data: blockedMarkets, error: marketsError } = await (supabaseAdmin as any)
-    .from('market_states')
-    .select('id')
-    .in('event_id', eventIds)
-    .eq('status', 'not_offered');
+  // 2. Identifier les marchés en 'not_offered' pour ces événements par lots
+  const chunkSize = 150;
+  let blockedMarkets: any[] = [];
+  
+  for (let i = 0; i < eventIds.length; i += chunkSize) {
+    const chunk = eventIds.slice(i, i + chunkSize);
+    const { data: marketsChunk, error: marketsError } = await (supabaseAdmin as any)
+      .from('market_states')
+      .select('id')
+      .in('event_id', chunk)
+      .eq('status', 'not_offered');
+      
+    if (marketsError) throw marketsError;
+    if (marketsChunk) blockedMarkets.push(...marketsChunk);
+  }
 
-  if (marketsError) throw marketsError;
   if (!blockedMarkets || blockedMarkets.length === 0) {
     console.log('[fix-odds] Aucun marché bloqué en "not_offered" trouvé.');
     return { eventsChecked: eventIds.length, resetCount: 0, durationMs: Date.now() - startTime };
@@ -157,19 +165,22 @@ export async function fixOdds() {
   const marketIdsToReset = blockedMarkets.map((m: any) => m.id);
   console.log(`[fix-odds] Tentative de réinitialisation de ${marketIdsToReset.length} marchés...`);
 
-  // 3. Reset : repasser en 'pending' et remettre les attempts à 0
-  const { error: updateError } = await (supabaseAdmin as any)
-    .from('market_states')
-    .update({
-      status: 'pending',
-      attempts: 0,
-      last_attempt_at: null
-    } as any)
-    .in('id', marketIdsToReset);
+  // 3. Reset : repasser en 'pending' et remettre les attempts à 0 par lots
+  for (let i = 0; i < marketIdsToReset.length; i += chunkSize) {
+    const chunk = marketIdsToReset.slice(i, i + chunkSize);
+    const { error: updateError } = await (supabaseAdmin as any)
+      .from('market_states')
+      .update({
+        status: 'pending',
+        attempts: 0,
+        last_attempt_at: null
+      } as any)
+      .in('id', chunk);
 
-  if (updateError) {
-    console.error('[fix-odds] Erreur lors du reset des marchés :', updateError.message);
-    throw updateError;
+    if (updateError) {
+      console.error(`[fix-odds] Erreur lors du reset des marchés (lot ${i / chunkSize + 1}) :`, updateError.message);
+      throw updateError;
+    }
   }
 
   const duration = Date.now() - startTime;
