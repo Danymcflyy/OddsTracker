@@ -102,13 +102,33 @@ export function extractOddsFromMarket(
         if (name === homeTeamLower || containsTeamName(name, homeTeam)) homeByPoint.set(point, outcome.price);
         else if (name === awayTeamLower || containsTeamName(name, awayTeam)) awayByPoint.set(point, outcome.price);
       }
+
+      // FIX 1 (J League missing handicaps): Collect all unique handicap points
+      // from BOTH home AND away sides, not just home.
+      const allHomePoints = new Set<number>(homeByPoint.keys());
+      for (const awayPoint of awayByPoint.keys()) {
+        allHomePoints.add(-1 * awayPoint); // Mirror away point to home reference frame
+      }
+
       const results: OpeningOdds[] = [];
-      for (const [homePoint, homePrice] of homeByPoint.entries()) {
-        const awayMirrorPoint = -1 * homePoint;
-        const variation: OpeningOdds = { point: homePoint, home: homePrice };
-        const awayPrice = awayByPoint.get(awayMirrorPoint);
-        if (awayPrice !== undefined) variation.away = awayPrice;
-        results.push(variation);
+      // FIX 2 (Sunderland duplicates): Track seen canonical values (absolute point)
+      // to prevent mirrored pairs like {point: 1.5} and {point: -1.5} both appearing.
+      const seenCanonical = new Set<number>();
+
+      for (const homePoint of allHomePoints) {
+        const canonicalKey = Math.abs(homePoint);
+        if (seenCanonical.has(canonicalKey)) continue;
+        seenCanonical.add(canonicalKey);
+
+        const homePrice = homeByPoint.get(homePoint);
+        const awayPrice = awayByPoint.get(-1 * homePoint);
+
+        if (homePrice !== undefined || awayPrice !== undefined) {
+          const variation: OpeningOdds = { point: homePoint };
+          if (homePrice !== undefined) variation.home = homePrice;
+          if (awayPrice !== undefined) variation.away = awayPrice;
+          results.push(variation);
+        }
       }
       return results;
     }

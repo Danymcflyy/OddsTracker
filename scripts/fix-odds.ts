@@ -14,8 +14,8 @@ async function main() {
     console.log('');
     console.log(result.log);
     
-    if (result.inserted > 0) {
-      console.log(`🎉 Successfully inserted odds for ${result.inserted} markets!`);
+    if (result.resetCount > 0) {
+      console.log(`🎉 Successfully reset ${result.resetCount} markets!`);
     }
 
     console.log('✅ Repair completed');
