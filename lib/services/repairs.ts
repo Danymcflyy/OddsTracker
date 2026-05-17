@@ -131,7 +131,8 @@ export async function fixOdds() {
     .from('events')
     .select('id, api_event_id, sport_key, commence_time, home_team, away_team')
     .gte('commence_time', now.toISOString())
-    .lte('commence_time', sevenDaysFromNow.toISOString());
+    .lte('commence_time', sevenDaysFromNow.toISOString())
+    .in('status', ['upcoming', 'live']);
 
   if (eventsError) throw eventsError;
   if (!upcomingEvents || upcomingEvents.length === 0) {
@@ -340,31 +341,22 @@ export async function fixOdds() {
                     error.response?.status === 404;
 
       if (is404) {
-        console.warn(`[fix-odds] ⚠️ Event ${eventApiId} (${event.home_team} vs ${event.away_team}) not found on API (404 / EVENT_NOT_FOUND). It may have expired or is invalid.`);
+        console.warn(`[fix-odds] ⚠️ Event ${eventApiId} (${event.home_team} vs ${event.away_team}) not found on API (404 / EVENT_NOT_FOUND). Marking event as completed and its markets as "not_offered".`);
         
-        // Mark pending markets as not_offered if the event is not found (404) to stop querying them
-        if (label === 'pending') {
-          for (const marketState of marketsToCheck) {
-            await (supabaseAdmin as any)
-              .from('market_states')
-              .update({
-                status: 'not_offered',
-                attempts: marketState.attempts + 1,
-                last_attempt_at: new Date().toISOString(),
-              } as any)
-              .eq('id', marketState.id);
-          }
-        } else {
-          for (const marketState of marketsToCheck) {
-            await (supabaseAdmin as any)
-              .from('market_states')
-              .update({
-                attempts: marketState.attempts + 1,
-                last_attempt_at: new Date().toISOString(),
-              } as any)
-              .eq('id', marketState.id);
-          }
-        }
+        // 1. Mark event as completed to remove it from future search queries
+        await (supabaseAdmin as any)
+          .from('events')
+          .update({ status: 'completed', completed: true } as any)
+          .eq('id', eventDbId);
+
+        // 2. Mark all markets of this event as not_offered
+        await (supabaseAdmin as any)
+          .from('market_states')
+          .update({
+            status: 'not_offered',
+            last_attempt_at: new Date().toISOString(),
+          } as any)
+          .eq('event_id', eventDbId);
       } else {
         console.error(`[fix-odds] ❌ Error checking odds for event ${eventApiId}:`, error);
         
