@@ -14,6 +14,157 @@ function matchTeams(homeA: string, awayA: string, homeB: string, awayB: string):
 }
 
 /**
+ * SCRIPT 0: fixDuplicates
+ * Trouve les doublons de matchs (mêmes équipes à +/- 4 jours) et interroge l'API.
+ * Supprime proprement le doublon si l'API renvoie 404 (Ghost).
+ */
+export async function fixDuplicates() {
+  const startTime = Date.now();
+  const now = new Date();
+  
+  console.log(`[fix-duplicates] Starting duplicate detection at ${now.toISOString()}`);
+  
+  // 1. Fetch all active events (upcoming or live)
+  const { data: activeEvents, error } = await (supabaseAdmin as any)
+    .from('events')
+    .select('id, api_event_id, sport_key, commence_time, home_team, away_team, status')
+    .in('status', ['upcoming', 'live']);
+
+  if (error) {
+    console.error('[fix-duplicates] Error fetching active events:', error);
+    return { detected: 0, cleaned: 0, durationMs: Date.now() - startTime };
+  }
+
+  if (!activeEvents || activeEvents.length === 0) {
+    console.log('[fix-duplicates] No active events found.');
+    return { detected: 0, cleaned: 0, durationMs: Date.now() - startTime };
+  }
+
+  // 2. Group events by canonical team names key
+  const duplicatesGrouped = new Map<string, any[]>();
+  for (const event of activeEvents) {
+    const key = `${event.home_team.toLowerCase().trim()}|${event.away_team.toLowerCase().trim()}`;
+    if (!duplicatesGrouped.has(key)) {
+      duplicatesGrouped.set(key, []);
+    }
+    duplicatesGrouped.get(key)!.push(event);
+  }
+
+  // Filter groups with multiple events within a 4-day window
+  const actualDuplicates: any[][] = [];
+  for (const [key, events] of duplicatesGrouped.entries()) {
+    if (events.length > 1) {
+      // Sort chronologically
+      events.sort((a, b) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime());
+      
+      let currentGroup = [events[0]];
+      for (let i = 1; i < events.length; i++) {
+        const prev = events[i - 1];
+        const curr = events[i];
+        const diffMs = Math.abs(new Date(curr.commence_time).getTime() - new Date(prev.commence_time).getTime());
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        
+        if (diffDays <= 4) {
+          currentGroup.push(curr);
+        } else {
+          if (currentGroup.length > 1) {
+            actualDuplicates.push(currentGroup);
+          }
+          currentGroup = [curr];
+        }
+      }
+      if (currentGroup.length > 1) {
+        actualDuplicates.push(currentGroup);
+      }
+    }
+  }
+
+  if (actualDuplicates.length === 0) {
+    console.log('[fix-duplicates] No duplicate matches detected.');
+    return { detected: 0, cleaned: 0, durationMs: Date.now() - startTime };
+  }
+
+  console.log(`[fix-duplicates] Detected ${actualDuplicates.length} potential duplicate match groups.`);
+
+  const client = getTheOddsApiClient();
+  const bookmaker = await getSetting('bookmaker') || 'pinnacle';
+  const region = await getSetting('region') || 'eu';
+  
+  let cleanedCount = 0;
+  let totalDetected = 0;
+
+  for (const group of actualDuplicates) {
+    totalDetected += group.length;
+    console.log(`[fix-duplicates] Group: ${group[0].home_team} vs ${group[0].away_team} (${group.length} entries)`);
+    
+    let validEvents: any[] = [];
+    let ghostEvents: any[] = [];
+
+    for (const event of group) {
+      console.log(`  - Verifying Event ID: ${event.id} | API ID: ${event.api_event_id} | Time: ${event.commence_time}`);
+      
+      try {
+        // Minimal lookup to check if event exists on the API
+        await client.getEventOdds(event.sport_key, event.api_event_id, {
+          regions: region,
+          bookmakers: bookmaker,
+          markets: 'h2h',
+        });
+        
+        console.log(`    -> API ID ${event.api_event_id} is VALID.`);
+        validEvents.push(event);
+      } catch (err: any) {
+        const is404 = err.message?.includes('404') || 
+                      err.message?.includes('EVENT_NOT_FOUND') ||
+                      err.status === 404 || 
+                      err.response?.status === 404;
+
+        if (is404) {
+          console.log(`    -> API ID ${event.api_event_id} is GHOST (404).`);
+          ghostEvents.push(event);
+        } else {
+          console.error(`    -> Error checking ${event.api_event_id}:`, err.message || err);
+          validEvents.push(event);
+        }
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    // Clean up ghost duplicates
+    for (const ghost of ghostEvents) {
+      console.log(`  [fix-duplicates] 🧹 Cleaning up ghost event ${ghost.id} (${ghost.api_event_id})...`);
+      
+      await (supabaseAdmin as any)
+        .from('market_states')
+        .delete()
+        .eq('event_id', ghost.id);
+
+      await (supabaseAdmin as any)
+        .from('events')
+        .delete()
+        .eq('id', ghost.id);
+
+      cleanedCount++;
+      console.log(`    -> Deleted ghost event from database.`);
+    }
+
+    if (validEvents.length > 1) {
+      console.warn(`  [fix-duplicates] ⚠️ Multiple valid events found on API. Keeping all valid entries active.`);
+    }
+  }
+
+  const duration = Date.now() - startTime;
+  console.log(`[fix-duplicates] Completed: Detected ${totalDetected} entries, cleaned ${cleanedCount} ghost duplicates | ${duration}ms`);
+  
+  return {
+    detected: totalDetected,
+    cleaned: cleanedCount,
+    durationMs: duration
+  };
+}
+
+/**
  * SCRIPT 1: fix-scores
  * Finds matches stuck in 'upcoming' and updates them with scores
  */
@@ -21,6 +172,13 @@ export async function fixScores() {
   const startTime = Date.now();
   const now = new Date();
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  // Clean duplicates first to prevent ghost match issues
+  try {
+    await fixDuplicates();
+  } catch (dupErr) {
+    console.error('[fix-scores] Error running pre-repair duplicates fix:', dupErr);
+  }
 
   console.log(`[fix-scores] Starting repair at ${now.toISOString()}`);
 
@@ -123,6 +281,13 @@ export async function fixOdds() {
   const startTime = Date.now();
   const now = new Date();
   const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  // Clean duplicates first to prevent ghost match issues
+  try {
+    await fixDuplicates();
+  } catch (dupErr) {
+    console.error('[fix-odds] Error running pre-repair duplicates fix:', dupErr);
+  }
 
   console.log(`[fix-odds] Starting proactive API search at ${now.toISOString()}`);
 
