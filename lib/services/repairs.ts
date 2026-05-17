@@ -318,7 +318,16 @@ export async function fixOdds() {
       // Small delay between calls
       await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error: any) {
-      console.error(`[fix-odds] Error checking odds for event ${eventApiId}:`, error);
+      const is404 = error.message?.includes('404') || 
+                    error.message?.includes('EVENT_NOT_FOUND') ||
+                    error.status === 404 || 
+                    error.response?.status === 404;
+
+      if (is404) {
+        console.warn(`[fix-odds] ⚠️ Event ${eventApiId} (${event.home_team} vs ${event.away_team}) not found on API (404 / EVENT_NOT_FOUND). It may have expired or is invalid. Keeping "not_offered".`);
+      } else {
+        console.error(`[fix-odds] ❌ Error checking odds for event ${eventApiId}:`, error);
+      }
 
       // Increment attempts even on error
       for (const marketState of pendingMarkets) {
