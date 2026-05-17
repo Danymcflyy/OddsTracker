@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { formatLeagueTitle } from '@/lib/utils';
 import { MARKET_NAMES, MVP_MARKETS, MARKET_GROUPS } from '@/lib/api/theoddsapi/constants';
 
 interface Sport {
@@ -186,7 +187,7 @@ export default function DataCollectionSettingsPage() {
                   onCheckedChange={() => toggleSport(sport.api_key)}
                 />
                 <Label htmlFor={sport.api_key} className="cursor-pointer">
-                  {sport.title}
+                  {formatLeagueTitle(sport.title)}
                 </Label>
               </div>
             ))}

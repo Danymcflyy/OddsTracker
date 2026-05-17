@@ -124,24 +124,26 @@ export async function fixOdds() {
   const now = new Date();
   const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  console.log(`[fix-odds] Démarrage de la réinitialisation des matchs not_offered à ${now.toISOString()}`);
+  console.log(`[fix-odds] Starting proactive API search for "not_offered" markets at ${now.toISOString()}`);
 
-  // 1. Trouver les IDs des événements qui ont lieu dans les 7 prochains jours
+  // 1. Find upcoming events in next 7 days with their details
   const { data: upcomingEvents, error: eventsError } = await (supabaseAdmin as any)
     .from('events')
-    .select('id')
+    .select('id, api_event_id, sport_key, commence_time, home_team, away_team')
     .gte('commence_time', now.toISOString())
     .lte('commence_time', sevenDaysFromNow.toISOString());
 
   if (eventsError) throw eventsError;
   if (!upcomingEvents || upcomingEvents.length === 0) {
-    console.log('[fix-odds] Aucun match à venir dans les 7 prochains jours.');
-    return { eventsChecked: 0, resetCount: 0, durationMs: Date.now() - startTime };
+    console.log('[fix-odds] No upcoming matches in the next 7 days.');
+    return { eventsChecked: 0, resetCount: 0, rescuedCount: 0, durationMs: Date.now() - startTime, log: '[fix-odds] No upcoming matches.' };
   }
 
   const eventIds = upcomingEvents.map((e: any) => e.id);
+  const eventsMap = new Map<string, any>();
+  upcomingEvents.forEach((e: any) => eventsMap.set(e.id, e));
 
-  // 2. Identifier les marchés en 'not_offered' pour ces événements par lots
+  // 2. Identify 'not_offered' markets for these events
   const chunkSize = 150;
   let blockedMarkets: any[] = [];
   
@@ -149,7 +151,7 @@ export async function fixOdds() {
     const chunk = eventIds.slice(i, i + chunkSize);
     const { data: marketsChunk, error: marketsError } = await (supabaseAdmin as any)
       .from('market_states')
-      .select('id')
+      .select('*')
       .in('event_id', chunk)
       .eq('status', 'not_offered');
       
@@ -158,38 +160,188 @@ export async function fixOdds() {
   }
 
   if (!blockedMarkets || blockedMarkets.length === 0) {
-    console.log('[fix-odds] Aucun marché bloqué en "not_offered" trouvé.');
-    return { eventsChecked: eventIds.length, resetCount: 0, durationMs: Date.now() - startTime };
+    console.log('[fix-odds] No markets in "not_offered" status found.');
+    return { eventsChecked: eventIds.length, resetCount: 0, rescuedCount: 0, durationMs: Date.now() - startTime, log: '[fix-odds] No not_offered markets found.' };
   }
 
-  const marketIdsToReset = blockedMarkets.map((m: any) => m.id);
-  console.log(`[fix-odds] Tentative de réinitialisation de ${marketIdsToReset.length} marchés...`);
+  console.log(`[fix-odds] Found ${blockedMarkets.length} "not_offered" markets. Querying the-odds-api...`);
 
-  // 3. Reset : repasser en 'pending' et remettre les attempts à 0 par lots
-  for (let i = 0; i < marketIdsToReset.length; i += chunkSize) {
-    const chunk = marketIdsToReset.slice(i, i + chunkSize);
-    const { error: updateError } = await (supabaseAdmin as any)
-      .from('market_states')
-      .update({
-        status: 'pending',
-        attempts: 0,
-        last_attempt_at: null
-      } as any)
-      .in('id', chunk);
+  // Group blocked markets by event_id
+  const marketsByEvent = new Map<string, any[]>();
+  blockedMarkets.forEach((m: any) => {
+    if (!marketsByEvent.has(m.event_id)) {
+      marketsByEvent.set(m.event_id, []);
+    }
+    marketsByEvent.get(m.event_id)!.push(m);
+  });
 
-    if (updateError) {
-      console.error(`[fix-odds] Erreur lors du reset des marchés (lot ${i / chunkSize + 1}) :`, updateError.message);
-      throw updateError;
+  const client = getTheOddsApiClient();
+  const bookmaker = await getSetting('bookmaker') || 'pinnacle';
+  const region = await getSetting('region') || 'eu';
+
+  let rescuedCount = 0;
+  let checkedCount = 0;
+  let totalCreditsUsed = 0;
+
+  for (const [eventDbId, pendingMarkets] of marketsByEvent.entries()) {
+    const event = eventsMap.get(eventDbId);
+    if (!event) continue;
+
+    checkedCount++;
+    const eventApiId = event.api_event_id;
+    const sportKey = event.sport_key;
+
+    // Map DB market keys to API market keys
+    const apiMarketKeys = pendingMarkets.map(m => mapToApiMarketKey(m.market_key));
+    const uniqueApiMarketKeys = [...new Set(apiMarketKeys)];
+
+    console.log(`[fix-odds] [${checkedCount}/${marketsByEvent.size}] Checking event ${eventApiId} (${event.home_team} vs ${event.away_team}) for markets: ${uniqueApiMarketKeys.join(', ')}`);
+
+    try {
+      const response = await client.getEventOdds(sportKey, eventApiId, {
+        regions: region,
+        markets: uniqueApiMarketKeys.join(','),
+        bookmakers: bookmaker,
+        oddsFormat: 'decimal',
+      });
+
+      const eventOddsData = response.data;
+      const creditsUsed = response.headers.requestsLast || 0;
+      totalCreditsUsed += creditsUsed;
+
+      const bookmakerData = eventOddsData.bookmakers?.find((b: any) => b.key === bookmaker);
+
+      if (!bookmakerData) {
+        console.log(`[fix-odds] No data from ${bookmaker} for event ${eventApiId}. Keeping "not_offered" status.`);
+        
+        // Just update attempts and last_attempt_at
+        for (const marketState of pendingMarkets) {
+          await (supabaseAdmin as any)
+            .from('market_states')
+            .update({
+              attempts: marketState.attempts + 1,
+              last_attempt_at: new Date().toISOString(),
+            } as any)
+            .eq('id', marketState.id);
+        }
+        continue;
+      }
+
+      // Group API markets by mapped DB keys
+      const apiMarketsByDbKey = new Map<string, any[]>();
+      for (const apiMarket of bookmakerData.markets) {
+        const dbMarketKey = mapToDbMarketKey(apiMarket.key);
+        if (!apiMarketsByDbKey.has(dbMarketKey)) {
+          apiMarketsByDbKey.set(dbMarketKey, []);
+        }
+        apiMarketsByDbKey.get(dbMarketKey)!.push(apiMarket);
+      }
+
+      // Process each market that was 'not_offered'
+      for (const marketState of pendingMarkets) {
+        const dbMarketKey = marketState.market_key;
+        const apiMarkets = apiMarketsByDbKey.get(dbMarketKey);
+
+        if (apiMarkets && apiMarkets.length > 0) {
+          let oddsVariations = [];
+          for (const apiMarket of apiMarkets) {
+            const odds = extractOddsFromMarket(apiMarket, event.home_team, event.away_team);
+            oddsVariations.push(...odds);
+          }
+
+          if (dbMarketKey.includes('spread')) {
+            oddsVariations = mergeVariationsByPoint(oddsVariations);
+          }
+
+          if (oddsVariations.length > 0) {
+            // Market is available! Save opening odds and set status to captured
+            const res = await upsertMarketState({
+              event_id: eventDbId,
+              market_key: dbMarketKey,
+              status: 'captured',
+              opening_odds: oddsVariations[0],
+              opening_odds_variations: oddsVariations,
+              opening_captured_at: new Date().toISOString(),
+              opening_bookmaker_update: apiMarkets[0].last_update,
+              deadline: marketState.deadline,
+              attempts: marketState.attempts + 1,
+              last_attempt_at: new Date().toISOString(),
+            });
+
+            if (res) {
+              rescuedCount++;
+              console.log(`[fix-odds] 🎉 SUCCESS! Captured and rescued "${dbMarketKey}" for ${eventApiId}`);
+            } else {
+              console.error(`[fix-odds] ❌ Failed to save "${dbMarketKey}" state for ${eventApiId}`);
+            }
+          } else {
+            // Market returned but empty odds
+            await (supabaseAdmin as any)
+              .from('market_states')
+              .update({
+                attempts: marketState.attempts + 1,
+                last_attempt_at: new Date().toISOString(),
+              } as any)
+              .eq('id', marketState.id);
+          }
+        } else {
+          // Market still not offered
+          console.log(`[fix-odds] Market "${dbMarketKey}" still not returned by API. Keeping "not_offered".`);
+          await (supabaseAdmin as any)
+            .from('market_states')
+            .update({
+              attempts: marketState.attempts + 1,
+              last_attempt_at: new Date().toISOString(),
+            } as any)
+            .eq('id', marketState.id);
+        }
+      }
+
+      // Log successful API usage
+      await logApiUsage({
+        job_name: 'fix-odds-check',
+        endpoint: `/sports/${sportKey}/events/${eventApiId}/odds`,
+        sport_key: sportKey,
+        request_params: {
+          event_id: eventApiId,
+          markets: pendingMarkets.map(m => m.market_key),
+        },
+        credits_used: creditsUsed,
+        credits_remaining: null,
+        events_processed: 1,
+        markets_captured: rescuedCount,
+        success: true,
+        error_message: null,
+        duration_ms: null,
+      });
+
+      // Small delay between calls
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (error: any) {
+      console.error(`[fix-odds] Error checking odds for event ${eventApiId}:`, error);
+
+      // Increment attempts even on error
+      for (const marketState of pendingMarkets) {
+        await (supabaseAdmin as any)
+          .from('market_states')
+          .update({
+            attempts: marketState.attempts + 1,
+            last_attempt_at: new Date().toISOString(),
+          } as any)
+          .eq('id', marketState.id);
+      }
     }
   }
 
   const duration = Date.now() - startTime;
-  const resultLog = `[fix-odds] Reset terminé : ${marketIdsToReset.length} marchés réactivés sur ${eventIds.length} matchs vérifiés | ${duration}ms`;
+  const resultLog = `[fix-odds] Proactive search finished: Checked ${checkedCount} events, rescued ${rescuedCount} markets, used ${totalCreditsUsed} API credits | ${duration}ms`;
   console.log(resultLog);
 
   return {
-    eventsChecked: eventIds.length,
-    resetCount: marketIdsToReset.length,
+    eventsChecked: checkedCount,
+    resetCount: rescuedCount, // Returned as resetCount for compatibility
+    rescuedCount,
+    creditsUsed: totalCreditsUsed,
     durationMs: duration,
     log: resultLog
   };

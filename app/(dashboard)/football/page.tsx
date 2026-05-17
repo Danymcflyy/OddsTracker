@@ -15,6 +15,7 @@ import { ColumnVisibilitySelector } from "@/components/tables/column-visibility-
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { formatLeagueTitle } from "@/lib/utils";
 
 const STORAGE_KEY_VISIBLE_MARKETS = "oddstracker_visible_markets";
 
@@ -529,7 +530,7 @@ export default function FootballPage() {
                 <SelectItem value="all">Tous les championnats</SelectItem>
                 {(filterOptions.sports || []).map((sport) => (
                   <SelectItem key={sport.api_key} value={sport.api_key}>
-                    {sport.title}
+                    {formatLeagueTitle(sport.title)}
                   </SelectItem>
                 ))}
               </SelectContent>
