@@ -22,36 +22,58 @@ export async function fixDuplicates() {
   const startTime = Date.now();
   const now = new Date();
   
-  console.log(`[fix-duplicates] Starting duplicate detection at ${now.toISOString()}`);
+  console.log(`[fix-duplicates] Starting paginated database-only duplicate detection at ${now.toISOString()}`);
   
-  // 1. Fetch all active events (upcoming or live)
-  const { data: activeEvents, error } = await (supabaseAdmin as any)
-    .from('events')
-    .select('id, api_event_id, sport_key, commence_time, home_team, away_team, status')
-    .in('status', ['upcoming', 'live']);
+  // 1. Fetch ALL events using pagination to bypass Supabase's 1000-row default cap
+  let allEvents: any[] = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
 
-  if (error) {
-    console.error('[fix-duplicates] Error fetching active events:', error);
+  while (hasMore) {
+    const { data: pageEvents, error } = await (supabaseAdmin as any)
+      .from('events')
+      .select('id, api_event_id, sport_key, commence_time, home_team, away_team, status, completed, home_score, away_score')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) {
+      console.error(`[fix-duplicates] Error fetching events page ${page}:`, error);
+      return { detected: 0, cleaned: 0, durationMs: Date.now() - startTime };
+    }
+
+    if (!pageEvents || pageEvents.length === 0) {
+      hasMore = false;
+    } else {
+      allEvents.push(...pageEvents);
+      if (pageEvents.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    }
+  }
+
+  console.log(`[fix-duplicates] Fetched ${allEvents.length} total events for analysis.`);
+
+  if (allEvents.length === 0) {
     return { detected: 0, cleaned: 0, durationMs: Date.now() - startTime };
   }
 
-  if (!activeEvents || activeEvents.length === 0) {
-    console.log('[fix-duplicates] No active events found.');
-    return { detected: 0, cleaned: 0, durationMs: Date.now() - startTime };
-  }
-
-  // 2. Group events by canonical team names key
+  // 2. Group events by canonical team names key (sorted alphabetically to support reversed home/away)
+  const norm = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+  
   const duplicatesGrouped = new Map<string, any[]>();
-  for (const event of activeEvents) {
-    const key = `${event.home_team.toLowerCase().trim()}|${event.away_team.toLowerCase().trim()}`;
+  for (const event of allEvents) {
+    const teams = [norm(event.home_team), norm(event.away_team)].sort();
+    const key = teams.join('|');
     if (!duplicatesGrouped.has(key)) {
       duplicatesGrouped.set(key, []);
     }
     duplicatesGrouped.get(key)!.push(event);
   }
 
-  // Filter groups with multiple events within a 4-day window
-  const actualDuplicates: any[][] = [];
+  // 3. Detect actual duplicates within a 4-day window
+  const duplicateGroups: any[][] = [];
   for (const [key, events] of duplicatesGrouped.entries()) {
     if (events.length > 1) {
       // Sort chronologically
@@ -68,94 +90,122 @@ export async function fixDuplicates() {
           currentGroup.push(curr);
         } else {
           if (currentGroup.length > 1) {
-            actualDuplicates.push(currentGroup);
+            duplicateGroups.push(currentGroup);
           }
           currentGroup = [curr];
         }
       }
       if (currentGroup.length > 1) {
-        actualDuplicates.push(currentGroup);
+        duplicateGroups.push(currentGroup);
       }
     }
   }
 
-  if (actualDuplicates.length === 0) {
+  if (duplicateGroups.length === 0) {
     console.log('[fix-duplicates] No duplicate matches detected.');
     return { detected: 0, cleaned: 0, durationMs: Date.now() - startTime };
   }
 
-  console.log(`[fix-duplicates] Detected ${actualDuplicates.length} potential duplicate match groups.`);
+  console.log(`[fix-duplicates] Detected ${duplicateGroups.length} duplicate match groups.`);
 
-  const client = getTheOddsApiClient();
-  const bookmaker = await getSetting('bookmaker') || 'pinnacle';
-  const region = await getSetting('region') || 'eu';
-  
+  // Collect all suspected event IDs
+  const allSuspectedIds: string[] = [];
+  duplicateGroups.forEach(group => {
+    group.forEach(event => {
+      allSuspectedIds.push(event.id);
+    });
+  });
+
+  // 4. Batch query captured market states for all suspected event IDs
+  const chunkSize = 100;
+  const marketStatesList: any[] = [];
+  for (let i = 0; i < allSuspectedIds.length; i += chunkSize) {
+    const chunk = allSuspectedIds.slice(i, i + chunkSize);
+    const { data: msChunk, error: msError } = await (supabaseAdmin as any)
+      .from('market_states')
+      .select('event_id, status')
+      .in('event_id', chunk);
+
+    if (msError) {
+      console.error('[fix-duplicates] Error fetching market states for duplicate group check:', msError);
+    } else if (msChunk) {
+      marketStatesList.push(...msChunk);
+    }
+  }
+
+  // Count captured markets per event
+  const capturedCounts = new Map<string, number>();
+  marketStatesList.forEach((ms: any) => {
+    if (ms.status === 'captured') {
+      capturedCounts.set(ms.event_id, (capturedCounts.get(ms.event_id) || 0) + 1);
+    }
+  });
+
   let cleanedCount = 0;
   let totalDetected = 0;
+  const idsToDelete: string[] = [];
 
-  for (const group of actualDuplicates) {
+  // 5. Evaluate each duplicate group
+  for (const group of duplicateGroups) {
     totalDetected += group.length;
-    console.log(`[fix-duplicates] Group: ${group[0].home_team} vs ${group[0].away_team} (${group.length} entries)`);
     
-    let validEvents: any[] = [];
-    let ghostEvents: any[] = [];
+    // Score each event in the group
+    const scoredEvents = group.map(event => {
+      const capturedCount = capturedCounts.get(event.id) || 0;
+      let score = capturedCount * 10;
 
-    for (const event of group) {
-      console.log(`  - Verifying Event ID: ${event.id} | API ID: ${event.api_event_id} | Time: ${event.commence_time}`);
-      
-      try {
-        // Minimal lookup to check if event exists on the API
-        await client.getEventOdds(event.sport_key, event.api_event_id, {
-          regions: region,
-          bookmakers: bookmaker,
-          markets: 'h2h',
-        });
-        
-        console.log(`    -> API ID ${event.api_event_id} is VALID.`);
-        validEvents.push(event);
-      } catch (err: any) {
-        const is404 = err.message?.includes('404') || 
-                      err.message?.includes('EVENT_NOT_FOUND') ||
-                      err.status === 404 || 
-                      err.response?.status === 404;
-
-        if (is404) {
-          console.log(`    -> API ID ${event.api_event_id} is GHOST (404).`);
-          ghostEvents.push(event);
-        } else {
-          console.error(`    -> Error checking ${event.api_event_id}:`, err.message || err);
-          validEvents.push(event);
-        }
+      // Bonus if it has scores (means it is completed correctly)
+      if (event.home_score !== null || event.away_score !== null) {
+        score += 100;
       }
       
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
+      // Minor penalty for non-standard api_event_id or if it is a completed ghost with no score
+      if (event.status === 'completed' && event.home_score === null && event.away_score === null) {
+        score -= 20; // Completed ghost match
+      }
 
-    // Clean up ghost duplicates
-    for (const ghost of ghostEvents) {
-      console.log(`  [fix-duplicates] 🧹 Cleaning up ghost event ${ghost.id} (${ghost.api_event_id})...`);
+      return { event, score, capturedCount };
+    });
+
+    // Sort by score descending (highest score first)
+    scoredEvents.sort((a, b) => b.score - a.score);
+
+    const winner = scoredEvents[0];
+    const losers = scoredEvents.slice(1);
+
+    console.log(`[fix-duplicates] Group: ${winner.event.home_team} vs ${winner.event.away_team}`);
+    console.log(`  -> Keeping Event ID: ${winner.event.id} | Commenced: ${winner.event.commence_time} | Status: ${winner.event.status} | Captured markets: ${winner.capturedCount} | Score: ${winner.score}`);
+
+    losers.forEach(loser => {
+      console.log(`  -> Deleting duplicate Event ID: ${loser.event.id} | Commenced: ${loser.event.commence_time} | Status: ${loser.event.status} | Captured markets: ${loser.capturedCount} | Score: ${loser.score}`);
+      idsToDelete.push(loser.event.id);
+    });
+  }
+
+  // 6. Execute deletions
+  if (idsToDelete.length > 0) {
+    console.log(`[fix-duplicates] Deleting ${idsToDelete.length} duplicate events from database...`);
+    
+    for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+      const chunk = idsToDelete.slice(i, i + chunkSize);
       
-      await (supabaseAdmin as any)
-        .from('market_states')
-        .delete()
-        .eq('event_id', ghost.id);
-
-      await (supabaseAdmin as any)
+      // Delete events (cascades automatically to market_states, closing_odds, and snapshots)
+      const { error: deleteError } = await (supabaseAdmin as any)
         .from('events')
         .delete()
-        .eq('id', ghost.id);
+        .in('id', chunk);
 
-      cleanedCount++;
-      console.log(`    -> Deleted ghost event from database.`);
-    }
-
-    if (validEvents.length > 1) {
-      console.warn(`  [fix-duplicates] ⚠️ Multiple valid events found on API. Keeping all valid entries active.`);
+      if (deleteError) {
+        console.error(`[fix-duplicates] Error deleting events chunk:`, deleteError.message);
+      } else {
+        cleanedCount += chunk.length;
+        console.log(`  -> Successfully deleted chunk of ${chunk.length} duplicate events.`);
+      }
     }
   }
 
   const duration = Date.now() - startTime;
-  console.log(`[fix-duplicates] Completed: Detected ${totalDetected} entries, cleaned ${cleanedCount} ghost duplicates | ${duration}ms`);
+  console.log(`[fix-duplicates] Completed: Detected ${totalDetected} entries, cleaned ${cleanedCount} duplicate events | ${duration}ms`);
   
   return {
     detected: totalDetected,
