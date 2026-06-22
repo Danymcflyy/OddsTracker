@@ -29,18 +29,17 @@ async function run() {
   console.log('═══════════════════════════════════════════════════════\n');
 
   // 1. RÉCUPÉRER LES ÉVÉNEMENTS DANS LA FENÊTRE DE CAPTURE (Strictement avant le match)
-  // On cherche les matchs qui vont commencer dans 5 à 20 minutes (pour capturer à M-15, M-10, M-5)
-  // On ne capture PLUS rien après M-5 pour éviter le risque de Live Odds
-  
+  // On cherche les matchs qui vont commencer dans 5 à 30 minutes (pour capturer à M-25, M-15, M-10, M-5)
+  // Fenêtre élargie de M-30 au lieu de M-20 pour compenser les retards GitHub Actions (2-15min sur plan gratuit)
   const windowStart = new Date(now.getTime() + 4 * 60 * 1000).toISOString(); // Dans 4 min (M-4) -> Trop tard
-  const windowEnd = new Date(now.getTime() + 20 * 60 * 1000).toISOString(); // Dans 20 min (M-20)
+  const windowEnd = new Date(now.getTime() + 30 * 60 * 1000).toISOString(); // Dans 30 min (M-30)
 
   const { data: events, error } = await supabase
     .from('events')
     .select('*')
     .eq('status', 'upcoming')
     .gte('commence_time', windowStart) // On veut commence_time >= now + 4min (donc pas encore commencé)
-    .lte('commence_time', windowEnd)   // On veut commence_time <= now + 20min
+    .lte('commence_time', windowEnd)   // On veut commence_time <= now + 30min
     .order('commence_time', { ascending: true });
 
   if (error) {
@@ -49,11 +48,11 @@ async function run() {
   }
 
   if (!events || events.length === 0) {
-    console.log('ℹ️ Aucun événement dans la fenêtre de capture (M-20 à M-5)');
+    console.log('ℹ️ Aucun événement dans la fenêtre de capture (M-30 à M-5)');
     return;
   }
 
-  console.log(`📊 ${events.length} événement(s) dans la fenêtre M-20 à M-5\n`);
+  console.log(`📊 ${events.length} événement(s) dans la fenêtre M-30 à M-5\n`);
   // 2. RÉCUPÉRER TOUS LES MARCHÉS TRACKÉS
   const { data: settings } = await supabase
     .from('settings')
