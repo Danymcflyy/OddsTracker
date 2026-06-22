@@ -10,5 +10,19 @@
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/fix-scores",
+      "schedule": "27 2 * * *"
+    },
+    {
+      "path": "/api/cron/fix-odds",
+      "schedule": "27 2 * * *"
+    },
+    {
+      "path": "/api/cron/fix-duplicates",
+      "schedule": "0 2 * * *"
+    }
   ]
 }

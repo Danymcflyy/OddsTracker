@@ -280,20 +280,25 @@ function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): a
 
     if (!type) continue;
 
-    // Normalize point for Spreads - DISABLED to allow full range (+ and -) display
-    // if (isSpread && point !== undefined && type === 'away') {
-    //    point = -1 * point;
-    // }
+    // Normalize point for Spreads:
+    // The API sends home and away outcomes each with their OWN point.
+    // e.g. Internacional (home) point=-0.5, Fluminense (away) point=+0.5
+    // We group everything by the HOME point, so for away we take -1 * awayPoint.
+    let groupPoint = point;
+    if (isSpread && point !== undefined && type === 'away') {
+      groupPoint = -1 * point;
+    }
 
     let compositeKey: string;
     if (isTeamTotals && teamSide) {
       compositeKey = `${point ?? 0}_${teamSide}`;
     } else {
-      compositeKey = `${point ?? 0}`;
+      compositeKey = `${groupPoint ?? 0}`;
     }
 
     if (!byKey.has(compositeKey)) {
-      const entry: any = { point: point, last_update: market.last_update };
+      // Store the entry with the HOME-perspective point
+      const entry: any = { point: groupPoint, last_update: market.last_update };
       if (isTeamTotals && teamSide) {
         entry.team = teamSide;
       }
@@ -302,7 +307,7 @@ function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): a
 
     const entry = byKey.get(compositeKey);
     entry[type] = outcome.price;
-    if (entry.point === undefined && point !== undefined) entry.point = point;
+    if (entry.point === undefined && groupPoint !== undefined) entry.point = groupPoint;
   }
 
   return Array.from(byKey.values());

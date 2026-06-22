@@ -29,18 +29,17 @@ async function run() {
   console.log('═══════════════════════════════════════════════════════\n');
 
   // 1. RÉCUPÉRER LES ÉVÉNEMENTS DANS LA FENÊTRE DE CAPTURE (Strictement avant le match)
-  // On cherche les matchs qui vont commencer dans 5 à 20 minutes (pour capturer à M-15, M-10, M-5)
-  // On ne capture PLUS rien après M-5 pour éviter le risque de Live Odds
-  
+  // On cherche les matchs qui vont commencer dans 5 à 30 minutes (pour capturer à M-25, M-15, M-10, M-5)
+  // Fenêtre élargie de M-30 au lieu de M-20 pour compenser les retards GitHub Actions (2-15min sur plan gratuit)
   const windowStart = new Date(now.getTime() + 4 * 60 * 1000).toISOString(); // Dans 4 min (M-4) -> Trop tard
-  const windowEnd = new Date(now.getTime() + 20 * 60 * 1000).toISOString(); // Dans 20 min (M-20)
+  const windowEnd = new Date(now.getTime() + 30 * 60 * 1000).toISOString(); // Dans 30 min (M-30)
 
   const { data: events, error } = await supabase
     .from('events')
     .select('*')
     .eq('status', 'upcoming')
     .gte('commence_time', windowStart) // On veut commence_time >= now + 4min (donc pas encore commencé)
-    .lte('commence_time', windowEnd)   // On veut commence_time <= now + 20min
+    .lte('commence_time', windowEnd)   // On veut commence_time <= now + 30min
     .order('commence_time', { ascending: true });
 
   if (error) {
@@ -49,14 +48,46 @@ async function run() {
   }
 
   if (!events || events.length === 0) {
-    console.log('ℹ️ Aucun événement dans la fenêtre de capture (M-20 à M-5)');
+    console.log('ℹ️ Aucun événement dans la fenêtre de capture (M-30 à M-5)');
     return;
   }
 
-  console.log(`📊 ${events.length} événement(s) dans la fenêtre M-20 à M-5\n`);
-  
-  // ... (suite du code)
+  console.log(`📊 ${events.length} événement(s) dans la fenêtre M-30 à M-5\n`);
+  // 2. RÉCUPÉRER TOUS LES MARCHÉS TRACKÉS
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('value')
+    .eq('key', 'tracked_markets')
+    .single();
 
+  let marketsToCapture = 'h2h,alternate_spreads,alternate_totals'; // Default with alternates
+  if (settings?.value && Array.isArray(settings.value) && settings.value.length > 0) {
+    const requested = [...settings.value];
+
+    // Auto-include alternate markets for full coverage (multiple point variations)
+    if (requested.includes('spreads') && !requested.includes('alternate_spreads')) {
+        requested.push('alternate_spreads');
+    }
+    if (requested.includes('totals') && !requested.includes('alternate_totals')) {
+        requested.push('alternate_totals');
+    }
+    if (requested.includes('spreads_h1') && !requested.includes('alternate_spreads_h1')) {
+        requested.push('alternate_spreads_h1');
+    }
+    if (requested.includes('totals_h1') && !requested.includes('alternate_totals_h1')) {
+        requested.push('alternate_totals_h1');
+    }
+    if (requested.includes('team_totals') && !requested.includes('alternate_team_totals')) {
+        requested.push('alternate_team_totals');
+    }
+
+    marketsToCapture = requested.join(',');
+  }
+  console.log(`   Marchés cibles: ${marketsToCapture}\n`);
+
+  let totalCaptured = 0;
+  let totalSkipped = 0;
+  let totalCredits = 0;
   // 3. TRAITER CHAQUE ÉVÉNEMENT
   for (const dbEvent of events) {
     const minutesBeforeKickoff = calculateMinutesBeforeKickoff(dbEvent.commence_time, now);
@@ -74,9 +105,6 @@ async function run() {
         totalSkipped++;
         continue;
     }
-    
-    // ... (suite du code)
-
 
     // Vérifier si déjà capturé à ce moment (déduplication)
     const { data: existing } = await supabase
@@ -256,21 +284,26 @@ function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): a
 
     if (!type) continue;
 
-    // Normalize point for Spreads - DISABLED to allow full range (+ and -) display
-    // if (isSpread && point !== undefined && type === 'away') {
-    //    point = -1 * point;
-    // }
+    // Normalize point for Spreads:
+    // The API sends home and away outcomes each with their OWN point.
+    // e.g. Internacional (home) point=-0.5, Fluminense (away) point=+0.5
+    // We group everything by the HOME point, so for away we take -1 * awayPoint.
+    let groupPoint = point;
+    if (isSpread && point !== undefined && type === 'away') {
+      groupPoint = -1 * point;
+    }
 
     // Build composite key
     let compositeKey: string;
     if (isTeamTotals && teamSide) {
       compositeKey = `${point ?? 0}_${teamSide}`;
     } else {
-      compositeKey = `${point ?? 0}`;
+      compositeKey = `${groupPoint ?? 0}`;
     }
 
     if (!byKey.has(compositeKey)) {
-      const entry: any = { point: point, last_update: market.last_update };
+      // Store the entry with the HOME-perspective point
+      const entry: any = { point: groupPoint, last_update: market.last_update };
       if (isTeamTotals && teamSide) {
         entry.team = teamSide;
       }
@@ -279,7 +312,7 @@ function extractMarketOdds(market: any, homeTeam?: string, awayTeam?: string): a
 
     const entry = byKey.get(compositeKey);
     entry[type] = outcome.price;
-    if (entry.point === undefined && point !== undefined) entry.point = point;
+    if (entry.point === undefined && groupPoint !== undefined) entry.point = groupPoint;
   }
 
   return Array.from(byKey.values());

@@ -501,28 +501,19 @@ function getOddsValue(
   point: number | undefined,
   type: 'opening' | 'closing'
 ): { value: string, isLate: boolean } {
-  const isSpread = isSpreadsMarket(marketKey);
-  const mirrorPoint = (isSpread && point !== undefined) ? getMirroredPoint(point) : undefined;
-
-  // For spreads: always search the exact point first, then mirror as fallback.
-  // New data: each variation has both home+away → exact search finds both directly.
-  // Old split data: variation may have only one side → fallback to mirror finds the other.
-  const primaryPoint = point;
-  const fallbackPoint = isSpread ? mirrorPoint : undefined;
 
   if (type === 'opening') {
     if (!event.opening_odds || !Array.isArray(event.opening_odds)) return { value: '-', isLate: false };
 
-    const findOpening = (searchPt: number | undefined) => {
-      return event.opening_odds.find((m) => {
-        if (m.market_key !== marketKey) return false;
-        if (searchPt !== undefined) return m.odds?.point === searchPt;
-        return true;
-      });
-    };
+    // Chercher UNIQUEMENT le point exact de la colonne.
+    // Pas de fallback miroir : -0.5 et +0.5 sont des lignes différentes (home favori vs away favori).
+    // Le fallback causait l'affichage en double : colonne -0.5 récupérait les valeurs de +0.5 et vice-versa.
+    const marketData = event.opening_odds.find((m) => {
+      if (m.market_key !== marketKey) return false;
+      if (point !== undefined) return m.odds?.point === point;
+      return true;
+    });
 
-    // 1. Try the primary point
-    let marketData = findOpening(primaryPoint);
     if (marketData?.odds?.[outcome]) {
       return {
         value: formatOddsValue(marketData.odds[outcome]),
@@ -530,49 +521,28 @@ function getOddsValue(
       };
     }
 
-    // 2. Try the fallback point
-    if (isSpread && fallbackPoint !== undefined) {
-      marketData = findOpening(fallbackPoint);
-      if (marketData?.odds?.[outcome]) {
-        return {
-          value: formatOddsValue(marketData.odds[outcome]),
-          isLate: !!(marketData.odds._metadata?.is_late)
-        };
-      }
-    }
-
     return { value: '-', isLate: false };
   } else {
     const closingData = event.closing_odds;
     if (!closingData) return { value: '-', isLate: false };
 
-    const findInVariations = (targetPoint: number | undefined, targetOutcome: string) => {
-      if (!closingData.markets_variations || !closingData.markets_variations[marketKey]) return null;
+    // Chercher UNIQUEMENT le point exact dans les variations de clôture.
+    if (closingData.markets_variations && closingData.markets_variations[marketKey]) {
       const variations = closingData.markets_variations[marketKey];
-      if (!Array.isArray(variations)) return null;
-
-      const found = targetPoint !== undefined
-        ? variations.find((v: any) => v.point === targetPoint)
-        : variations[0];
-
-      return found?.[targetOutcome];
-    };
-
-    // 1. Try the primary point
-    let val = findInVariations(primaryPoint, outcome);
-    if (val) return { value: formatOddsValue(val as number), isLate: false };
-
-    // 2. Try the fallback point
-    if (isSpread && fallbackPoint !== undefined) {
-      val = findInVariations(fallbackPoint, outcome);
-      if (val) return { value: formatOddsValue(val as number), isLate: false };
+      if (Array.isArray(variations)) {
+        const found = point !== undefined
+          ? variations.find((v: any) => v.point === point)
+          : variations[0];
+        if (found?.[outcome]) {
+          return { value: formatOddsValue(found[outcome] as number), isLate: false };
+        }
+      }
     }
 
-    // 3. Fallback to main markets object
+    // Fallback sur l'objet markets principal (point exact uniquement)
     if (closingData.markets && closingData.markets[marketKey]) {
       const fallback = closingData.markets[marketKey];
-      const matchesPoint = point === undefined || fallback.point === primaryPoint ||
-        (fallbackPoint !== undefined && fallback.point === fallbackPoint);
+      const matchesPoint = point === undefined || fallback.point === point;
       if (matchesPoint && fallback[outcome]) {
         return { value: formatOddsValue(fallback[outcome] as number), isLate: false };
       }
